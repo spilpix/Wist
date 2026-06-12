@@ -296,7 +296,7 @@ Authorization: Bearer <token>
         </div>
       </section>
 
-      <div className="pb-4 text-center text-xs text-zinc-700">{t('set.footer', { version: '0.5.2' })}</div>
+      <div className="pb-4 text-center text-xs text-zinc-700">{t('set.footer', { version: '0.6.0' })}</div>
 
       {confirmClear && (
         <ConfirmDialog

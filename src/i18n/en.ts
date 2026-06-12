@@ -45,6 +45,13 @@ const en = {
   'world.zone.openTasks': '{n} open',
   'world.zone.streak': 'streak: {n}',
   'world.hint': 'This world grows out of what you live through. Click a place to travel there.',
+  'world.counts': '{n} stars · {m} links',
+  'world.galaxyHint': 'drag — pan · wheel — zoom · drag a star — move it · click — open',
+  'world.kind.title': 'Titles',
+  'world.kind.book': 'Books',
+  'world.kind.note': 'Notes',
+  'world.kind.moment': 'Moments',
+  'world.kind.journal': 'Journal',
 
   // home / sanctuary
   'home.today': 'Today',
@@ -225,7 +232,7 @@ const en = {
   'notes.saveClose': 'Save & close',
 
   // memory tree
-  'tree.subtitle': 'Your inner world. The Spirit Tree grows from everything you live through — twelve branches, one per month, every glowing orb a memory. Around it: the Story Forest, the Garden of Thoughts, the Lake of Days and the Path of Deeds.',
+  'tree.subtitle': 'A galaxy of everything you live through. Every star is a title, a note, a moment or a day; every filament a real connection — [[wiki links]], attachments, the thread of your journal. Hover a star to light up its constellation.',
   'tree.emptyTitle': 'The tree is still growing',
   'tree.emptySubtitle': 'Finish titles, save moments, write notes and journal entries — leaves will start to appear.',
   'tree.memories': '{n} memories this year',

@@ -293,11 +293,31 @@ var init_Extensions = __esm({
        * @see {@link Object.getOwnPropertyDescriptors} For details on property copying
        */
       mixin(Target, ...sources2) {
-        for (const source5 of sources2) {
-          Object.defineProperties(Target.prototype, Object.getOwnPropertyDescriptors(source5));
+        for (const source3 of sources2) {
+          Object.defineProperties(Target.prototype, Object.getOwnPropertyDescriptors(source3));
         }
       }
     };
+  }
+});
+
+// node_modules/pixi.js/lib/utils/browser/unsafeEvalSupported.mjs
+function unsafeEvalSupported() {
+  if (typeof unsafeEval === "boolean") {
+    return unsafeEval;
+  }
+  try {
+    const func = new Function("param1", "param2", "param3", "return param1[param2] === param3;");
+    unsafeEval = func({ a: "b" }, "a", "b") === true;
+  } catch (_e) {
+    unsafeEval = false;
+  }
+  return unsafeEval;
+}
+var unsafeEval;
+var init_unsafeEvalSupported = __esm({
+  "node_modules/pixi.js/lib/utils/browser/unsafeEvalSupported.mjs"() {
+    "use strict";
   }
 });
 
@@ -469,6 +489,2441 @@ var init_eventemitter3 = __esm({
   "node_modules/pixi.js/node_modules/eventemitter3/index.mjs"() {
     import_index = __toESM(require_eventemitter3(), 1);
     eventemitter3_default = import_index.default;
+  }
+});
+
+// node_modules/pixi.js/lib/utils/data/uid.mjs
+function uid(name = "default") {
+  if (uidCache[name] === void 0) {
+    uidCache[name] = -1;
+  }
+  return ++uidCache[name];
+}
+var uidCache;
+var init_uid = __esm({
+  "node_modules/pixi.js/lib/utils/data/uid.mjs"() {
+    "use strict";
+    uidCache = {
+      default: -1
+    };
+  }
+});
+
+// node_modules/pixi.js/lib/rendering/renderers/shared/buffer/const.mjs
+var BufferUsage;
+var init_const = __esm({
+  "node_modules/pixi.js/lib/rendering/renderers/shared/buffer/const.mjs"() {
+    "use strict";
+    BufferUsage = /* @__PURE__ */ ((BufferUsage2) => {
+      BufferUsage2[BufferUsage2["MAP_READ"] = 1] = "MAP_READ";
+      BufferUsage2[BufferUsage2["MAP_WRITE"] = 2] = "MAP_WRITE";
+      BufferUsage2[BufferUsage2["COPY_SRC"] = 4] = "COPY_SRC";
+      BufferUsage2[BufferUsage2["COPY_DST"] = 8] = "COPY_DST";
+      BufferUsage2[BufferUsage2["INDEX"] = 16] = "INDEX";
+      BufferUsage2[BufferUsage2["VERTEX"] = 32] = "VERTEX";
+      BufferUsage2[BufferUsage2["UNIFORM"] = 64] = "UNIFORM";
+      BufferUsage2[BufferUsage2["STORAGE"] = 128] = "STORAGE";
+      BufferUsage2[BufferUsage2["INDIRECT"] = 256] = "INDIRECT";
+      BufferUsage2[BufferUsage2["QUERY_RESOLVE"] = 512] = "QUERY_RESOLVE";
+      BufferUsage2[BufferUsage2["STATIC"] = 1024] = "STATIC";
+      return BufferUsage2;
+    })(BufferUsage || {});
+  }
+});
+
+// node_modules/pixi.js/lib/rendering/renderers/shared/buffer/Buffer.mjs
+var Buffer2;
+var init_Buffer = __esm({
+  "node_modules/pixi.js/lib/rendering/renderers/shared/buffer/Buffer.mjs"() {
+    init_eventemitter3();
+    init_uid();
+    init_const();
+    Buffer2 = class extends eventemitter3_default {
+      /**
+       * Creates a new Buffer with the given options
+       * @param options - the options for the buffer
+       */
+      constructor(options) {
+        let { data, size } = options;
+        const { usage, label, shrinkToFit } = options;
+        super();
+        this._gpuData = /* @__PURE__ */ Object.create(null);
+        this._gcLastUsed = -1;
+        this.autoGarbageCollect = true;
+        this.uid = uid("buffer");
+        this._resourceType = "buffer";
+        this._resourceId = uid("resource");
+        this._touched = 0;
+        this._updateID = 1;
+        this._dataInt32 = null;
+        this.shrinkToFit = true;
+        this.destroyed = false;
+        if (data instanceof Array) {
+          data = new Float32Array(data);
+        }
+        this._data = data;
+        size ?? (size = data?.byteLength);
+        const mappedAtCreation = !!data;
+        this.descriptor = {
+          size,
+          usage,
+          mappedAtCreation,
+          label
+        };
+        this.shrinkToFit = shrinkToFit ?? true;
+      }
+      /** the data in the buffer */
+      get data() {
+        return this._data;
+      }
+      set data(value) {
+        this.setDataWithSize(value, value.length, true);
+      }
+      get dataInt32() {
+        if (!this._dataInt32) {
+          this._dataInt32 = new Int32Array(this.data.buffer);
+        }
+        return this._dataInt32;
+      }
+      /** whether the buffer is static or not */
+      get static() {
+        return !!(this.descriptor.usage & BufferUsage.STATIC);
+      }
+      set static(value) {
+        if (value) {
+          this.descriptor.usage |= BufferUsage.STATIC;
+        } else {
+          this.descriptor.usage &= ~BufferUsage.STATIC;
+        }
+      }
+      /**
+       * Sets the data in the buffer to the given value. This will immediately update the buffer on the GPU.
+       * If you only want to update a subset of the buffer, you can pass in the size of the data.
+       * @param value - the data to set
+       * @param size - the size of the data in bytes
+       * @param syncGPU - should the buffer be updated on the GPU immediately?
+       */
+      setDataWithSize(value, size, syncGPU) {
+        this._updateID++;
+        this._updateSize = size * value.BYTES_PER_ELEMENT;
+        if (this._data === value) {
+          if (syncGPU) this.emit("update", this);
+          return;
+        }
+        const oldData = this._data;
+        this._data = value;
+        this._dataInt32 = null;
+        if (!oldData || oldData.length !== value.length) {
+          if (!this.shrinkToFit && oldData && value.byteLength < oldData.byteLength) {
+            if (syncGPU) this.emit("update", this);
+          } else {
+            this.descriptor.size = value.byteLength;
+            this._resourceId = uid("resource");
+            this.emit("change", this);
+          }
+          return;
+        }
+        if (syncGPU) this.emit("update", this);
+      }
+      /**
+       * updates the buffer on the GPU to reflect the data in the buffer.
+       * By default it will update the entire buffer. If you only want to update a subset of the buffer,
+       * you can pass in the size of the buffer to update.
+       * @param sizeInBytes - the new size of the buffer in bytes
+       */
+      update(sizeInBytes) {
+        this._updateSize = sizeInBytes ?? this._updateSize;
+        this._updateID++;
+        this.emit("update", this);
+      }
+      /** Unloads the buffer from the GPU */
+      unload() {
+        this.emit("unload", this);
+        for (const key in this._gpuData) {
+          this._gpuData[key]?.destroy();
+        }
+        this._gpuData = /* @__PURE__ */ Object.create(null);
+      }
+      /** Destroys the buffer */
+      destroy() {
+        this.destroyed = true;
+        this.unload();
+        this.emit("destroy", this);
+        this.emit("change", this);
+        this._data = null;
+        this.descriptor = null;
+        this.removeAllListeners();
+      }
+    };
+  }
+});
+
+// node_modules/pixi.js/lib/rendering/renderers/shared/shader/UboSystem.mjs
+var UboSystem;
+var init_UboSystem = __esm({
+  "node_modules/pixi.js/lib/rendering/renderers/shared/shader/UboSystem.mjs"() {
+    init_unsafeEvalSupported();
+    init_Buffer();
+    init_const();
+    UboSystem = class {
+      constructor(adaptor) {
+        this._syncFunctionHash = /* @__PURE__ */ Object.create(null);
+        this._adaptor = adaptor;
+        this._systemCheck();
+      }
+      /**
+       * Overridable function by `pixi.js/unsafe-eval` to silence
+       * throwing an error if platform doesn't support unsafe-evals.
+       * @private
+       */
+      _systemCheck() {
+        if (!unsafeEvalSupported()) {
+          throw new Error("Current environment does not allow unsafe-eval, please use pixi.js/unsafe-eval module to enable support.");
+        }
+      }
+      ensureUniformGroup(uniformGroup) {
+        const uniformData = this.getUniformGroupData(uniformGroup);
+        uniformGroup.buffer || (uniformGroup.buffer = new Buffer2({
+          data: new Float32Array(uniformData.layout.size / 4),
+          usage: BufferUsage.UNIFORM | BufferUsage.COPY_DST
+        }));
+      }
+      getUniformGroupData(uniformGroup) {
+        return this._syncFunctionHash[uniformGroup._signature] || this._initUniformGroup(uniformGroup);
+      }
+      _initUniformGroup(uniformGroup) {
+        const uniformGroupSignature = uniformGroup._signature;
+        let uniformData = this._syncFunctionHash[uniformGroupSignature];
+        if (!uniformData) {
+          const elements = Object.keys(uniformGroup.uniformStructures).map((i2) => uniformGroup.uniformStructures[i2]);
+          const layout = this._adaptor.createUboElements(elements);
+          const syncFunction = this._generateUboSync(layout.uboElements);
+          uniformData = this._syncFunctionHash[uniformGroupSignature] = {
+            layout,
+            syncFunction
+          };
+        }
+        return this._syncFunctionHash[uniformGroupSignature];
+      }
+      _generateUboSync(uboElements) {
+        return this._adaptor.generateUboSync(uboElements);
+      }
+      syncUniformGroup(uniformGroup, data, offset) {
+        const uniformGroupData = this.getUniformGroupData(uniformGroup);
+        uniformGroup.buffer || (uniformGroup.buffer = new Buffer2({
+          data: new Float32Array(uniformGroupData.layout.size / 4),
+          usage: BufferUsage.UNIFORM | BufferUsage.COPY_DST
+        }));
+        let dataInt32 = null;
+        if (!data) {
+          data = uniformGroup.buffer.data;
+          dataInt32 = uniformGroup.buffer.dataInt32;
+        }
+        offset || (offset = 0);
+        uniformGroupData.syncFunction(uniformGroup.uniforms, data, dataInt32, offset);
+        return true;
+      }
+      updateUniformGroup(uniformGroup) {
+        if (uniformGroup.isStatic && !uniformGroup._dirtyId) return false;
+        uniformGroup._dirtyId = 0;
+        const synced = this.syncUniformGroup(uniformGroup);
+        uniformGroup.buffer.update();
+        return synced;
+      }
+      destroy() {
+        this._syncFunctionHash = null;
+      }
+    };
+  }
+});
+
+// node_modules/pixi.js/lib/rendering/renderers/gl/shader/utils/createUboElementsSTD40.mjs
+function createUboElementsSTD40(uniformData) {
+  const uboElements = uniformData.map((data) => ({
+    data,
+    offset: 0,
+    size: 0
+  }));
+  const chunkSize = 16;
+  let size = 0;
+  let offset = 0;
+  for (let i2 = 0; i2 < uboElements.length; i2++) {
+    const uboElement = uboElements[i2];
+    size = WGSL_TO_STD40_SIZE[uboElement.data.type];
+    if (!size) {
+      throw new Error(`Unknown type ${uboElement.data.type}`);
+    }
+    if (uboElement.data.size > 1) {
+      size = Math.max(size, chunkSize) * uboElement.data.size;
+    }
+    const boundary = size === 12 ? 16 : size;
+    uboElement.size = size;
+    const curOffset = offset % chunkSize;
+    if (curOffset > 0 && chunkSize - curOffset < boundary) {
+      offset += (chunkSize - curOffset) % 16;
+    } else {
+      offset += (size - curOffset % size) % size;
+    }
+    uboElement.offset = offset;
+    offset += size;
+  }
+  offset = Math.ceil(offset / 16) * 16;
+  return { uboElements, size: offset };
+}
+var WGSL_TO_STD40_SIZE;
+var init_createUboElementsSTD40 = __esm({
+  "node_modules/pixi.js/lib/rendering/renderers/gl/shader/utils/createUboElementsSTD40.mjs"() {
+    "use strict";
+    WGSL_TO_STD40_SIZE = {
+      f32: 4,
+      i32: 4,
+      "vec2<f32>": 8,
+      "vec3<f32>": 12,
+      "vec4<f32>": 16,
+      "vec2<i32>": 8,
+      "vec3<i32>": 12,
+      "vec4<i32>": 16,
+      "mat2x2<f32>": 16 * 2,
+      "mat3x3<f32>": 16 * 3,
+      "mat4x4<f32>": 16 * 4
+      // TODO - not essential for now but support these in the future
+      // int:      4,
+      // ivec2:    8,
+      // ivec3:    12,
+      // ivec4:    16,
+      // uint:     4,
+      // uvec2:    8,
+      // uvec3:    12,
+      // uvec4:    16,
+      // bool:     4,
+      // bvec2:    8,
+      // bvec3:    12,
+      // bvec4:    16,
+      // mat2:     16 * 2,
+      // mat3:     16 * 3,
+      // mat4:     16 * 4,
+    };
+  }
+});
+
+// node_modules/pixi.js/lib/rendering/renderers/shared/shader/utils/uniformParsers.mjs
+var uniformParsers;
+var init_uniformParsers = __esm({
+  "node_modules/pixi.js/lib/rendering/renderers/shared/shader/utils/uniformParsers.mjs"() {
+    "use strict";
+    uniformParsers = [
+      // uploading pixi matrix object to mat3
+      {
+        type: "mat3x3<f32>",
+        test: (data) => {
+          const value = data.value;
+          return value.a !== void 0;
+        },
+        ubo: `
+            var matrix = uv[name].toArray(true);
+            data[offset] = matrix[0];
+            data[offset + 1] = matrix[1];
+            data[offset + 2] = matrix[2];
+            data[offset + 4] = matrix[3];
+            data[offset + 5] = matrix[4];
+            data[offset + 6] = matrix[5];
+            data[offset + 8] = matrix[6];
+            data[offset + 9] = matrix[7];
+            data[offset + 10] = matrix[8];
+        `,
+        uniform: `
+            gl.uniformMatrix3fv(ud[name].location, false, uv[name].toArray(true));
+        `
+      },
+      // uploading a pixi rectangle as a vec4
+      {
+        type: "vec4<f32>",
+        test: (data) => data.type === "vec4<f32>" && data.size === 1 && data.value.width !== void 0,
+        ubo: `
+            v = uv[name];
+            data[offset] = v.x;
+            data[offset + 1] = v.y;
+            data[offset + 2] = v.width;
+            data[offset + 3] = v.height;
+        `,
+        uniform: `
+            cv = ud[name].value;
+            v = uv[name];
+            if (cv[0] !== v.x || cv[1] !== v.y || cv[2] !== v.width || cv[3] !== v.height) {
+                cv[0] = v.x;
+                cv[1] = v.y;
+                cv[2] = v.width;
+                cv[3] = v.height;
+                gl.uniform4f(ud[name].location, v.x, v.y, v.width, v.height);
+            }
+        `
+      },
+      // uploading a pixi point as a vec2
+      {
+        type: "vec2<f32>",
+        test: (data) => data.type === "vec2<f32>" && data.size === 1 && data.value.x !== void 0,
+        ubo: `
+            v = uv[name];
+            data[offset] = v.x;
+            data[offset + 1] = v.y;
+        `,
+        uniform: `
+            cv = ud[name].value;
+            v = uv[name];
+            if (cv[0] !== v.x || cv[1] !== v.y) {
+                cv[0] = v.x;
+                cv[1] = v.y;
+                gl.uniform2f(ud[name].location, v.x, v.y);
+            }
+        `
+      },
+      // uploading a pixi color as a vec4
+      {
+        type: "vec4<f32>",
+        test: (data) => data.type === "vec4<f32>" && data.size === 1 && data.value.red !== void 0,
+        ubo: `
+            v = uv[name];
+            data[offset] = v.red;
+            data[offset + 1] = v.green;
+            data[offset + 2] = v.blue;
+            data[offset + 3] = v.alpha;
+        `,
+        uniform: `
+            cv = ud[name].value;
+            v = uv[name];
+            if (cv[0] !== v.red || cv[1] !== v.green || cv[2] !== v.blue || cv[3] !== v.alpha) {
+                cv[0] = v.red;
+                cv[1] = v.green;
+                cv[2] = v.blue;
+                cv[3] = v.alpha;
+                gl.uniform4f(ud[name].location, v.red, v.green, v.blue, v.alpha);
+            }
+        `
+      },
+      // uploading a pixi color as a vec3
+      {
+        type: "vec3<f32>",
+        test: (data) => data.type === "vec3<f32>" && data.size === 1 && data.value.red !== void 0,
+        ubo: `
+            v = uv[name];
+            data[offset] = v.red;
+            data[offset + 1] = v.green;
+            data[offset + 2] = v.blue;
+        `,
+        uniform: `
+            cv = ud[name].value;
+            v = uv[name];
+            if (cv[0] !== v.red || cv[1] !== v.green || cv[2] !== v.blue) {
+                cv[0] = v.red;
+                cv[1] = v.green;
+                cv[2] = v.blue;
+                gl.uniform3f(ud[name].location, v.red, v.green, v.blue);
+            }
+        `
+      }
+    ];
+  }
+});
+
+// node_modules/pixi.js/lib/rendering/renderers/shared/shader/utils/createUboSyncFunction.mjs
+function createUboSyncFunction(uboElements, parserCode, arrayGenerationFunction, singleSettersMap) {
+  const funcFragments = [`
+        var v = null;
+        var v2 = null;
+        var t = 0;
+        var index = 0;
+        var name = null;
+        var arrayOffset = null;
+    `];
+  let prev = 0;
+  for (let i2 = 0; i2 < uboElements.length; i2++) {
+    const uboElement = uboElements[i2];
+    const name = uboElement.data.name;
+    let parsed = false;
+    let offset = 0;
+    for (let j2 = 0; j2 < uniformParsers.length; j2++) {
+      const uniformParser = uniformParsers[j2];
+      if (uniformParser.test(uboElement.data)) {
+        offset = uboElement.offset / 4;
+        funcFragments.push(
+          `name = "${name}";`,
+          `offset += ${offset - prev};`,
+          uniformParsers[j2][parserCode] || uniformParsers[j2].ubo
+        );
+        parsed = true;
+        break;
+      }
+    }
+    if (!parsed) {
+      if (uboElement.data.size > 1) {
+        offset = uboElement.offset / 4;
+        funcFragments.push(arrayGenerationFunction(uboElement, offset - prev));
+      } else {
+        const template = singleSettersMap[uboElement.data.type];
+        offset = uboElement.offset / 4;
+        funcFragments.push(
+          /* wgsl */
+          `
+                    v = uv.${name};
+                    offset += ${offset - prev};
+                    ${template};
+                `
+        );
+      }
+    }
+    prev = offset;
+  }
+  const fragmentSrc = funcFragments.join("\n");
+  return new Function(
+    "uv",
+    "data",
+    "dataInt32",
+    "offset",
+    fragmentSrc
+  );
+}
+var init_createUboSyncFunction = __esm({
+  "node_modules/pixi.js/lib/rendering/renderers/shared/shader/utils/createUboSyncFunction.mjs"() {
+    init_uniformParsers();
+  }
+});
+
+// node_modules/pixi.js/lib/rendering/renderers/shared/shader/utils/uboSyncFunctions.mjs
+function loopMatrix(col, row) {
+  const total = col * row;
+  return `
+        for (let i = 0; i < ${total}; i++) {
+            data[offset + (((i / ${col})|0) * 4) + (i % ${col})] = v[i];
+        }
+    `;
+}
+var uboSyncFunctionsSTD40, uboSyncFunctionsWGSL;
+var init_uboSyncFunctions = __esm({
+  "node_modules/pixi.js/lib/rendering/renderers/shared/shader/utils/uboSyncFunctions.mjs"() {
+    "use strict";
+    uboSyncFunctionsSTD40 = {
+      f32: `
+        data[offset] = v;`,
+      i32: `
+        dataInt32[offset] = v;`,
+      "vec2<f32>": `
+        data[offset] = v[0];
+        data[offset + 1] = v[1];`,
+      "vec3<f32>": `
+        data[offset] = v[0];
+        data[offset + 1] = v[1];
+        data[offset + 2] = v[2];`,
+      "vec4<f32>": `
+        data[offset] = v[0];
+        data[offset + 1] = v[1];
+        data[offset + 2] = v[2];
+        data[offset + 3] = v[3];`,
+      "vec2<i32>": `
+        dataInt32[offset] = v[0];
+        dataInt32[offset + 1] = v[1];`,
+      "vec3<i32>": `
+        dataInt32[offset] = v[0];
+        dataInt32[offset + 1] = v[1];
+        dataInt32[offset + 2] = v[2];`,
+      "vec4<i32>": `
+        dataInt32[offset] = v[0];
+        dataInt32[offset + 1] = v[1];
+        dataInt32[offset + 2] = v[2];
+        dataInt32[offset + 3] = v[3];`,
+      "mat2x2<f32>": `
+        data[offset] = v[0];
+        data[offset + 1] = v[1];
+        data[offset + 4] = v[2];
+        data[offset + 5] = v[3];`,
+      "mat3x3<f32>": `
+        data[offset] = v[0];
+        data[offset + 1] = v[1];
+        data[offset + 2] = v[2];
+        data[offset + 4] = v[3];
+        data[offset + 5] = v[4];
+        data[offset + 6] = v[5];
+        data[offset + 8] = v[6];
+        data[offset + 9] = v[7];
+        data[offset + 10] = v[8];`,
+      "mat4x4<f32>": `
+        for (let i = 0; i < 16; i++) {
+            data[offset + i] = v[i];
+        }`,
+      "mat3x2<f32>": loopMatrix(3, 2),
+      "mat4x2<f32>": loopMatrix(4, 2),
+      "mat2x3<f32>": loopMatrix(2, 3),
+      "mat4x3<f32>": loopMatrix(4, 3),
+      "mat2x4<f32>": loopMatrix(2, 4),
+      "mat3x4<f32>": loopMatrix(3, 4)
+    };
+    uboSyncFunctionsWGSL = {
+      ...uboSyncFunctionsSTD40,
+      "mat2x2<f32>": `
+        data[offset] = v[0];
+        data[offset + 1] = v[1];
+        data[offset + 2] = v[2];
+        data[offset + 3] = v[3];
+    `
+    };
+  }
+});
+
+// node_modules/pixi.js/lib/rendering/renderers/gl/shader/utils/generateArraySyncSTD40.mjs
+function generateArraySyncSTD40(uboElement, offsetToAdd) {
+  const rowSize = Math.max(WGSL_TO_STD40_SIZE[uboElement.data.type] / 16, 1);
+  const elementSize = uboElement.data.value.length / uboElement.data.size;
+  const remainder = (4 - elementSize % 4) % 4;
+  const data = uboElement.data.type.indexOf("i32") >= 0 ? "dataInt32" : "data";
+  return `
+        v = uv.${uboElement.data.name};
+        offset += ${offsetToAdd};
+
+        arrayOffset = offset;
+
+        t = 0;
+
+        for(var i=0; i < ${uboElement.data.size * rowSize}; i++)
+        {
+            for(var j = 0; j < ${elementSize}; j++)
+            {
+                ${data}[arrayOffset++] = v[t++];
+            }
+            ${remainder !== 0 ? `arrayOffset += ${remainder};` : ""}
+        }
+    `;
+}
+var init_generateArraySyncSTD40 = __esm({
+  "node_modules/pixi.js/lib/rendering/renderers/gl/shader/utils/generateArraySyncSTD40.mjs"() {
+    init_createUboElementsSTD40();
+  }
+});
+
+// node_modules/pixi.js/lib/rendering/renderers/gl/shader/utils/createUboSyncSTD40.mjs
+function createUboSyncFunctionSTD40(uboElements) {
+  return createUboSyncFunction(
+    uboElements,
+    "uboStd40",
+    generateArraySyncSTD40,
+    uboSyncFunctionsSTD40
+  );
+}
+var init_createUboSyncSTD40 = __esm({
+  "node_modules/pixi.js/lib/rendering/renderers/gl/shader/utils/createUboSyncSTD40.mjs"() {
+    init_createUboSyncFunction();
+    init_uboSyncFunctions();
+    init_generateArraySyncSTD40();
+  }
+});
+
+// node_modules/pixi.js/lib/rendering/renderers/gl/GlUboSystem.mjs
+var GlUboSystem;
+var init_GlUboSystem = __esm({
+  "node_modules/pixi.js/lib/rendering/renderers/gl/GlUboSystem.mjs"() {
+    init_Extensions();
+    init_UboSystem();
+    init_createUboElementsSTD40();
+    init_createUboSyncSTD40();
+    GlUboSystem = class extends UboSystem {
+      constructor() {
+        super({
+          createUboElements: createUboElementsSTD40,
+          generateUboSync: createUboSyncFunctionSTD40
+        });
+      }
+    };
+    GlUboSystem.extension = {
+      type: [ExtensionType.WebGLSystem],
+      name: "ubo"
+    };
+  }
+});
+
+// node_modules/pixi.js/lib/rendering/renderers/shared/buffer/BufferResource.mjs
+var BufferResource;
+var init_BufferResource = __esm({
+  "node_modules/pixi.js/lib/rendering/renderers/shared/buffer/BufferResource.mjs"() {
+    init_eventemitter3();
+    init_uid();
+    BufferResource = class extends eventemitter3_default {
+      /**
+       * Create a new Buffer Resource.
+       * @param options - The options for the buffer resource
+       * @param options.buffer - The underlying buffer that this resource is using
+       * @param options.offset - The offset of the buffer this resource is using.
+       * If not provided, then it will use the offset of the buffer.
+       * @param options.size - The size of the buffer this resource is using.
+       * If not provided, then it will use the size of the buffer.
+       */
+      constructor({ buffer, offset, size }) {
+        super();
+        this.uid = uid("buffer");
+        this._resourceType = "bufferResource";
+        this._touched = 0;
+        this._resourceId = uid("resource");
+        this._bufferResource = true;
+        this.destroyed = false;
+        this.buffer = buffer;
+        this.offset = offset | 0;
+        this.size = size;
+        this.buffer.on("change", this.onBufferChange, this);
+      }
+      onBufferChange() {
+        this._resourceId = uid("resource");
+        this.emit("change", this);
+      }
+      /**
+       * Destroys this resource. Make sure the underlying buffer is not used anywhere else
+       * if you want to destroy it as well, or code will explode
+       * @param destroyBuffer - Should the underlying buffer be destroyed as well?
+       */
+      destroy(destroyBuffer = false) {
+        this.destroyed = true;
+        if (destroyBuffer) {
+          this.buffer.destroy();
+        }
+        this.emit("change", this);
+        this.buffer = null;
+        this.removeAllListeners();
+      }
+    };
+  }
+});
+
+// node_modules/pixi.js/lib/rendering/renderers/shared/utils/createIdFromString.mjs
+function createIdFromString(value, groupId) {
+  let id = idHash[value];
+  if (id === void 0) {
+    if (idCounts[groupId] === void 0) {
+      idCounts[groupId] = 1;
+    }
+    idHash[value] = id = idCounts[groupId]++;
+  }
+  return id;
+}
+var idCounts, idHash;
+var init_createIdFromString = __esm({
+  "node_modules/pixi.js/lib/rendering/renderers/shared/utils/createIdFromString.mjs"() {
+    "use strict";
+    idCounts = /* @__PURE__ */ Object.create(null);
+    idHash = /* @__PURE__ */ Object.create(null);
+  }
+});
+
+// node_modules/pixi.js/lib/rendering/renderers/shared/shader/types.mjs
+var UNIFORM_TYPES_VALUES, UNIFORM_TYPES_MAP;
+var init_types = __esm({
+  "node_modules/pixi.js/lib/rendering/renderers/shared/shader/types.mjs"() {
+    "use strict";
+    UNIFORM_TYPES_VALUES = [
+      "f32",
+      "i32",
+      "vec2<f32>",
+      "vec3<f32>",
+      "vec4<f32>",
+      "mat2x2<f32>",
+      "mat3x3<f32>",
+      "mat4x4<f32>",
+      "mat3x2<f32>",
+      "mat4x2<f32>",
+      "mat2x3<f32>",
+      "mat4x3<f32>",
+      "mat2x4<f32>",
+      "mat3x4<f32>",
+      "vec2<i32>",
+      "vec3<i32>",
+      "vec4<i32>"
+    ];
+    UNIFORM_TYPES_MAP = UNIFORM_TYPES_VALUES.reduce((acc, type) => {
+      acc[type] = true;
+      return acc;
+    }, {});
+  }
+});
+
+// node_modules/pixi.js/lib/rendering/renderers/shared/shader/utils/getDefaultUniformValue.mjs
+function getDefaultUniformValue(type, size) {
+  switch (type) {
+    case "f32":
+      return 0;
+    case "vec2<f32>":
+      return new Float32Array(2 * size);
+    case "vec3<f32>":
+      return new Float32Array(3 * size);
+    case "vec4<f32>":
+      return new Float32Array(4 * size);
+    case "mat2x2<f32>":
+      return new Float32Array([
+        1,
+        0,
+        0,
+        1
+      ]);
+    case "mat3x3<f32>":
+      return new Float32Array([
+        1,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        1
+      ]);
+    case "mat4x4<f32>":
+      return new Float32Array([
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1
+      ]);
+  }
+  return null;
+}
+var init_getDefaultUniformValue = __esm({
+  "node_modules/pixi.js/lib/rendering/renderers/shared/shader/utils/getDefaultUniformValue.mjs"() {
+    "use strict";
+  }
+});
+
+// node_modules/pixi.js/lib/rendering/renderers/shared/shader/UniformGroup.mjs
+var _UniformGroup, UniformGroup;
+var init_UniformGroup = __esm({
+  "node_modules/pixi.js/lib/rendering/renderers/shared/shader/UniformGroup.mjs"() {
+    init_uid();
+    init_createIdFromString();
+    init_types();
+    init_getDefaultUniformValue();
+    _UniformGroup = class _UniformGroup2 {
+      /**
+       * Create a new Uniform group
+       * @param uniformStructures - The structures of the uniform group
+       * @param options - The optional parameters of this uniform group
+       */
+      constructor(uniformStructures, options) {
+        this._touched = 0;
+        this.uid = uid("uniform");
+        this._resourceType = "uniformGroup";
+        this._resourceId = uid("resource");
+        this.isUniformGroup = true;
+        this._dirtyId = 0;
+        this.destroyed = false;
+        options = { ..._UniformGroup2.defaultOptions, ...options };
+        this.uniformStructures = uniformStructures;
+        const uniforms = {};
+        for (const i2 in uniformStructures) {
+          const uniformData = uniformStructures[i2];
+          uniformData.name = i2;
+          uniformData.size = uniformData.size ?? 1;
+          if (!UNIFORM_TYPES_MAP[uniformData.type]) {
+            const arrayMatch = uniformData.type.match(/^array<(\w+(?:<\w+>)?),\s*(\d+)>$/);
+            if (arrayMatch) {
+              const [, innerType, size] = arrayMatch;
+              throw new Error(
+                `Uniform type ${uniformData.type} is not supported. Use type: '${innerType}', size: ${size} instead.`
+              );
+            }
+            throw new Error(`Uniform type ${uniformData.type} is not supported. Supported uniform types are: ${UNIFORM_TYPES_VALUES.join(", ")}`);
+          }
+          uniformData.value ?? (uniformData.value = getDefaultUniformValue(uniformData.type, uniformData.size));
+          uniforms[i2] = uniformData.value;
+        }
+        this.uniforms = uniforms;
+        this._dirtyId = 1;
+        this.ubo = options.ubo;
+        this.isStatic = options.isStatic;
+        this._signature = createIdFromString(Object.keys(uniforms).map(
+          (i2) => `${i2}-${uniformStructures[i2].type}`
+        ).join("-"), "uniform-group");
+      }
+      /** Call this if you want the uniform groups data to be uploaded to the GPU only useful if `isStatic` is true. */
+      update() {
+        this._dirtyId++;
+      }
+    };
+    _UniformGroup.defaultOptions = {
+      /** if true the UniformGroup is handled as an Uniform buffer object. */
+      ubo: false,
+      /** if true, then you are responsible for when the data is uploaded to the GPU by calling `update()` */
+      isStatic: false
+    };
+    UniformGroup = _UniformGroup;
+  }
+});
+
+// node_modules/pixi.js/lib/maths/misc/pow2.mjs
+function nextPow2(v2) {
+  v2 += v2 === 0 ? 1 : 0;
+  --v2;
+  v2 |= v2 >>> 1;
+  v2 |= v2 >>> 2;
+  v2 |= v2 >>> 4;
+  v2 |= v2 >>> 8;
+  v2 |= v2 >>> 16;
+  return v2 + 1;
+}
+function isPow2(v2) {
+  return !(v2 & v2 - 1) && !!v2;
+}
+var init_pow2 = __esm({
+  "node_modules/pixi.js/lib/maths/misc/pow2.mjs"() {
+    "use strict";
+  }
+});
+
+// node_modules/pixi.js/lib/scene/container/utils/definedProps.mjs
+function definedProps(obj) {
+  const result = {};
+  for (const key in obj) {
+    if (obj[key] !== void 0) {
+      result[key] = obj[key];
+    }
+  }
+  return result;
+}
+var init_definedProps = __esm({
+  "node_modules/pixi.js/lib/scene/container/utils/definedProps.mjs"() {
+    "use strict";
+  }
+});
+
+// node_modules/pixi.js/lib/utils/logging/deprecation.mjs
+var warnings, v8_0_0, v8_3_4, deprecationState, deprecation;
+var init_deprecation = __esm({
+  "node_modules/pixi.js/lib/utils/logging/deprecation.mjs"() {
+    "use strict";
+    warnings = /* @__PURE__ */ new Set();
+    v8_0_0 = "8.0.0";
+    v8_3_4 = "8.3.4";
+    deprecationState = {
+      quiet: false,
+      noColor: false
+    };
+    deprecation = (version, message, ignoreDepth = 3) => {
+      if (deprecationState.quiet || warnings.has(message)) return;
+      let stack = new Error().stack;
+      const deprecationMessage = `${message}
+Deprecated since v${version}`;
+      const useGroup = typeof console.groupCollapsed === "function" && !deprecationState.noColor;
+      if (typeof stack === "undefined") {
+        console.warn("PixiJS Deprecation Warning: ", deprecationMessage);
+      } else {
+        stack = stack.split("\n").splice(ignoreDepth).join("\n");
+        if (useGroup) {
+          console.groupCollapsed(
+            "%cPixiJS Deprecation Warning: %c%s",
+            "color:#614108;background:#fffbe6",
+            "font-weight:normal;color:#614108;background:#fffbe6",
+            deprecationMessage
+          );
+          console.warn(stack);
+          console.groupEnd();
+        } else {
+          console.warn("PixiJS Deprecation Warning: ", deprecationMessage);
+          console.warn(stack);
+        }
+      }
+      warnings.add(message);
+    };
+    Object.defineProperties(deprecation, {
+      quiet: {
+        get: () => deprecationState.quiet,
+        set: (value) => {
+          deprecationState.quiet = value;
+        },
+        enumerable: true,
+        configurable: false
+      },
+      noColor: {
+        get: () => deprecationState.noColor,
+        set: (value) => {
+          deprecationState.noColor = value;
+        },
+        enumerable: true,
+        configurable: false
+      }
+    });
+  }
+});
+
+// node_modules/pixi.js/lib/rendering/renderers/shared/texture/TextureStyle.mjs
+function createResourceIdFromString(value) {
+  const id = idHash2[value];
+  if (id === void 0) {
+    idHash2[value] = uid("resource");
+  }
+  return id;
+}
+var idHash2, _TextureStyle, TextureStyle;
+var init_TextureStyle = __esm({
+  "node_modules/pixi.js/lib/rendering/renderers/shared/texture/TextureStyle.mjs"() {
+    init_eventemitter3();
+    init_uid();
+    init_deprecation();
+    idHash2 = /* @__PURE__ */ Object.create(null);
+    _TextureStyle = class _TextureStyle2 extends eventemitter3_default {
+      /**
+       * @param options - options for the style
+       */
+      constructor(options = {}) {
+        super();
+        this._resourceType = "textureSampler";
+        this._touched = 0;
+        this._maxAnisotropy = 1;
+        this.destroyed = false;
+        options = { ..._TextureStyle2.defaultOptions, ...options };
+        this.addressMode = options.addressMode;
+        this.addressModeU = options.addressModeU ?? this.addressModeU;
+        this.addressModeV = options.addressModeV ?? this.addressModeV;
+        this.addressModeW = options.addressModeW ?? this.addressModeW;
+        this.scaleMode = options.scaleMode;
+        this.magFilter = options.magFilter ?? this.magFilter;
+        this.minFilter = options.minFilter ?? this.minFilter;
+        this.mipmapFilter = options.mipmapFilter ?? this.mipmapFilter;
+        this.lodMinClamp = options.lodMinClamp;
+        this.lodMaxClamp = options.lodMaxClamp;
+        this.compare = options.compare;
+        this.maxAnisotropy = options.maxAnisotropy ?? 1;
+      }
+      set addressMode(value) {
+        this.addressModeU = value;
+        this.addressModeV = value;
+        this.addressModeW = value;
+      }
+      /** setting this will set wrapModeU,wrapModeV and wrapModeW all at once! */
+      get addressMode() {
+        return this.addressModeU;
+      }
+      set wrapMode(value) {
+        deprecation(v8_0_0, "TextureStyle.wrapMode is now TextureStyle.addressMode");
+        this.addressMode = value;
+      }
+      get wrapMode() {
+        return this.addressMode;
+      }
+      set scaleMode(value) {
+        this.magFilter = value;
+        this.minFilter = value;
+        this.mipmapFilter = value;
+      }
+      /** setting this will set magFilter,minFilter and mipmapFilter all at once!  */
+      get scaleMode() {
+        return this.magFilter;
+      }
+      /** Specifies the maximum anisotropy value clamp used by the sampler. */
+      set maxAnisotropy(value) {
+        this._maxAnisotropy = Math.min(value, 16);
+        if (this._maxAnisotropy > 1) {
+          this.scaleMode = "linear";
+        }
+      }
+      get maxAnisotropy() {
+        return this._maxAnisotropy;
+      }
+      // TODO - move this to WebGL?
+      get _resourceId() {
+        return this._sharedResourceId || this._generateResourceId();
+      }
+      update() {
+        this._sharedResourceId = null;
+        this.emit("change", this);
+      }
+      _generateResourceId() {
+        const bigKey = `${this.addressModeU}-${this.addressModeV}-${this.addressModeW}-${this.magFilter}-${this.minFilter}-${this.mipmapFilter}-${this.lodMinClamp}-${this.lodMaxClamp}-${this.compare}-${this._maxAnisotropy}`;
+        this._sharedResourceId = createResourceIdFromString(bigKey);
+        return this._resourceId;
+      }
+      /** Destroys the style */
+      destroy() {
+        this.destroyed = true;
+        this.emit("destroy", this);
+        this.emit("change", this);
+        this.removeAllListeners();
+      }
+    };
+    _TextureStyle.defaultOptions = {
+      addressMode: "clamp-to-edge",
+      scaleMode: "linear"
+    };
+    TextureStyle = _TextureStyle;
+  }
+});
+
+// node_modules/pixi.js/lib/rendering/renderers/shared/texture/sources/TextureSource.mjs
+var _TextureSource, TextureSource;
+var init_TextureSource = __esm({
+  "node_modules/pixi.js/lib/rendering/renderers/shared/texture/sources/TextureSource.mjs"() {
+    init_eventemitter3();
+    init_pow2();
+    init_definedProps();
+    init_uid();
+    init_TextureStyle();
+    _TextureSource = class _TextureSource2 extends eventemitter3_default {
+      /**
+       * @param options - options for creating a new TextureSource
+       */
+      constructor(options = {}) {
+        super();
+        this.options = options;
+        this._gpuData = /* @__PURE__ */ Object.create(null);
+        this._gcLastUsed = -1;
+        this.uid = uid("textureSource");
+        this._resourceType = "textureSource";
+        this._resourceId = uid("resource");
+        this.uploadMethodId = "unknown";
+        this._resolution = 1;
+        this.pixelWidth = 1;
+        this.pixelHeight = 1;
+        this.width = 1;
+        this.height = 1;
+        this.sampleCount = 1;
+        this.mipLevelCount = 1;
+        this.autoGenerateMipmaps = false;
+        this.format = "rgba8unorm";
+        this.dimension = "2d";
+        this.viewDimension = "2d";
+        this.arrayLayerCount = 1;
+        this.antialias = false;
+        this.transient = false;
+        this._touched = 0;
+        this._batchTick = -1;
+        this._textureBindLocation = -1;
+        options = { ..._TextureSource2.defaultOptions, ...options };
+        this.label = options.label ?? "";
+        this.resource = options.resource;
+        this.autoGarbageCollect = options.autoGarbageCollect;
+        this._resolution = options.resolution;
+        if (options.width) {
+          this.pixelWidth = options.width * this._resolution;
+        } else {
+          this.pixelWidth = this.resource ? this.resourceWidth ?? 1 : 1;
+        }
+        if (options.height) {
+          this.pixelHeight = options.height * this._resolution;
+        } else {
+          this.pixelHeight = this.resource ? this.resourceHeight ?? 1 : 1;
+        }
+        this.width = this.pixelWidth / this._resolution;
+        this.height = this.pixelHeight / this._resolution;
+        this.format = options.format;
+        this.dimension = options.dimensions;
+        this.viewDimension = options.viewDimension ?? options.dimensions;
+        this.arrayLayerCount = options.arrayLayerCount;
+        this.mipLevelCount = options.mipLevelCount;
+        this.autoGenerateMipmaps = options.autoGenerateMipmaps;
+        this.sampleCount = options.sampleCount;
+        this.antialias = options.antialias;
+        this.transient = options.transient ?? false;
+        this.alphaMode = options.alphaMode;
+        this.style = new TextureStyle(definedProps(options));
+        this.destroyed = false;
+        this._refreshPOT();
+      }
+      /** returns itself */
+      get source() {
+        return this;
+      }
+      /** the style of the texture */
+      get style() {
+        return this._style;
+      }
+      set style(value) {
+        if (this.style === value) return;
+        this._style?.off("change", this._onStyleChange, this);
+        this._style = value;
+        this._style?.on("change", this._onStyleChange, this);
+        this._onStyleChange();
+      }
+      /** Specifies the maximum anisotropy value clamp used by the sampler. */
+      set maxAnisotropy(value) {
+        this._style.maxAnisotropy = value;
+      }
+      get maxAnisotropy() {
+        return this._style.maxAnisotropy;
+      }
+      /** setting this will set wrapModeU, wrapModeV and wrapModeW all at once! */
+      get addressMode() {
+        return this._style.addressMode;
+      }
+      set addressMode(value) {
+        this._style.addressMode = value;
+      }
+      /** setting this will set wrapModeU, wrapModeV and wrapModeW all at once! */
+      get repeatMode() {
+        return this._style.addressMode;
+      }
+      set repeatMode(value) {
+        this._style.addressMode = value;
+      }
+      /** Specifies the sampling behavior when the sample footprint is smaller than or equal to one texel. */
+      get magFilter() {
+        return this._style.magFilter;
+      }
+      set magFilter(value) {
+        this._style.magFilter = value;
+      }
+      /** Specifies the sampling behavior when the sample footprint is larger than one texel. */
+      get minFilter() {
+        return this._style.minFilter;
+      }
+      set minFilter(value) {
+        this._style.minFilter = value;
+      }
+      /** Specifies behavior for sampling between mipmap levels. */
+      get mipmapFilter() {
+        return this._style.mipmapFilter;
+      }
+      set mipmapFilter(value) {
+        this._style.mipmapFilter = value;
+      }
+      /** Specifies the minimum and maximum levels of detail, respectively, used internally when sampling a texture. */
+      get lodMinClamp() {
+        return this._style.lodMinClamp;
+      }
+      set lodMinClamp(value) {
+        this._style.lodMinClamp = value;
+      }
+      /** Specifies the minimum and maximum levels of detail, respectively, used internally when sampling a texture. */
+      get lodMaxClamp() {
+        return this._style.lodMaxClamp;
+      }
+      set lodMaxClamp(value) {
+        this._style.lodMaxClamp = value;
+      }
+      _onStyleChange() {
+        this.emit("styleChange", this);
+      }
+      /** call this if you have modified the texture outside of the constructor */
+      update() {
+        if (this.resource) {
+          const resolution = this._resolution;
+          const didResize = this.resize(this.resourceWidth / resolution, this.resourceHeight / resolution);
+          if (didResize) return;
+        }
+        this.emit("update", this);
+      }
+      /** Destroys this texture source */
+      destroy() {
+        this.destroyed = true;
+        this.unload();
+        this.emit("destroy", this);
+        if (this._style) {
+          this._style.destroy();
+          this._style = null;
+        }
+        this.uploadMethodId = null;
+        this.resource = null;
+        this.removeAllListeners();
+      }
+      /**
+       * This will unload the Texture source from the GPU. This will free up the GPU memory
+       * As soon as it is required fore rendering, it will be re-uploaded.
+       */
+      unload() {
+        this._resourceId = uid("resource");
+        this.emit("change", this);
+        this.emit("unload", this);
+        for (const key in this._gpuData) {
+          this._gpuData[key]?.destroy?.();
+        }
+        this._gpuData = /* @__PURE__ */ Object.create(null);
+      }
+      /** the width of the resource. This is the REAL pure number, not accounting resolution   */
+      get resourceWidth() {
+        const { resource } = this;
+        return resource.naturalWidth || resource.videoWidth || resource.displayWidth || resource.width;
+      }
+      /** the height of the resource. This is the REAL pure number, not accounting resolution */
+      get resourceHeight() {
+        const { resource } = this;
+        return resource.naturalHeight || resource.videoHeight || resource.displayHeight || resource.height;
+      }
+      /**
+       * the resolution of the texture. Changing this number, will not change the number of pixels in the actual texture
+       * but will the size of the texture when rendered.
+       *
+       * changing the resolution of this texture to 2 for example will make it appear twice as small when rendered (as pixel
+       * density will have increased)
+       */
+      get resolution() {
+        return this._resolution;
+      }
+      set resolution(resolution) {
+        if (this._resolution === resolution) return;
+        this._resolution = resolution;
+        this.width = this.pixelWidth / resolution;
+        this.height = this.pixelHeight / resolution;
+      }
+      /**
+       * Resize the texture, this is handy if you want to use the texture as a render texture
+       * @param width - the new width of the texture
+       * @param height - the new height of the texture
+       * @param resolution - the new resolution of the texture
+       * @returns - if the texture was resized
+       */
+      resize(width, height, resolution) {
+        resolution || (resolution = this._resolution);
+        width || (width = this.width);
+        height || (height = this.height);
+        const newPixelWidth = Math.round(width * resolution);
+        const newPixelHeight = Math.round(height * resolution);
+        this.width = newPixelWidth / resolution;
+        this.height = newPixelHeight / resolution;
+        this._resolution = resolution;
+        if (this.pixelWidth === newPixelWidth && this.pixelHeight === newPixelHeight) {
+          return false;
+        }
+        this._refreshPOT();
+        this.pixelWidth = newPixelWidth;
+        this.pixelHeight = newPixelHeight;
+        this.emit("resize", this);
+        this._resourceId = uid("resource");
+        this.emit("change", this);
+        return true;
+      }
+      /**
+       * Lets the renderer know that this texture has been updated and its mipmaps should be re-generated.
+       * This is only important for RenderTexture instances, as standard Texture instances will have their
+       * mipmaps generated on upload. You should call this method after you make any change to the texture
+       *
+       * The reason for this is is can be quite expensive to update mipmaps for a texture. So by default,
+       * We want you, the developer to specify when this action should happen.
+       *
+       * Generally you don't want to have mipmaps generated on Render targets that are changed every frame,
+       */
+      updateMipmaps() {
+        if (this.autoGenerateMipmaps && this.mipLevelCount > 1) {
+          this.emit("updateMipmaps", this);
+        }
+      }
+      set wrapMode(value) {
+        this._style.wrapMode = value;
+      }
+      get wrapMode() {
+        return this._style.wrapMode;
+      }
+      set scaleMode(value) {
+        this._style.scaleMode = value;
+      }
+      /** setting this will set magFilter,minFilter and mipmapFilter all at once!  */
+      get scaleMode() {
+        return this._style.scaleMode;
+      }
+      /**
+       * Refresh check for isPowerOfTwo texture based on size
+       * @private
+       */
+      _refreshPOT() {
+        this.isPowerOfTwo = isPow2(this.pixelWidth) && isPow2(this.pixelHeight);
+      }
+      static test(_resource) {
+        throw new Error("Unimplemented");
+      }
+    };
+    _TextureSource.defaultOptions = {
+      resolution: 1,
+      format: "bgra8unorm",
+      alphaMode: "premultiply-alpha-on-upload",
+      dimensions: "2d",
+      viewDimension: "2d",
+      arrayLayerCount: 1,
+      mipLevelCount: 1,
+      autoGenerateMipmaps: false,
+      sampleCount: 1,
+      antialias: false,
+      autoGarbageCollect: false
+    };
+    TextureSource = _TextureSource;
+  }
+});
+
+// node_modules/pixi.js/lib/rendering/renderers/gl/shader/GenerateShaderSyncCode.mjs
+function generateShaderSyncCode(shader, shaderSystem) {
+  const funcFragments = [];
+  const headerFragments = [`
+        var g = s.groups;
+        var sS = r.shader;
+        var p = s.glProgram;
+        var ugS = r.uniformGroup;
+        var resources;
+    `];
+  let addedTextreSystem = false;
+  let textureCount = 0;
+  const programData = shaderSystem._getProgramData(shader.glProgram);
+  for (const i2 in shader.groups) {
+    const group = shader.groups[i2];
+    funcFragments.push(`
+            resources = g[${i2}].resources;
+        `);
+    for (const j2 in group.resources) {
+      const resource = group.resources[j2];
+      if (resource instanceof UniformGroup) {
+        if (resource.ubo) {
+          const resName = shader._uniformBindMap[i2][Number(j2)];
+          funcFragments.push(`
+                        sS.bindUniformBlock(
+                            resources[${j2}],
+                            '${resName}',
+                            ${shader.glProgram._uniformBlockData[resName].index}
+                        );
+                    `);
+        } else {
+          funcFragments.push(`
+                        ugS.updateUniformGroup(resources[${j2}], p, sD);
+                    `);
+        }
+      } else if (resource instanceof BufferResource) {
+        const resName = shader._uniformBindMap[i2][Number(j2)];
+        funcFragments.push(`
+                    sS.bindUniformBlock(
+                        resources[${j2}],
+                        '${resName}',
+                        ${shader.glProgram._uniformBlockData[resName].index}
+                    );
+                `);
+      } else if (resource instanceof TextureSource) {
+        const uniformName = shader._uniformBindMap[i2][j2];
+        const uniformData = programData.uniformData[uniformName];
+        if (uniformData) {
+          if (!addedTextreSystem) {
+            addedTextreSystem = true;
+            headerFragments.push(`
+                        var tS = r.texture;
+                        `);
+          }
+          shaderSystem._gl.uniform1i(uniformData.location, textureCount);
+          funcFragments.push(`
+                        tS.bind(resources[${j2}], ${textureCount});
+                    `);
+          textureCount++;
+        }
+      }
+    }
+  }
+  const functionSource = [...headerFragments, ...funcFragments].join("\n");
+  return new Function("r", "s", "sD", functionSource);
+}
+var init_GenerateShaderSyncCode = __esm({
+  "node_modules/pixi.js/lib/rendering/renderers/gl/shader/GenerateShaderSyncCode.mjs"() {
+    init_BufferResource();
+    init_UniformGroup();
+    init_TextureSource();
+  }
+});
+
+// node_modules/pixi.js/lib/utils/logging/warn.mjs
+function warn(...args) {
+  if (warnCount === maxWarnings) return;
+  warnCount++;
+  if (warnCount === maxWarnings) {
+    console.warn("PixiJS Warning: too many warnings, no more warnings will be reported to the console by PixiJS.");
+  } else {
+    console.warn("PixiJS Warning: ", ...args);
+  }
+}
+var warnCount, maxWarnings;
+var init_warn = __esm({
+  "node_modules/pixi.js/lib/utils/logging/warn.mjs"() {
+    "use strict";
+    warnCount = 0;
+    maxWarnings = 500;
+  }
+});
+
+// node_modules/pixi.js/lib/rendering/renderers/gl/shader/GlProgramData.mjs
+var GlProgramData;
+var init_GlProgramData = __esm({
+  "node_modules/pixi.js/lib/rendering/renderers/gl/shader/GlProgramData.mjs"() {
+    "use strict";
+    GlProgramData = class {
+      /**
+       * Makes a new Pixi program.
+       * @param program - webgl program
+       * @param uniformData - uniforms
+       */
+      constructor(program, uniformData) {
+        this.program = program;
+        this.uniformData = uniformData;
+        this.uniformGroups = {};
+        this.uniformDirtyGroups = {};
+        this.uniformBlockBindings = {};
+      }
+      /** Destroys this program. */
+      destroy() {
+        this.uniformData = null;
+        this.uniformGroups = null;
+        this.uniformDirtyGroups = null;
+        this.uniformBlockBindings = null;
+        this.program = null;
+      }
+    };
+  }
+});
+
+// node_modules/pixi.js/lib/rendering/renderers/gl/shader/program/compileShader.mjs
+function compileShader(gl, type, src) {
+  const shader = gl.createShader(type);
+  gl.shaderSource(shader, src);
+  gl.compileShader(shader);
+  return shader;
+}
+var init_compileShader = __esm({
+  "node_modules/pixi.js/lib/rendering/renderers/gl/shader/program/compileShader.mjs"() {
+    "use strict";
+  }
+});
+
+// node_modules/pixi.js/lib/rendering/renderers/gl/shader/program/defaultValue.mjs
+function booleanArray(size) {
+  const array = new Array(size);
+  for (let i2 = 0; i2 < array.length; i2++) {
+    array[i2] = false;
+  }
+  return array;
+}
+function defaultValue(type, size) {
+  switch (type) {
+    case "float":
+      return 0;
+    case "vec2":
+      return new Float32Array(2 * size);
+    case "vec3":
+      return new Float32Array(3 * size);
+    case "vec4":
+      return new Float32Array(4 * size);
+    case "int":
+    case "uint":
+    case "sampler2D":
+    case "sampler2DArray":
+      return 0;
+    case "ivec2":
+      return new Int32Array(2 * size);
+    case "ivec3":
+      return new Int32Array(3 * size);
+    case "ivec4":
+      return new Int32Array(4 * size);
+    case "uvec2":
+      return new Uint32Array(2 * size);
+    case "uvec3":
+      return new Uint32Array(3 * size);
+    case "uvec4":
+      return new Uint32Array(4 * size);
+    case "bool":
+      return false;
+    case "bvec2":
+      return booleanArray(2 * size);
+    case "bvec3":
+      return booleanArray(3 * size);
+    case "bvec4":
+      return booleanArray(4 * size);
+    case "mat2":
+      return new Float32Array([
+        1,
+        0,
+        0,
+        1
+      ]);
+    case "mat3":
+      return new Float32Array([
+        1,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        1
+      ]);
+    case "mat4":
+      return new Float32Array([
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1
+      ]);
+  }
+  return null;
+}
+var init_defaultValue = __esm({
+  "node_modules/pixi.js/lib/rendering/renderers/gl/shader/program/defaultValue.mjs"() {
+    "use strict";
+  }
+});
+
+// node_modules/pixi.js/lib/rendering/renderers/shared/geometry/utils/getAttributeInfoFromFormat.mjs
+function getAttributeInfoFromFormat(format) {
+  return attributeFormatData[format] ?? attributeFormatData.float32;
+}
+var attributeFormatData;
+var init_getAttributeInfoFromFormat = __esm({
+  "node_modules/pixi.js/lib/rendering/renderers/shared/geometry/utils/getAttributeInfoFromFormat.mjs"() {
+    "use strict";
+    attributeFormatData = {
+      uint8x2: { size: 2, stride: 2, normalised: false },
+      uint8x4: { size: 4, stride: 4, normalised: false },
+      sint8x2: { size: 2, stride: 2, normalised: false },
+      sint8x4: { size: 4, stride: 4, normalised: false },
+      unorm8x2: { size: 2, stride: 2, normalised: true },
+      unorm8x4: { size: 4, stride: 4, normalised: true },
+      snorm8x2: { size: 2, stride: 2, normalised: true },
+      snorm8x4: { size: 4, stride: 4, normalised: true },
+      uint16x2: { size: 2, stride: 4, normalised: false },
+      uint16x4: { size: 4, stride: 8, normalised: false },
+      sint16x2: { size: 2, stride: 4, normalised: false },
+      sint16x4: { size: 4, stride: 8, normalised: false },
+      unorm16x2: { size: 2, stride: 4, normalised: true },
+      unorm16x4: { size: 4, stride: 8, normalised: true },
+      snorm16x2: { size: 2, stride: 4, normalised: true },
+      snorm16x4: { size: 4, stride: 8, normalised: true },
+      float16x2: { size: 2, stride: 4, normalised: false },
+      float16x4: { size: 4, stride: 8, normalised: false },
+      float32: { size: 1, stride: 4, normalised: false },
+      float32x2: { size: 2, stride: 8, normalised: false },
+      float32x3: { size: 3, stride: 12, normalised: false },
+      float32x4: { size: 4, stride: 16, normalised: false },
+      uint32: { size: 1, stride: 4, normalised: false },
+      uint32x2: { size: 2, stride: 8, normalised: false },
+      uint32x3: { size: 3, stride: 12, normalised: false },
+      uint32x4: { size: 4, stride: 16, normalised: false },
+      sint32: { size: 1, stride: 4, normalised: false },
+      sint32x2: { size: 2, stride: 8, normalised: false },
+      sint32x3: { size: 3, stride: 12, normalised: false },
+      sint32x4: { size: 4, stride: 16, normalised: false }
+    };
+  }
+});
+
+// node_modules/pixi.js/lib/rendering/renderers/gl/shader/program/mapType.mjs
+function mapType(gl, type) {
+  if (!GL_TABLE) {
+    const typeNames = Object.keys(GL_TO_GLSL_TYPES);
+    GL_TABLE = {};
+    for (let i2 = 0; i2 < typeNames.length; ++i2) {
+      const tn = typeNames[i2];
+      GL_TABLE[gl[tn]] = GL_TO_GLSL_TYPES[tn];
+    }
+  }
+  return GL_TABLE[type];
+}
+function mapGlToVertexFormat(gl, type) {
+  const typeValue = mapType(gl, type);
+  return GLSL_TO_VERTEX_TYPES[typeValue] || "float32";
+}
+var GL_TABLE, GL_TO_GLSL_TYPES, GLSL_TO_VERTEX_TYPES;
+var init_mapType = __esm({
+  "node_modules/pixi.js/lib/rendering/renderers/gl/shader/program/mapType.mjs"() {
+    "use strict";
+    GL_TABLE = null;
+    GL_TO_GLSL_TYPES = {
+      FLOAT: "float",
+      FLOAT_VEC2: "vec2",
+      FLOAT_VEC3: "vec3",
+      FLOAT_VEC4: "vec4",
+      INT: "int",
+      INT_VEC2: "ivec2",
+      INT_VEC3: "ivec3",
+      INT_VEC4: "ivec4",
+      UNSIGNED_INT: "uint",
+      UNSIGNED_INT_VEC2: "uvec2",
+      UNSIGNED_INT_VEC3: "uvec3",
+      UNSIGNED_INT_VEC4: "uvec4",
+      BOOL: "bool",
+      BOOL_VEC2: "bvec2",
+      BOOL_VEC3: "bvec3",
+      BOOL_VEC4: "bvec4",
+      FLOAT_MAT2: "mat2",
+      FLOAT_MAT3: "mat3",
+      FLOAT_MAT4: "mat4",
+      SAMPLER_2D: "sampler2D",
+      INT_SAMPLER_2D: "sampler2D",
+      UNSIGNED_INT_SAMPLER_2D: "sampler2D",
+      SAMPLER_CUBE: "samplerCube",
+      INT_SAMPLER_CUBE: "samplerCube",
+      UNSIGNED_INT_SAMPLER_CUBE: "samplerCube",
+      SAMPLER_2D_ARRAY: "sampler2DArray",
+      INT_SAMPLER_2D_ARRAY: "sampler2DArray",
+      UNSIGNED_INT_SAMPLER_2D_ARRAY: "sampler2DArray"
+    };
+    GLSL_TO_VERTEX_TYPES = {
+      float: "float32",
+      vec2: "float32x2",
+      vec3: "float32x3",
+      vec4: "float32x4",
+      int: "sint32",
+      ivec2: "sint32x2",
+      ivec3: "sint32x3",
+      ivec4: "sint32x4",
+      uint: "uint32",
+      uvec2: "uint32x2",
+      uvec3: "uint32x3",
+      uvec4: "uint32x4",
+      bool: "uint32",
+      bvec2: "uint32x2",
+      bvec3: "uint32x3",
+      bvec4: "uint32x4"
+    };
+  }
+});
+
+// node_modules/pixi.js/lib/rendering/renderers/gl/shader/program/extractAttributesFromGlProgram.mjs
+function extractAttributesFromGlProgram(program, gl, sortAttributes = false) {
+  const attributes = {};
+  const totalAttributes = gl.getProgramParameter(program, gl.ACTIVE_ATTRIBUTES);
+  for (let i2 = 0; i2 < totalAttributes; i2++) {
+    const attribData = gl.getActiveAttrib(program, i2);
+    if (attribData.name.startsWith("gl_")) {
+      continue;
+    }
+    const format = mapGlToVertexFormat(gl, attribData.type);
+    attributes[attribData.name] = {
+      location: 0,
+      // set further down..
+      format,
+      stride: getAttributeInfoFromFormat(format).stride,
+      offset: 0,
+      instance: false,
+      start: 0
+    };
+  }
+  const keys = Object.keys(attributes);
+  if (sortAttributes) {
+    keys.sort((a2, b2) => a2 > b2 ? 1 : -1);
+    for (let i2 = 0; i2 < keys.length; i2++) {
+      attributes[keys[i2]].location = i2;
+      gl.bindAttribLocation(program, i2, keys[i2]);
+    }
+    gl.linkProgram(program);
+  } else {
+    for (let i2 = 0; i2 < keys.length; i2++) {
+      attributes[keys[i2]].location = gl.getAttribLocation(program, keys[i2]);
+    }
+  }
+  return attributes;
+}
+var init_extractAttributesFromGlProgram = __esm({
+  "node_modules/pixi.js/lib/rendering/renderers/gl/shader/program/extractAttributesFromGlProgram.mjs"() {
+    init_getAttributeInfoFromFormat();
+    init_mapType();
+  }
+});
+
+// node_modules/pixi.js/lib/rendering/renderers/gl/shader/program/getUboData.mjs
+function getUboData(program, gl) {
+  if (!gl.ACTIVE_UNIFORM_BLOCKS) return {};
+  const uniformBlocks = {};
+  const totalUniformsBlocks = gl.getProgramParameter(program, gl.ACTIVE_UNIFORM_BLOCKS);
+  for (let i2 = 0; i2 < totalUniformsBlocks; i2++) {
+    const name = gl.getActiveUniformBlockName(program, i2);
+    const uniformBlockIndex = gl.getUniformBlockIndex(program, name);
+    const size = gl.getActiveUniformBlockParameter(program, i2, gl.UNIFORM_BLOCK_DATA_SIZE);
+    uniformBlocks[name] = {
+      name,
+      index: uniformBlockIndex,
+      size
+    };
+  }
+  return uniformBlocks;
+}
+var init_getUboData = __esm({
+  "node_modules/pixi.js/lib/rendering/renderers/gl/shader/program/getUboData.mjs"() {
+    "use strict";
+  }
+});
+
+// node_modules/pixi.js/lib/rendering/renderers/gl/shader/program/getUniformData.mjs
+function getUniformData(program, gl) {
+  const uniforms = {};
+  const totalUniforms = gl.getProgramParameter(program, gl.ACTIVE_UNIFORMS);
+  for (let i2 = 0; i2 < totalUniforms; i2++) {
+    const uniformData = gl.getActiveUniform(program, i2);
+    const name = uniformData.name.replace(/\[.*?\]$/, "");
+    const isArray = !!uniformData.name.match(/\[.*?\]$/);
+    const type = mapType(gl, uniformData.type);
+    uniforms[name] = {
+      name,
+      index: i2,
+      type,
+      size: uniformData.size,
+      isArray,
+      value: defaultValue(type, uniformData.size)
+    };
+  }
+  return uniforms;
+}
+var init_getUniformData = __esm({
+  "node_modules/pixi.js/lib/rendering/renderers/gl/shader/program/getUniformData.mjs"() {
+    init_defaultValue();
+    init_mapType();
+  }
+});
+
+// node_modules/pixi.js/lib/rendering/renderers/gl/shader/program/logProgramError.mjs
+function logPrettyShaderError(gl, shader) {
+  const rawSource = gl.getShaderSource(shader);
+  if (rawSource === null) {
+    console.error("PixiJS Error: Could not retrieve shader source (WebGL context may be lost).");
+    return;
+  }
+  const shaderSrc = rawSource.split("\n").map((line, index) => `${index}: ${line}`);
+  const shaderLog = gl.getShaderInfoLog(shader) ?? "";
+  const splitShader = shaderLog.split("\n");
+  const dedupe = {};
+  const lineNumbers = splitShader.map((line) => parseFloat(line.replace(/^ERROR\: 0\:([\d]+)\:.*$/, "$1"))).filter((n2) => {
+    if (n2 && !dedupe[n2]) {
+      dedupe[n2] = true;
+      return true;
+    }
+    return false;
+  });
+  const logArgs = [""];
+  lineNumbers.forEach((number2) => {
+    shaderSrc[number2 - 1] = `%c${shaderSrc[number2 - 1]}%c`;
+    logArgs.push("background: #FF0000; color:#FFFFFF; font-size: 10px", "font-size: 10px");
+  });
+  const fragmentSourceToLog = shaderSrc.join("\n");
+  logArgs[0] = fragmentSourceToLog;
+  console.error(shaderLog);
+  console.groupCollapsed("click to view full shader code");
+  console.warn(...logArgs);
+  console.groupEnd();
+}
+function logProgramError(gl, program, vertexShader, fragmentShader) {
+  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+    if (!gl.getShaderParameter(vertexShader, gl.COMPILE_STATUS)) {
+      logPrettyShaderError(gl, vertexShader);
+    }
+    if (!gl.getShaderParameter(fragmentShader, gl.COMPILE_STATUS)) {
+      logPrettyShaderError(gl, fragmentShader);
+    }
+    console.error("PixiJS Error: Could not initialize shader.");
+    if (gl.getProgramInfoLog(program) !== "") {
+      console.warn("PixiJS Warning: gl.getProgramInfoLog()", gl.getProgramInfoLog(program));
+    }
+  }
+}
+var init_logProgramError = __esm({
+  "node_modules/pixi.js/lib/rendering/renderers/gl/shader/program/logProgramError.mjs"() {
+    "use strict";
+  }
+});
+
+// node_modules/pixi.js/lib/rendering/renderers/gl/shader/program/generateProgram.mjs
+function generateProgram(gl, program) {
+  const glVertShader = compileShader(gl, gl.VERTEX_SHADER, program.vertex);
+  const glFragShader = compileShader(gl, gl.FRAGMENT_SHADER, program.fragment);
+  const webGLProgram = gl.createProgram();
+  gl.attachShader(webGLProgram, glVertShader);
+  gl.attachShader(webGLProgram, glFragShader);
+  const transformFeedbackVaryings = program.transformFeedbackVaryings;
+  if (transformFeedbackVaryings) {
+    if (typeof gl.transformFeedbackVaryings !== "function") {
+      warn(`TransformFeedback is not supported but TransformFeedbackVaryings are given.`);
+    } else {
+      gl.transformFeedbackVaryings(
+        webGLProgram,
+        transformFeedbackVaryings.names,
+        transformFeedbackVaryings.bufferMode === "separate" ? gl.SEPARATE_ATTRIBS : gl.INTERLEAVED_ATTRIBS
+      );
+    }
+  }
+  gl.linkProgram(webGLProgram);
+  if (!gl.getProgramParameter(webGLProgram, gl.LINK_STATUS)) {
+    logProgramError(gl, webGLProgram, glVertShader, glFragShader);
+  }
+  program._attributeData = extractAttributesFromGlProgram(
+    webGLProgram,
+    gl,
+    !/^[ \t]*#[ \t]*version[ \t]+300[ \t]+es[ \t]*$/m.test(program.vertex)
+  );
+  program._uniformData = getUniformData(webGLProgram, gl);
+  program._uniformBlockData = getUboData(webGLProgram, gl);
+  gl.deleteShader(glVertShader);
+  gl.deleteShader(glFragShader);
+  const uniformData = {};
+  for (const i2 in program._uniformData) {
+    const data = program._uniformData[i2];
+    uniformData[i2] = {
+      location: gl.getUniformLocation(webGLProgram, i2),
+      value: defaultValue(data.type, data.size)
+    };
+  }
+  const glProgram = new GlProgramData(webGLProgram, uniformData);
+  return glProgram;
+}
+var init_generateProgram = __esm({
+  "node_modules/pixi.js/lib/rendering/renderers/gl/shader/program/generateProgram.mjs"() {
+    init_warn();
+    init_GlProgramData();
+    init_compileShader();
+    init_defaultValue();
+    init_extractAttributesFromGlProgram();
+    init_getUboData();
+    init_getUniformData();
+    init_logProgramError();
+  }
+});
+
+// node_modules/pixi.js/lib/rendering/renderers/gl/shader/GlShaderSystem.mjs
+var defaultSyncData, GlShaderSystem;
+var init_GlShaderSystem = __esm({
+  "node_modules/pixi.js/lib/rendering/renderers/gl/shader/GlShaderSystem.mjs"() {
+    init_Extensions();
+    init_GenerateShaderSyncCode();
+    init_generateProgram();
+    defaultSyncData = {
+      textureCount: 0,
+      blockIndex: 0
+    };
+    GlShaderSystem = class {
+      constructor(renderer) {
+        this._activeProgram = null;
+        this._programDataHash = /* @__PURE__ */ Object.create(null);
+        this._shaderSyncFunctions = /* @__PURE__ */ Object.create(null);
+        this._renderer = renderer;
+      }
+      contextChange(gl) {
+        this._gl = gl;
+        this._programDataHash = /* @__PURE__ */ Object.create(null);
+        this._shaderSyncFunctions = /* @__PURE__ */ Object.create(null);
+        this._activeProgram = null;
+      }
+      /**
+       * Changes the current shader to the one given in parameter.
+       * @param shader - the new shader
+       * @param skipSync - false if the shader should automatically sync its uniforms.
+       * @returns the glProgram that belongs to the shader.
+       */
+      bind(shader, skipSync) {
+        this._setProgram(shader.glProgram);
+        if (skipSync) return;
+        defaultSyncData.textureCount = 0;
+        defaultSyncData.blockIndex = 0;
+        let syncFunction = this._shaderSyncFunctions[shader.glProgram._key];
+        if (!syncFunction) {
+          syncFunction = this._shaderSyncFunctions[shader.glProgram._key] = this._generateShaderSync(shader, this);
+        }
+        this._renderer.buffer.nextBindBase(!!shader.glProgram.transformFeedbackVaryings);
+        syncFunction(this._renderer, shader, defaultSyncData);
+      }
+      /**
+       * Updates the uniform group.
+       * @param uniformGroup - the uniform group to update
+       */
+      updateUniformGroup(uniformGroup) {
+        this._renderer.uniformGroup.updateUniformGroup(uniformGroup, this._activeProgram, defaultSyncData);
+      }
+      /**
+       * Binds a uniform block to the shader.
+       * @param uniformGroup - the uniform group to bind
+       * @param name - the name of the uniform block
+       * @param index - the index of the uniform block
+       */
+      bindUniformBlock(uniformGroup, name, index = 0) {
+        const bufferSystem = this._renderer.buffer;
+        const programData = this._getProgramData(this._activeProgram);
+        const isBufferResource = uniformGroup._bufferResource;
+        if (!isBufferResource) {
+          this._renderer.ubo.updateUniformGroup(uniformGroup);
+        }
+        const buffer = uniformGroup.buffer;
+        const glBuffer = bufferSystem.updateBuffer(buffer);
+        const boundLocation = bufferSystem.freeLocationForBufferBase(glBuffer);
+        if (isBufferResource) {
+          const { offset, size } = uniformGroup;
+          if (offset === 0 && size === buffer.data.byteLength) {
+            bufferSystem.bindBufferBase(glBuffer, boundLocation);
+          } else {
+            bufferSystem.bindBufferRange(glBuffer, boundLocation, offset);
+          }
+        } else if (bufferSystem.getLastBindBaseLocation(glBuffer) !== boundLocation) {
+          bufferSystem.bindBufferBase(glBuffer, boundLocation);
+        }
+        const uniformBlockIndex = this._activeProgram._uniformBlockData[name].index;
+        if (programData.uniformBlockBindings[index] === boundLocation) return;
+        programData.uniformBlockBindings[index] = boundLocation;
+        this._renderer.gl.uniformBlockBinding(programData.program, uniformBlockIndex, boundLocation);
+      }
+      _setProgram(program) {
+        if (this._activeProgram === program) return;
+        this._activeProgram = program;
+        const programData = this._getProgramData(program);
+        this._gl.useProgram(programData.program);
+      }
+      /**
+       * @param program - the program to get the data for
+       * @internal
+       */
+      _getProgramData(program) {
+        return this._programDataHash[program._key] || this._createProgramData(program);
+      }
+      _createProgramData(program) {
+        const key = program._key;
+        this._programDataHash[key] = generateProgram(this._gl, program);
+        return this._programDataHash[key];
+      }
+      destroy() {
+        for (const key of Object.keys(this._programDataHash)) {
+          this._programDataHash[key].destroy();
+        }
+        this._programDataHash = null;
+        this._shaderSyncFunctions = null;
+        this._activeProgram = null;
+        this._renderer = null;
+        this._gl = null;
+      }
+      /**
+       * Creates a function that can be executed that will sync the shader as efficiently as possible.
+       * Overridden by the unsafe eval package if you don't want eval used in your project.
+       * @param shader - the shader to generate the sync function for
+       * @param shaderSystem - the shader system to use
+       * @returns - the generated sync function
+       * @ignore
+       */
+      _generateShaderSync(shader, shaderSystem) {
+        return generateShaderSyncCode(shader, shaderSystem);
+      }
+      resetState() {
+        this._activeProgram = null;
+      }
+    };
+    GlShaderSystem.extension = {
+      type: [
+        ExtensionType.WebGLSystem
+      ],
+      name: "shader"
+    };
+  }
+});
+
+// node_modules/pixi.js/lib/rendering/renderers/gl/shader/utils/generateUniformsSyncTypes.mjs
+var UNIFORM_TO_SINGLE_SETTERS, UNIFORM_TO_ARRAY_SETTERS;
+var init_generateUniformsSyncTypes = __esm({
+  "node_modules/pixi.js/lib/rendering/renderers/gl/shader/utils/generateUniformsSyncTypes.mjs"() {
+    "use strict";
+    UNIFORM_TO_SINGLE_SETTERS = {
+      f32: `if (cv !== v) {
+            cu.value = v;
+            gl.uniform1f(location, v);
+        }`,
+      "vec2<f32>": `if (cv[0] !== v[0] || cv[1] !== v[1]) {
+            cv[0] = v[0];
+            cv[1] = v[1];
+            gl.uniform2f(location, v[0], v[1]);
+        }`,
+      "vec3<f32>": `if (cv[0] !== v[0] || cv[1] !== v[1] || cv[2] !== v[2]) {
+            cv[0] = v[0];
+            cv[1] = v[1];
+            cv[2] = v[2];
+            gl.uniform3f(location, v[0], v[1], v[2]);
+        }`,
+      "vec4<f32>": `if (cv[0] !== v[0] || cv[1] !== v[1] || cv[2] !== v[2] || cv[3] !== v[3]) {
+            cv[0] = v[0];
+            cv[1] = v[1];
+            cv[2] = v[2];
+            cv[3] = v[3];
+            gl.uniform4f(location, v[0], v[1], v[2], v[3]);
+        }`,
+      i32: `if (cv !== v) {
+            cu.value = v;
+            gl.uniform1i(location, v);
+        }`,
+      "vec2<i32>": `if (cv[0] !== v[0] || cv[1] !== v[1]) {
+            cv[0] = v[0];
+            cv[1] = v[1];
+            gl.uniform2i(location, v[0], v[1]);
+        }`,
+      "vec3<i32>": `if (cv[0] !== v[0] || cv[1] !== v[1] || cv[2] !== v[2]) {
+            cv[0] = v[0];
+            cv[1] = v[1];
+            cv[2] = v[2];
+            gl.uniform3i(location, v[0], v[1], v[2]);
+        }`,
+      "vec4<i32>": `if (cv[0] !== v[0] || cv[1] !== v[1] || cv[2] !== v[2] || cv[3] !== v[3]) {
+            cv[0] = v[0];
+            cv[1] = v[1];
+            cv[2] = v[2];
+            cv[3] = v[3];
+            gl.uniform4i(location, v[0], v[1], v[2], v[3]);
+        }`,
+      u32: `if (cv !== v) {
+            cu.value = v;
+            gl.uniform1ui(location, v);
+        }`,
+      "vec2<u32>": `if (cv[0] !== v[0] || cv[1] !== v[1]) {
+            cv[0] = v[0];
+            cv[1] = v[1];
+            gl.uniform2ui(location, v[0], v[1]);
+        }`,
+      "vec3<u32>": `if (cv[0] !== v[0] || cv[1] !== v[1] || cv[2] !== v[2]) {
+            cv[0] = v[0];
+            cv[1] = v[1];
+            cv[2] = v[2];
+            gl.uniform3ui(location, v[0], v[1], v[2]);
+        }`,
+      "vec4<u32>": `if (cv[0] !== v[0] || cv[1] !== v[1] || cv[2] !== v[2] || cv[3] !== v[3]) {
+            cv[0] = v[0];
+            cv[1] = v[1];
+            cv[2] = v[2];
+            cv[3] = v[3];
+            gl.uniform4ui(location, v[0], v[1], v[2], v[3]);
+        }`,
+      bool: `if (cv !== v) {
+            cu.value = v;
+            gl.uniform1i(location, v);
+        }`,
+      "vec2<bool>": `if (cv[0] !== v[0] || cv[1] !== v[1]) {
+            cv[0] = v[0];
+            cv[1] = v[1];
+            gl.uniform2i(location, v[0], v[1]);
+        }`,
+      "vec3<bool>": `if (cv[0] !== v[0] || cv[1] !== v[1] || cv[2] !== v[2]) {
+            cv[0] = v[0];
+            cv[1] = v[1];
+            cv[2] = v[2];
+            gl.uniform3i(location, v[0], v[1], v[2]);
+        }`,
+      "vec4<bool>": `if (cv[0] !== v[0] || cv[1] !== v[1] || cv[2] !== v[2] || cv[3] !== v[3]) {
+            cv[0] = v[0];
+            cv[1] = v[1];
+            cv[2] = v[2];
+            cv[3] = v[3];
+            gl.uniform4i(location, v[0], v[1], v[2], v[3]);
+        }`,
+      "mat2x2<f32>": `gl.uniformMatrix2fv(location, false, v);`,
+      "mat3x3<f32>": `gl.uniformMatrix3fv(location, false, v);`,
+      "mat4x4<f32>": `gl.uniformMatrix4fv(location, false, v);`
+    };
+    UNIFORM_TO_ARRAY_SETTERS = {
+      f32: `gl.uniform1fv(location, v);`,
+      "vec2<f32>": `gl.uniform2fv(location, v);`,
+      "vec3<f32>": `gl.uniform3fv(location, v);`,
+      "vec4<f32>": `gl.uniform4fv(location, v);`,
+      "mat2x2<f32>": `gl.uniformMatrix2fv(location, false, v);`,
+      "mat3x3<f32>": `gl.uniformMatrix3fv(location, false, v);`,
+      "mat4x4<f32>": `gl.uniformMatrix4fv(location, false, v);`,
+      i32: `gl.uniform1iv(location, v);`,
+      "vec2<i32>": `gl.uniform2iv(location, v);`,
+      "vec3<i32>": `gl.uniform3iv(location, v);`,
+      "vec4<i32>": `gl.uniform4iv(location, v);`,
+      u32: `gl.uniform1iv(location, v);`,
+      "vec2<u32>": `gl.uniform2iv(location, v);`,
+      "vec3<u32>": `gl.uniform3iv(location, v);`,
+      "vec4<u32>": `gl.uniform4iv(location, v);`,
+      bool: `gl.uniform1iv(location, v);`,
+      "vec2<bool>": `gl.uniform2iv(location, v);`,
+      "vec3<bool>": `gl.uniform3iv(location, v);`,
+      "vec4<bool>": `gl.uniform4iv(location, v);`
+    };
+  }
+});
+
+// node_modules/pixi.js/lib/rendering/renderers/gl/shader/utils/generateUniformsSync.mjs
+function generateUniformsSync(group, uniformData) {
+  const funcFragments = [`
+        var v = null;
+        var cv = null;
+        var cu = null;
+        var t = 0;
+        var gl = renderer.gl;
+        var name = null;
+    `];
+  for (const i2 in group.uniforms) {
+    if (!uniformData[i2]) {
+      if (group.uniforms[i2] instanceof UniformGroup) {
+        if (group.uniforms[i2].ubo) {
+          funcFragments.push(`
+                        renderer.shader.bindUniformBlock(uv.${i2}, "${i2}");
+                    `);
+        } else {
+          funcFragments.push(`
+                        renderer.shader.updateUniformGroup(uv.${i2});
+                    `);
+        }
+      } else if (group.uniforms[i2] instanceof BufferResource) {
+        funcFragments.push(`
+                        renderer.shader.bindBufferResource(uv.${i2}, "${i2}");
+                    `);
+      }
+      continue;
+    }
+    const uniform = group.uniformStructures[i2];
+    let parsed = false;
+    for (let j2 = 0; j2 < uniformParsers.length; j2++) {
+      const parser = uniformParsers[j2];
+      if (uniform.type === parser.type && parser.test(uniform)) {
+        funcFragments.push(`name = "${i2}";`, uniformParsers[j2].uniform);
+        parsed = true;
+        break;
+      }
+    }
+    if (!parsed) {
+      const templateType = uniform.size === 1 ? UNIFORM_TO_SINGLE_SETTERS : UNIFORM_TO_ARRAY_SETTERS;
+      const template = templateType[uniform.type].replace("location", `ud["${i2}"].location`);
+      funcFragments.push(`
+            cu = ud["${i2}"];
+            cv = cu.value;
+            v = uv["${i2}"];
+            ${template};`);
+    }
+  }
+  return new Function("ud", "uv", "renderer", "syncData", funcFragments.join("\n"));
+}
+var init_generateUniformsSync = __esm({
+  "node_modules/pixi.js/lib/rendering/renderers/gl/shader/utils/generateUniformsSync.mjs"() {
+    init_BufferResource();
+    init_UniformGroup();
+    init_uniformParsers();
+    init_generateUniformsSyncTypes();
+  }
+});
+
+// node_modules/pixi.js/lib/rendering/renderers/gl/shader/GlUniformGroupSystem.mjs
+var GlUniformGroupSystem;
+var init_GlUniformGroupSystem = __esm({
+  "node_modules/pixi.js/lib/rendering/renderers/gl/shader/GlUniformGroupSystem.mjs"() {
+    init_Extensions();
+    init_generateUniformsSync();
+    GlUniformGroupSystem = class {
+      /** @param renderer - The renderer this System works for. */
+      constructor(renderer) {
+        this._cache = {};
+        this._uniformGroupSyncHash = {};
+        this._renderer = renderer;
+        this.gl = null;
+        this._cache = {};
+      }
+      contextChange(gl) {
+        this.gl = gl;
+      }
+      /**
+       * Uploads the uniforms values to the currently bound shader.
+       * @param group - the uniforms values that be applied to the current shader
+       * @param program
+       * @param syncData
+       * @param syncData.textureCount
+       */
+      updateUniformGroup(group, program, syncData) {
+        const programData = this._renderer.shader._getProgramData(program);
+        if (!group.isStatic || group._dirtyId !== programData.uniformDirtyGroups[group.uid]) {
+          programData.uniformDirtyGroups[group.uid] = group._dirtyId;
+          const syncFunc = this._getUniformSyncFunction(group, program);
+          syncFunc(programData.uniformData, group.uniforms, this._renderer, syncData);
+        }
+      }
+      /**
+       * Overridable by the pixi.js/unsafe-eval package to use static syncUniforms instead.
+       * @param group
+       * @param program
+       */
+      _getUniformSyncFunction(group, program) {
+        return this._uniformGroupSyncHash[group._signature]?.[program._key] || this._createUniformSyncFunction(group, program);
+      }
+      _createUniformSyncFunction(group, program) {
+        const uniformGroupSyncHash = this._uniformGroupSyncHash[group._signature] || (this._uniformGroupSyncHash[group._signature] = {});
+        const id = this._getSignature(group, program._uniformData, "u");
+        if (!this._cache[id]) {
+          this._cache[id] = this._generateUniformsSync(group, program._uniformData);
+        }
+        uniformGroupSyncHash[program._key] = this._cache[id];
+        return uniformGroupSyncHash[program._key];
+      }
+      _generateUniformsSync(group, uniformData) {
+        return generateUniformsSync(group, uniformData);
+      }
+      /**
+       * Takes a uniform group and data and generates a unique signature for them.
+       * @param group - The uniform group to get signature of
+       * @param group.uniforms
+       * @param uniformData - Uniform information generated by the shader
+       * @param preFix
+       * @returns Unique signature of the uniform group
+       */
+      _getSignature(group, uniformData, preFix) {
+        const uniforms = group.uniforms;
+        const strings = [`${preFix}-`];
+        for (const i2 in uniforms) {
+          strings.push(i2);
+          if (uniformData[i2]) {
+            strings.push(uniformData[i2].type);
+          }
+        }
+        return strings.join("-");
+      }
+      /** Destroys this System and removes all its textures. */
+      destroy() {
+        this._renderer = null;
+        this._cache = null;
+      }
+    };
+    GlUniformGroupSystem.extension = {
+      type: [
+        ExtensionType.WebGLSystem
+      ],
+      name: "uniformGroup"
+    };
+  }
+});
+
+// node_modules/pixi.js/lib/rendering/renderers/gpu/shader/utils/createUboElementsWGSL.mjs
+function createUboElementsWGSL(uniformData) {
+  const uboElements = uniformData.map((data) => ({
+    data,
+    offset: 0,
+    size: 0
+  }));
+  let offset = 0;
+  for (let i2 = 0; i2 < uboElements.length; i2++) {
+    const uboElement = uboElements[i2];
+    let size = WGSL_ALIGN_SIZE_DATA[uboElement.data.type].size;
+    const align = WGSL_ALIGN_SIZE_DATA[uboElement.data.type].align;
+    if (!WGSL_ALIGN_SIZE_DATA[uboElement.data.type]) {
+      throw new Error(`[Pixi.js] WebGPU UniformBuffer: Unknown type ${uboElement.data.type}`);
+    }
+    if (uboElement.data.size > 1) {
+      size = Math.max(size, align) * uboElement.data.size;
+    }
+    offset = Math.ceil(offset / align) * align;
+    uboElement.size = size;
+    uboElement.offset = offset;
+    offset += size;
+  }
+  offset = Math.ceil(offset / 16) * 16;
+  return { uboElements, size: offset };
+}
+var WGSL_ALIGN_SIZE_DATA;
+var init_createUboElementsWGSL = __esm({
+  "node_modules/pixi.js/lib/rendering/renderers/gpu/shader/utils/createUboElementsWGSL.mjs"() {
+    "use strict";
+    WGSL_ALIGN_SIZE_DATA = {
+      i32: { align: 4, size: 4 },
+      u32: { align: 4, size: 4 },
+      f32: { align: 4, size: 4 },
+      f16: { align: 2, size: 2 },
+      "vec2<i32>": { align: 8, size: 8 },
+      "vec2<u32>": { align: 8, size: 8 },
+      "vec2<f32>": { align: 8, size: 8 },
+      "vec2<f16>": { align: 4, size: 4 },
+      "vec3<i32>": { align: 16, size: 12 },
+      "vec3<u32>": { align: 16, size: 12 },
+      "vec3<f32>": { align: 16, size: 12 },
+      "vec3<f16>": { align: 8, size: 6 },
+      "vec4<i32>": { align: 16, size: 16 },
+      "vec4<u32>": { align: 16, size: 16 },
+      "vec4<f32>": { align: 16, size: 16 },
+      "vec4<f16>": { align: 8, size: 8 },
+      "mat2x2<f32>": { align: 8, size: 16 },
+      "mat2x2<f16>": { align: 4, size: 8 },
+      "mat3x2<f32>": { align: 8, size: 24 },
+      "mat3x2<f16>": { align: 4, size: 12 },
+      "mat4x2<f32>": { align: 8, size: 32 },
+      "mat4x2<f16>": { align: 4, size: 16 },
+      "mat2x3<f32>": { align: 16, size: 32 },
+      "mat2x3<f16>": { align: 8, size: 16 },
+      "mat3x3<f32>": { align: 16, size: 48 },
+      "mat3x3<f16>": { align: 8, size: 24 },
+      "mat4x3<f32>": { align: 16, size: 64 },
+      "mat4x3<f16>": { align: 8, size: 32 },
+      "mat2x4<f32>": { align: 16, size: 32 },
+      "mat2x4<f16>": { align: 8, size: 16 },
+      "mat3x4<f32>": { align: 16, size: 48 },
+      "mat3x4<f16>": { align: 8, size: 24 },
+      "mat4x4<f32>": { align: 16, size: 64 },
+      "mat4x4<f16>": { align: 8, size: 32 }
+    };
+  }
+});
+
+// node_modules/pixi.js/lib/rendering/renderers/gpu/shader/utils/generateArraySyncWGSL.mjs
+function generateArraySyncWGSL(uboElement, offsetToAdd) {
+  const { size, align } = WGSL_ALIGN_SIZE_DATA[uboElement.data.type];
+  const remainder = (align - size) / 4;
+  const data = uboElement.data.type.indexOf("i32") >= 0 ? "dataInt32" : "data";
+  return `
+         v = uv.${uboElement.data.name};
+         ${offsetToAdd !== 0 ? `offset += ${offsetToAdd};` : ""}
+
+         arrayOffset = offset;
+
+         t = 0;
+
+         for(var i=0; i < ${uboElement.data.size * (size / 4)}; i++)
+         {
+             for(var j = 0; j < ${size / 4}; j++)
+             {
+                 ${data}[arrayOffset++] = v[t++];
+             }
+             ${remainder !== 0 ? `arrayOffset += ${remainder};` : ""}
+         }
+     `;
+}
+var init_generateArraySyncWGSL = __esm({
+  "node_modules/pixi.js/lib/rendering/renderers/gpu/shader/utils/generateArraySyncWGSL.mjs"() {
+    init_createUboElementsWGSL();
+  }
+});
+
+// node_modules/pixi.js/lib/rendering/renderers/gpu/shader/utils/createUboSyncFunctionWGSL.mjs
+function createUboSyncFunctionWGSL(uboElements) {
+  return createUboSyncFunction(
+    uboElements,
+    "uboWgsl",
+    generateArraySyncWGSL,
+    uboSyncFunctionsWGSL
+  );
+}
+var init_createUboSyncFunctionWGSL = __esm({
+  "node_modules/pixi.js/lib/rendering/renderers/gpu/shader/utils/createUboSyncFunctionWGSL.mjs"() {
+    init_createUboSyncFunction();
+    init_uboSyncFunctions();
+    init_generateArraySyncWGSL();
+  }
+});
+
+// node_modules/pixi.js/lib/rendering/renderers/gpu/GpuUboSystem.mjs
+var GpuUboSystem;
+var init_GpuUboSystem = __esm({
+  "node_modules/pixi.js/lib/rendering/renderers/gpu/GpuUboSystem.mjs"() {
+    init_Extensions();
+    init_UboSystem();
+    init_createUboElementsWGSL();
+    init_createUboSyncFunctionWGSL();
+    GpuUboSystem = class extends UboSystem {
+      constructor() {
+        super({
+          createUboElements: createUboElementsWGSL,
+          generateUboSync: createUboSyncFunctionWGSL
+        });
+      }
+    };
+    GpuUboSystem.extension = {
+      type: [ExtensionType.WebGPUSystem],
+      name: "ubo"
+    };
   }
 });
 
@@ -1452,6 +3907,26 @@ var init_Color = __esm({
   }
 });
 
+// node_modules/pixi.js/lib/environment/autoDetectEnvironment.mjs
+async function loadEnvironmentExtensions(skip) {
+  if (skip) return;
+  for (let i2 = 0; i2 < environments.length; i2++) {
+    const env = environments[i2];
+    if (env.value.test()) {
+      await env.value.load();
+      return;
+    }
+  }
+}
+var environments;
+var init_autoDetectEnvironment = __esm({
+  "node_modules/pixi.js/lib/environment/autoDetectEnvironment.mjs"() {
+    init_Extensions();
+    environments = [];
+    extensions.handleByNamedList(ExtensionType.Environment, environments);
+  }
+});
+
 // node_modules/pixi.js/lib/culling/cullingMixin.mjs
 var cullingMixin;
 var init_cullingMixin = __esm({
@@ -1467,7 +3942,7 @@ var init_cullingMixin = __esm({
 
 // node_modules/pixi.js/lib/maths/misc/const.mjs
 var PI_2, RAD_TO_DEG, DEG_TO_RAD;
-var init_const = __esm({
+var init_const2 = __esm({
   "node_modules/pixi.js/lib/maths/misc/const.mjs"() {
     "use strict";
     PI_2 = Math.PI * 2;
@@ -1660,7 +4135,7 @@ var init_Point = __esm({
 var Matrix, tempMatrix, identityMatrix;
 var init_Matrix = __esm({
   "node_modules/pixi.js/lib/maths/matrix/Matrix.mjs"() {
-    init_const();
+    init_const2();
     init_Point();
     Matrix = class _Matrix {
       /**
@@ -2657,101 +5132,6 @@ var init_ObservablePoint = __esm({
   }
 });
 
-// node_modules/pixi.js/lib/utils/data/uid.mjs
-function uid(name = "default") {
-  if (uidCache[name] === void 0) {
-    uidCache[name] = -1;
-  }
-  return ++uidCache[name];
-}
-var uidCache;
-var init_uid = __esm({
-  "node_modules/pixi.js/lib/utils/data/uid.mjs"() {
-    "use strict";
-    uidCache = {
-      default: -1
-    };
-  }
-});
-
-// node_modules/pixi.js/lib/utils/logging/deprecation.mjs
-var warnings, v8_0_0, v8_3_4, deprecationState, deprecation;
-var init_deprecation = __esm({
-  "node_modules/pixi.js/lib/utils/logging/deprecation.mjs"() {
-    "use strict";
-    warnings = /* @__PURE__ */ new Set();
-    v8_0_0 = "8.0.0";
-    v8_3_4 = "8.3.4";
-    deprecationState = {
-      quiet: false,
-      noColor: false
-    };
-    deprecation = (version, message, ignoreDepth = 3) => {
-      if (deprecationState.quiet || warnings.has(message)) return;
-      let stack = new Error().stack;
-      const deprecationMessage = `${message}
-Deprecated since v${version}`;
-      const useGroup = typeof console.groupCollapsed === "function" && !deprecationState.noColor;
-      if (typeof stack === "undefined") {
-        console.warn("PixiJS Deprecation Warning: ", deprecationMessage);
-      } else {
-        stack = stack.split("\n").splice(ignoreDepth).join("\n");
-        if (useGroup) {
-          console.groupCollapsed(
-            "%cPixiJS Deprecation Warning: %c%s",
-            "color:#614108;background:#fffbe6",
-            "font-weight:normal;color:#614108;background:#fffbe6",
-            deprecationMessage
-          );
-          console.warn(stack);
-          console.groupEnd();
-        } else {
-          console.warn("PixiJS Deprecation Warning: ", deprecationMessage);
-          console.warn(stack);
-        }
-      }
-      warnings.add(message);
-    };
-    Object.defineProperties(deprecation, {
-      quiet: {
-        get: () => deprecationState.quiet,
-        set: (value) => {
-          deprecationState.quiet = value;
-        },
-        enumerable: true,
-        configurable: false
-      },
-      noColor: {
-        get: () => deprecationState.noColor,
-        set: (value) => {
-          deprecationState.noColor = value;
-        },
-        enumerable: true,
-        configurable: false
-      }
-    });
-  }
-});
-
-// node_modules/pixi.js/lib/utils/logging/warn.mjs
-function warn(...args) {
-  if (warnCount === maxWarnings) return;
-  warnCount++;
-  if (warnCount === maxWarnings) {
-    console.warn("PixiJS Warning: too many warnings, no more warnings will be reported to the console by PixiJS.");
-  } else {
-    console.warn("PixiJS Warning: ", ...args);
-  }
-}
-var warnCount, maxWarnings;
-var init_warn = __esm({
-  "node_modules/pixi.js/lib/utils/logging/warn.mjs"() {
-    "use strict";
-    warnCount = 0;
-    maxWarnings = 500;
-  }
-});
-
 // node_modules/pixi.js/lib/utils/pool/GlobalResourceRegistry.mjs
 var GlobalResourceRegistry;
 var init_GlobalResourceRegistry = __esm({
@@ -2843,7 +5223,7 @@ var init_Pool = __esm({
        * @param {I} [data] - Optional data to pass to the item's constructor.
        * @returns {T} The item from the pool.
        */
-      get(data2) {
+      get(data) {
         let item;
         if (this._index > 0) {
           item = this._pool[--this._index];
@@ -2851,7 +5231,7 @@ var init_Pool = __esm({
           item = new this._classType();
           this._count++;
         }
-        item.init?.(data2);
+        item.init?.(data);
         return item;
       }
       /**
@@ -2925,9 +5305,9 @@ var init_PoolGroup = __esm({
        * @param {unknown} [data] - Optional data to pass to the item's constructor.
        * @returns {T} The item from the pool.
        */
-      get(Class, data2) {
+      get(Class, data) {
         const pool = this.getPool(Class);
-        return pool.get(data2);
+        return pool.get(data);
       }
       /**
        * Returns an item to its respective pool.
@@ -5381,433 +7761,6 @@ var init_InstructionSet = __esm({
   }
 });
 
-// node_modules/pixi.js/lib/maths/misc/pow2.mjs
-function nextPow2(v2) {
-  v2 += v2 === 0 ? 1 : 0;
-  --v2;
-  v2 |= v2 >>> 1;
-  v2 |= v2 >>> 2;
-  v2 |= v2 >>> 4;
-  v2 |= v2 >>> 8;
-  v2 |= v2 >>> 16;
-  return v2 + 1;
-}
-function isPow2(v2) {
-  return !(v2 & v2 - 1) && !!v2;
-}
-var init_pow2 = __esm({
-  "node_modules/pixi.js/lib/maths/misc/pow2.mjs"() {
-    "use strict";
-  }
-});
-
-// node_modules/pixi.js/lib/scene/container/utils/definedProps.mjs
-function definedProps(obj) {
-  const result = {};
-  for (const key in obj) {
-    if (obj[key] !== void 0) {
-      result[key] = obj[key];
-    }
-  }
-  return result;
-}
-var init_definedProps = __esm({
-  "node_modules/pixi.js/lib/scene/container/utils/definedProps.mjs"() {
-    "use strict";
-  }
-});
-
-// node_modules/pixi.js/lib/rendering/renderers/shared/texture/TextureStyle.mjs
-function createResourceIdFromString(value) {
-  const id = idHash[value];
-  if (id === void 0) {
-    idHash[value] = uid("resource");
-  }
-  return id;
-}
-var idHash, _TextureStyle, TextureStyle;
-var init_TextureStyle = __esm({
-  "node_modules/pixi.js/lib/rendering/renderers/shared/texture/TextureStyle.mjs"() {
-    init_eventemitter3();
-    init_uid();
-    init_deprecation();
-    idHash = /* @__PURE__ */ Object.create(null);
-    _TextureStyle = class _TextureStyle2 extends eventemitter3_default {
-      /**
-       * @param options - options for the style
-       */
-      constructor(options = {}) {
-        super();
-        this._resourceType = "textureSampler";
-        this._touched = 0;
-        this._maxAnisotropy = 1;
-        this.destroyed = false;
-        options = { ..._TextureStyle2.defaultOptions, ...options };
-        this.addressMode = options.addressMode;
-        this.addressModeU = options.addressModeU ?? this.addressModeU;
-        this.addressModeV = options.addressModeV ?? this.addressModeV;
-        this.addressModeW = options.addressModeW ?? this.addressModeW;
-        this.scaleMode = options.scaleMode;
-        this.magFilter = options.magFilter ?? this.magFilter;
-        this.minFilter = options.minFilter ?? this.minFilter;
-        this.mipmapFilter = options.mipmapFilter ?? this.mipmapFilter;
-        this.lodMinClamp = options.lodMinClamp;
-        this.lodMaxClamp = options.lodMaxClamp;
-        this.compare = options.compare;
-        this.maxAnisotropy = options.maxAnisotropy ?? 1;
-      }
-      set addressMode(value) {
-        this.addressModeU = value;
-        this.addressModeV = value;
-        this.addressModeW = value;
-      }
-      /** setting this will set wrapModeU,wrapModeV and wrapModeW all at once! */
-      get addressMode() {
-        return this.addressModeU;
-      }
-      set wrapMode(value) {
-        deprecation(v8_0_0, "TextureStyle.wrapMode is now TextureStyle.addressMode");
-        this.addressMode = value;
-      }
-      get wrapMode() {
-        return this.addressMode;
-      }
-      set scaleMode(value) {
-        this.magFilter = value;
-        this.minFilter = value;
-        this.mipmapFilter = value;
-      }
-      /** setting this will set magFilter,minFilter and mipmapFilter all at once!  */
-      get scaleMode() {
-        return this.magFilter;
-      }
-      /** Specifies the maximum anisotropy value clamp used by the sampler. */
-      set maxAnisotropy(value) {
-        this._maxAnisotropy = Math.min(value, 16);
-        if (this._maxAnisotropy > 1) {
-          this.scaleMode = "linear";
-        }
-      }
-      get maxAnisotropy() {
-        return this._maxAnisotropy;
-      }
-      // TODO - move this to WebGL?
-      get _resourceId() {
-        return this._sharedResourceId || this._generateResourceId();
-      }
-      update() {
-        this._sharedResourceId = null;
-        this.emit("change", this);
-      }
-      _generateResourceId() {
-        const bigKey = `${this.addressModeU}-${this.addressModeV}-${this.addressModeW}-${this.magFilter}-${this.minFilter}-${this.mipmapFilter}-${this.lodMinClamp}-${this.lodMaxClamp}-${this.compare}-${this._maxAnisotropy}`;
-        this._sharedResourceId = createResourceIdFromString(bigKey);
-        return this._resourceId;
-      }
-      /** Destroys the style */
-      destroy() {
-        this.destroyed = true;
-        this.emit("destroy", this);
-        this.emit("change", this);
-        this.removeAllListeners();
-      }
-    };
-    _TextureStyle.defaultOptions = {
-      addressMode: "clamp-to-edge",
-      scaleMode: "linear"
-    };
-    TextureStyle = _TextureStyle;
-  }
-});
-
-// node_modules/pixi.js/lib/rendering/renderers/shared/texture/sources/TextureSource.mjs
-var _TextureSource, TextureSource;
-var init_TextureSource = __esm({
-  "node_modules/pixi.js/lib/rendering/renderers/shared/texture/sources/TextureSource.mjs"() {
-    init_eventemitter3();
-    init_pow2();
-    init_definedProps();
-    init_uid();
-    init_TextureStyle();
-    _TextureSource = class _TextureSource2 extends eventemitter3_default {
-      /**
-       * @param options - options for creating a new TextureSource
-       */
-      constructor(options = {}) {
-        super();
-        this.options = options;
-        this._gpuData = /* @__PURE__ */ Object.create(null);
-        this._gcLastUsed = -1;
-        this.uid = uid("textureSource");
-        this._resourceType = "textureSource";
-        this._resourceId = uid("resource");
-        this.uploadMethodId = "unknown";
-        this._resolution = 1;
-        this.pixelWidth = 1;
-        this.pixelHeight = 1;
-        this.width = 1;
-        this.height = 1;
-        this.sampleCount = 1;
-        this.mipLevelCount = 1;
-        this.autoGenerateMipmaps = false;
-        this.format = "rgba8unorm";
-        this.dimension = "2d";
-        this.viewDimension = "2d";
-        this.arrayLayerCount = 1;
-        this.antialias = false;
-        this.transient = false;
-        this._touched = 0;
-        this._batchTick = -1;
-        this._textureBindLocation = -1;
-        options = { ..._TextureSource2.defaultOptions, ...options };
-        this.label = options.label ?? "";
-        this.resource = options.resource;
-        this.autoGarbageCollect = options.autoGarbageCollect;
-        this._resolution = options.resolution;
-        if (options.width) {
-          this.pixelWidth = options.width * this._resolution;
-        } else {
-          this.pixelWidth = this.resource ? this.resourceWidth ?? 1 : 1;
-        }
-        if (options.height) {
-          this.pixelHeight = options.height * this._resolution;
-        } else {
-          this.pixelHeight = this.resource ? this.resourceHeight ?? 1 : 1;
-        }
-        this.width = this.pixelWidth / this._resolution;
-        this.height = this.pixelHeight / this._resolution;
-        this.format = options.format;
-        this.dimension = options.dimensions;
-        this.viewDimension = options.viewDimension ?? options.dimensions;
-        this.arrayLayerCount = options.arrayLayerCount;
-        this.mipLevelCount = options.mipLevelCount;
-        this.autoGenerateMipmaps = options.autoGenerateMipmaps;
-        this.sampleCount = options.sampleCount;
-        this.antialias = options.antialias;
-        this.transient = options.transient ?? false;
-        this.alphaMode = options.alphaMode;
-        this.style = new TextureStyle(definedProps(options));
-        this.destroyed = false;
-        this._refreshPOT();
-      }
-      /** returns itself */
-      get source() {
-        return this;
-      }
-      /** the style of the texture */
-      get style() {
-        return this._style;
-      }
-      set style(value) {
-        if (this.style === value) return;
-        this._style?.off("change", this._onStyleChange, this);
-        this._style = value;
-        this._style?.on("change", this._onStyleChange, this);
-        this._onStyleChange();
-      }
-      /** Specifies the maximum anisotropy value clamp used by the sampler. */
-      set maxAnisotropy(value) {
-        this._style.maxAnisotropy = value;
-      }
-      get maxAnisotropy() {
-        return this._style.maxAnisotropy;
-      }
-      /** setting this will set wrapModeU, wrapModeV and wrapModeW all at once! */
-      get addressMode() {
-        return this._style.addressMode;
-      }
-      set addressMode(value) {
-        this._style.addressMode = value;
-      }
-      /** setting this will set wrapModeU, wrapModeV and wrapModeW all at once! */
-      get repeatMode() {
-        return this._style.addressMode;
-      }
-      set repeatMode(value) {
-        this._style.addressMode = value;
-      }
-      /** Specifies the sampling behavior when the sample footprint is smaller than or equal to one texel. */
-      get magFilter() {
-        return this._style.magFilter;
-      }
-      set magFilter(value) {
-        this._style.magFilter = value;
-      }
-      /** Specifies the sampling behavior when the sample footprint is larger than one texel. */
-      get minFilter() {
-        return this._style.minFilter;
-      }
-      set minFilter(value) {
-        this._style.minFilter = value;
-      }
-      /** Specifies behavior for sampling between mipmap levels. */
-      get mipmapFilter() {
-        return this._style.mipmapFilter;
-      }
-      set mipmapFilter(value) {
-        this._style.mipmapFilter = value;
-      }
-      /** Specifies the minimum and maximum levels of detail, respectively, used internally when sampling a texture. */
-      get lodMinClamp() {
-        return this._style.lodMinClamp;
-      }
-      set lodMinClamp(value) {
-        this._style.lodMinClamp = value;
-      }
-      /** Specifies the minimum and maximum levels of detail, respectively, used internally when sampling a texture. */
-      get lodMaxClamp() {
-        return this._style.lodMaxClamp;
-      }
-      set lodMaxClamp(value) {
-        this._style.lodMaxClamp = value;
-      }
-      _onStyleChange() {
-        this.emit("styleChange", this);
-      }
-      /** call this if you have modified the texture outside of the constructor */
-      update() {
-        if (this.resource) {
-          const resolution = this._resolution;
-          const didResize = this.resize(this.resourceWidth / resolution, this.resourceHeight / resolution);
-          if (didResize) return;
-        }
-        this.emit("update", this);
-      }
-      /** Destroys this texture source */
-      destroy() {
-        this.destroyed = true;
-        this.unload();
-        this.emit("destroy", this);
-        if (this._style) {
-          this._style.destroy();
-          this._style = null;
-        }
-        this.uploadMethodId = null;
-        this.resource = null;
-        this.removeAllListeners();
-      }
-      /**
-       * This will unload the Texture source from the GPU. This will free up the GPU memory
-       * As soon as it is required fore rendering, it will be re-uploaded.
-       */
-      unload() {
-        this._resourceId = uid("resource");
-        this.emit("change", this);
-        this.emit("unload", this);
-        for (const key in this._gpuData) {
-          this._gpuData[key]?.destroy?.();
-        }
-        this._gpuData = /* @__PURE__ */ Object.create(null);
-      }
-      /** the width of the resource. This is the REAL pure number, not accounting resolution   */
-      get resourceWidth() {
-        const { resource } = this;
-        return resource.naturalWidth || resource.videoWidth || resource.displayWidth || resource.width;
-      }
-      /** the height of the resource. This is the REAL pure number, not accounting resolution */
-      get resourceHeight() {
-        const { resource } = this;
-        return resource.naturalHeight || resource.videoHeight || resource.displayHeight || resource.height;
-      }
-      /**
-       * the resolution of the texture. Changing this number, will not change the number of pixels in the actual texture
-       * but will the size of the texture when rendered.
-       *
-       * changing the resolution of this texture to 2 for example will make it appear twice as small when rendered (as pixel
-       * density will have increased)
-       */
-      get resolution() {
-        return this._resolution;
-      }
-      set resolution(resolution) {
-        if (this._resolution === resolution) return;
-        this._resolution = resolution;
-        this.width = this.pixelWidth / resolution;
-        this.height = this.pixelHeight / resolution;
-      }
-      /**
-       * Resize the texture, this is handy if you want to use the texture as a render texture
-       * @param width - the new width of the texture
-       * @param height - the new height of the texture
-       * @param resolution - the new resolution of the texture
-       * @returns - if the texture was resized
-       */
-      resize(width, height, resolution) {
-        resolution || (resolution = this._resolution);
-        width || (width = this.width);
-        height || (height = this.height);
-        const newPixelWidth = Math.round(width * resolution);
-        const newPixelHeight = Math.round(height * resolution);
-        this.width = newPixelWidth / resolution;
-        this.height = newPixelHeight / resolution;
-        this._resolution = resolution;
-        if (this.pixelWidth === newPixelWidth && this.pixelHeight === newPixelHeight) {
-          return false;
-        }
-        this._refreshPOT();
-        this.pixelWidth = newPixelWidth;
-        this.pixelHeight = newPixelHeight;
-        this.emit("resize", this);
-        this._resourceId = uid("resource");
-        this.emit("change", this);
-        return true;
-      }
-      /**
-       * Lets the renderer know that this texture has been updated and its mipmaps should be re-generated.
-       * This is only important for RenderTexture instances, as standard Texture instances will have their
-       * mipmaps generated on upload. You should call this method after you make any change to the texture
-       *
-       * The reason for this is is can be quite expensive to update mipmaps for a texture. So by default,
-       * We want you, the developer to specify when this action should happen.
-       *
-       * Generally you don't want to have mipmaps generated on Render targets that are changed every frame,
-       */
-      updateMipmaps() {
-        if (this.autoGenerateMipmaps && this.mipLevelCount > 1) {
-          this.emit("updateMipmaps", this);
-        }
-      }
-      set wrapMode(value) {
-        this._style.wrapMode = value;
-      }
-      get wrapMode() {
-        return this._style.wrapMode;
-      }
-      set scaleMode(value) {
-        this._style.scaleMode = value;
-      }
-      /** setting this will set magFilter,minFilter and mipmapFilter all at once!  */
-      get scaleMode() {
-        return this._style.scaleMode;
-      }
-      /**
-       * Refresh check for isPowerOfTwo texture based on size
-       * @private
-       */
-      _refreshPOT() {
-        this.isPowerOfTwo = isPow2(this.pixelWidth) && isPow2(this.pixelHeight);
-      }
-      static test(_resource) {
-        throw new Error("Unimplemented");
-      }
-    };
-    _TextureSource.defaultOptions = {
-      resolution: 1,
-      format: "bgra8unorm",
-      alphaMode: "premultiply-alpha-on-upload",
-      dimensions: "2d",
-      viewDimension: "2d",
-      arrayLayerCount: 1,
-      mipLevelCount: 1,
-      autoGenerateMipmaps: false,
-      sampleCount: 1,
-      antialias: false,
-      autoGarbageCollect: false
-    };
-    TextureSource = _TextureSource;
-  }
-});
-
 // node_modules/pixi.js/lib/maths/matrix/groupD8.mjs
 function init() {
   for (let i2 = 0; i2 < 16; i2++) {
@@ -6292,7 +8245,7 @@ var init_Texture = __esm({
        * @param {TextureOptions} options - Options for the texture
        */
       constructor({
-        source: source5,
+        source: source3,
         label,
         frame,
         orig,
@@ -6310,7 +8263,7 @@ var init_Texture = __esm({
         this.dynamic = false;
         this.isTexture = true;
         this.label = label;
-        this.source = source5?.source ?? new TextureSource();
+        this.source = source3?.source ?? new TextureSource();
         this.noFrame = !frame;
         if (frame) {
           this.frame.copyFrom(frame);
@@ -6541,8 +8494,8 @@ var init_TexturePool = __esm({
        * @returns A pooled texture with power-of-two backing dimensions at the source resolution.
        */
       getSameSizeTexture(texture, antialias = false) {
-        const source5 = texture.source;
-        return this.getOptimalTexture(texture.width, texture.height, source5._resolution, antialias);
+        const source3 = texture.source;
+        return this.getOptimalTexture(texture.width, texture.height, source3._resolution, antialias);
       }
       /**
        * Returns a texture to the pool so it can be reused by future
@@ -6868,7 +8821,7 @@ var init_Container = __esm({
     init_cullingMixin();
     init_Extensions();
     init_Matrix();
-    init_const();
+    init_const2();
     init_ObservablePoint();
     init_uid();
     init_deprecation();
@@ -6952,9 +8905,9 @@ var init_Container = __esm({
        * @param source - The source of properties and methods to mix in.
        * @deprecated since 8.8.0
        */
-      static mixin(source5) {
+      static mixin(source3) {
         deprecation("8.8.0", "Container.mixin is deprecated, please use extensions.mixin instead.");
-        extensions.mixin(_Container, source5);
+        extensions.mixin(_Container, source3);
       }
       // = 'default';
       /**
@@ -7845,9 +9798,1227 @@ var init_Container = __esm({
   }
 });
 
+// node_modules/earcut/src/earcut.js
+function earcut(data, holeIndices, dim = 2) {
+  const hasHoles = holeIndices && holeIndices.length;
+  const outerLen = hasHoles ? holeIndices[0] * dim : data.length;
+  let outerNode = linkedList(data, 0, outerLen, dim, true);
+  const triangles = [];
+  if (!outerNode || outerNode.next === outerNode.prev) return triangles;
+  let minX, minY, invSize;
+  if (hasHoles) outerNode = eliminateHoles(data, holeIndices, outerNode, dim);
+  if (data.length > 80 * dim) {
+    minX = data[0];
+    minY = data[1];
+    let maxX = minX;
+    let maxY = minY;
+    for (let i2 = dim; i2 < outerLen; i2 += dim) {
+      const x2 = data[i2];
+      const y2 = data[i2 + 1];
+      if (x2 < minX) minX = x2;
+      if (y2 < minY) minY = y2;
+      if (x2 > maxX) maxX = x2;
+      if (y2 > maxY) maxY = y2;
+    }
+    invSize = Math.max(maxX - minX, maxY - minY);
+    invSize = invSize !== 0 ? 32767 / invSize : 0;
+  }
+  earcutLinked(outerNode, triangles, dim, minX, minY, invSize, 0);
+  return triangles;
+}
+function linkedList(data, start, end, dim, clockwise) {
+  let last;
+  if (clockwise === signedArea(data, start, end, dim) > 0) {
+    for (let i2 = start; i2 < end; i2 += dim) last = insertNode(i2 / dim | 0, data[i2], data[i2 + 1], last);
+  } else {
+    for (let i2 = end - dim; i2 >= start; i2 -= dim) last = insertNode(i2 / dim | 0, data[i2], data[i2 + 1], last);
+  }
+  if (last && equals(last, last.next)) {
+    removeNode(last);
+    last = last.next;
+  }
+  return last;
+}
+function filterPoints(start, end) {
+  if (!start) return start;
+  if (!end) end = start;
+  let p2 = start, again;
+  do {
+    again = false;
+    if (!p2.steiner && (equals(p2, p2.next) || area(p2.prev, p2, p2.next) === 0)) {
+      removeNode(p2);
+      p2 = end = p2.prev;
+      if (p2 === p2.next) break;
+      again = true;
+    } else {
+      p2 = p2.next;
+    }
+  } while (again || p2 !== end);
+  return end;
+}
+function earcutLinked(ear, triangles, dim, minX, minY, invSize, pass) {
+  if (!ear) return;
+  if (!pass && invSize) indexCurve(ear, minX, minY, invSize);
+  let stop = ear;
+  while (ear.prev !== ear.next) {
+    const prev = ear.prev;
+    const next = ear.next;
+    if (invSize ? isEarHashed(ear, minX, minY, invSize) : isEar(ear)) {
+      triangles.push(prev.i, ear.i, next.i);
+      removeNode(ear);
+      ear = next.next;
+      stop = next.next;
+      continue;
+    }
+    ear = next;
+    if (ear === stop) {
+      if (!pass) {
+        earcutLinked(filterPoints(ear), triangles, dim, minX, minY, invSize, 1);
+      } else if (pass === 1) {
+        ear = cureLocalIntersections(filterPoints(ear), triangles);
+        earcutLinked(ear, triangles, dim, minX, minY, invSize, 2);
+      } else if (pass === 2) {
+        splitEarcut(ear, triangles, dim, minX, minY, invSize);
+      }
+      break;
+    }
+  }
+}
+function isEar(ear) {
+  const a2 = ear.prev, b2 = ear, c2 = ear.next;
+  if (area(a2, b2, c2) >= 0) return false;
+  const ax = a2.x, bx = b2.x, cx = c2.x, ay = a2.y, by = b2.y, cy = c2.y;
+  const x0 = Math.min(ax, bx, cx), y0 = Math.min(ay, by, cy), x1 = Math.max(ax, bx, cx), y1 = Math.max(ay, by, cy);
+  let p2 = c2.next;
+  while (p2 !== a2) {
+    if (p2.x >= x0 && p2.x <= x1 && p2.y >= y0 && p2.y <= y1 && pointInTriangleExceptFirst(ax, ay, bx, by, cx, cy, p2.x, p2.y) && area(p2.prev, p2, p2.next) >= 0) return false;
+    p2 = p2.next;
+  }
+  return true;
+}
+function isEarHashed(ear, minX, minY, invSize) {
+  const a2 = ear.prev, b2 = ear, c2 = ear.next;
+  if (area(a2, b2, c2) >= 0) return false;
+  const ax = a2.x, bx = b2.x, cx = c2.x, ay = a2.y, by = b2.y, cy = c2.y;
+  const x0 = Math.min(ax, bx, cx), y0 = Math.min(ay, by, cy), x1 = Math.max(ax, bx, cx), y1 = Math.max(ay, by, cy);
+  const minZ = zOrder(x0, y0, minX, minY, invSize), maxZ = zOrder(x1, y1, minX, minY, invSize);
+  let p2 = ear.prevZ, n2 = ear.nextZ;
+  while (p2 && p2.z >= minZ && n2 && n2.z <= maxZ) {
+    if (p2.x >= x0 && p2.x <= x1 && p2.y >= y0 && p2.y <= y1 && p2 !== a2 && p2 !== c2 && pointInTriangleExceptFirst(ax, ay, bx, by, cx, cy, p2.x, p2.y) && area(p2.prev, p2, p2.next) >= 0) return false;
+    p2 = p2.prevZ;
+    if (n2.x >= x0 && n2.x <= x1 && n2.y >= y0 && n2.y <= y1 && n2 !== a2 && n2 !== c2 && pointInTriangleExceptFirst(ax, ay, bx, by, cx, cy, n2.x, n2.y) && area(n2.prev, n2, n2.next) >= 0) return false;
+    n2 = n2.nextZ;
+  }
+  while (p2 && p2.z >= minZ) {
+    if (p2.x >= x0 && p2.x <= x1 && p2.y >= y0 && p2.y <= y1 && p2 !== a2 && p2 !== c2 && pointInTriangleExceptFirst(ax, ay, bx, by, cx, cy, p2.x, p2.y) && area(p2.prev, p2, p2.next) >= 0) return false;
+    p2 = p2.prevZ;
+  }
+  while (n2 && n2.z <= maxZ) {
+    if (n2.x >= x0 && n2.x <= x1 && n2.y >= y0 && n2.y <= y1 && n2 !== a2 && n2 !== c2 && pointInTriangleExceptFirst(ax, ay, bx, by, cx, cy, n2.x, n2.y) && area(n2.prev, n2, n2.next) >= 0) return false;
+    n2 = n2.nextZ;
+  }
+  return true;
+}
+function cureLocalIntersections(start, triangles) {
+  let p2 = start;
+  do {
+    const a2 = p2.prev, b2 = p2.next.next;
+    if (!equals(a2, b2) && intersects(a2, p2, p2.next, b2) && locallyInside(a2, b2) && locallyInside(b2, a2)) {
+      triangles.push(a2.i, p2.i, b2.i);
+      removeNode(p2);
+      removeNode(p2.next);
+      p2 = start = b2;
+    }
+    p2 = p2.next;
+  } while (p2 !== start);
+  return filterPoints(p2);
+}
+function splitEarcut(start, triangles, dim, minX, minY, invSize) {
+  let a2 = start;
+  do {
+    let b2 = a2.next.next;
+    while (b2 !== a2.prev) {
+      if (a2.i !== b2.i && isValidDiagonal(a2, b2)) {
+        let c2 = splitPolygon(a2, b2);
+        a2 = filterPoints(a2, a2.next);
+        c2 = filterPoints(c2, c2.next);
+        earcutLinked(a2, triangles, dim, minX, minY, invSize, 0);
+        earcutLinked(c2, triangles, dim, minX, minY, invSize, 0);
+        return;
+      }
+      b2 = b2.next;
+    }
+    a2 = a2.next;
+  } while (a2 !== start);
+}
+function eliminateHoles(data, holeIndices, outerNode, dim) {
+  const queue = [];
+  for (let i2 = 0, len = holeIndices.length; i2 < len; i2++) {
+    const start = holeIndices[i2] * dim;
+    const end = i2 < len - 1 ? holeIndices[i2 + 1] * dim : data.length;
+    const list = linkedList(data, start, end, dim, false);
+    if (list === list.next) list.steiner = true;
+    queue.push(getLeftmost(list));
+  }
+  queue.sort(compareXYSlope);
+  for (let i2 = 0; i2 < queue.length; i2++) {
+    outerNode = eliminateHole(queue[i2], outerNode);
+  }
+  return outerNode;
+}
+function compareXYSlope(a2, b2) {
+  let result = a2.x - b2.x;
+  if (result === 0) {
+    result = a2.y - b2.y;
+    if (result === 0) {
+      const aSlope = (a2.next.y - a2.y) / (a2.next.x - a2.x);
+      const bSlope = (b2.next.y - b2.y) / (b2.next.x - b2.x);
+      result = aSlope - bSlope;
+    }
+  }
+  return result;
+}
+function eliminateHole(hole, outerNode) {
+  const bridge = findHoleBridge(hole, outerNode);
+  if (!bridge) {
+    return outerNode;
+  }
+  const bridgeReverse = splitPolygon(bridge, hole);
+  filterPoints(bridgeReverse, bridgeReverse.next);
+  return filterPoints(bridge, bridge.next);
+}
+function findHoleBridge(hole, outerNode) {
+  let p2 = outerNode;
+  const hx = hole.x;
+  const hy = hole.y;
+  let qx = -Infinity;
+  let m2;
+  if (equals(hole, p2)) return p2;
+  do {
+    if (equals(hole, p2.next)) return p2.next;
+    else if (hy <= p2.y && hy >= p2.next.y && p2.next.y !== p2.y) {
+      const x2 = p2.x + (hy - p2.y) * (p2.next.x - p2.x) / (p2.next.y - p2.y);
+      if (x2 <= hx && x2 > qx) {
+        qx = x2;
+        m2 = p2.x < p2.next.x ? p2 : p2.next;
+        if (x2 === hx) return m2;
+      }
+    }
+    p2 = p2.next;
+  } while (p2 !== outerNode);
+  if (!m2) return null;
+  const stop = m2;
+  const mx = m2.x;
+  const my = m2.y;
+  let tanMin = Infinity;
+  p2 = m2;
+  do {
+    if (hx >= p2.x && p2.x >= mx && hx !== p2.x && pointInTriangle(hy < my ? hx : qx, hy, mx, my, hy < my ? qx : hx, hy, p2.x, p2.y)) {
+      const tan = Math.abs(hy - p2.y) / (hx - p2.x);
+      if (locallyInside(p2, hole) && (tan < tanMin || tan === tanMin && (p2.x > m2.x || p2.x === m2.x && sectorContainsSector(m2, p2)))) {
+        m2 = p2;
+        tanMin = tan;
+      }
+    }
+    p2 = p2.next;
+  } while (p2 !== stop);
+  return m2;
+}
+function sectorContainsSector(m2, p2) {
+  return area(m2.prev, m2, p2.prev) < 0 && area(p2.next, m2, m2.next) < 0;
+}
+function indexCurve(start, minX, minY, invSize) {
+  let p2 = start;
+  do {
+    if (p2.z === 0) p2.z = zOrder(p2.x, p2.y, minX, minY, invSize);
+    p2.prevZ = p2.prev;
+    p2.nextZ = p2.next;
+    p2 = p2.next;
+  } while (p2 !== start);
+  p2.prevZ.nextZ = null;
+  p2.prevZ = null;
+  sortLinked(p2);
+}
+function sortLinked(list) {
+  let numMerges;
+  let inSize = 1;
+  do {
+    let p2 = list;
+    let e2;
+    list = null;
+    let tail = null;
+    numMerges = 0;
+    while (p2) {
+      numMerges++;
+      let q = p2;
+      let pSize = 0;
+      for (let i2 = 0; i2 < inSize; i2++) {
+        pSize++;
+        q = q.nextZ;
+        if (!q) break;
+      }
+      let qSize = inSize;
+      while (pSize > 0 || qSize > 0 && q) {
+        if (pSize !== 0 && (qSize === 0 || !q || p2.z <= q.z)) {
+          e2 = p2;
+          p2 = p2.nextZ;
+          pSize--;
+        } else {
+          e2 = q;
+          q = q.nextZ;
+          qSize--;
+        }
+        if (tail) tail.nextZ = e2;
+        else list = e2;
+        e2.prevZ = tail;
+        tail = e2;
+      }
+      p2 = q;
+    }
+    tail.nextZ = null;
+    inSize *= 2;
+  } while (numMerges > 1);
+  return list;
+}
+function zOrder(x2, y2, minX, minY, invSize) {
+  x2 = (x2 - minX) * invSize | 0;
+  y2 = (y2 - minY) * invSize | 0;
+  x2 = (x2 | x2 << 8) & 16711935;
+  x2 = (x2 | x2 << 4) & 252645135;
+  x2 = (x2 | x2 << 2) & 858993459;
+  x2 = (x2 | x2 << 1) & 1431655765;
+  y2 = (y2 | y2 << 8) & 16711935;
+  y2 = (y2 | y2 << 4) & 252645135;
+  y2 = (y2 | y2 << 2) & 858993459;
+  y2 = (y2 | y2 << 1) & 1431655765;
+  return x2 | y2 << 1;
+}
+function getLeftmost(start) {
+  let p2 = start, leftmost = start;
+  do {
+    if (p2.x < leftmost.x || p2.x === leftmost.x && p2.y < leftmost.y) leftmost = p2;
+    p2 = p2.next;
+  } while (p2 !== start);
+  return leftmost;
+}
+function pointInTriangle(ax, ay, bx, by, cx, cy, px, py) {
+  return (cx - px) * (ay - py) >= (ax - px) * (cy - py) && (ax - px) * (by - py) >= (bx - px) * (ay - py) && (bx - px) * (cy - py) >= (cx - px) * (by - py);
+}
+function pointInTriangleExceptFirst(ax, ay, bx, by, cx, cy, px, py) {
+  return !(ax === px && ay === py) && pointInTriangle(ax, ay, bx, by, cx, cy, px, py);
+}
+function isValidDiagonal(a2, b2) {
+  return a2.next.i !== b2.i && a2.prev.i !== b2.i && !intersectsPolygon(a2, b2) && // doesn't intersect other edges
+  (locallyInside(a2, b2) && locallyInside(b2, a2) && middleInside(a2, b2) && // locally visible
+  (area(a2.prev, a2, b2.prev) || area(a2, b2.prev, b2)) || // does not create opposite-facing sectors
+  equals(a2, b2) && area(a2.prev, a2, a2.next) > 0 && area(b2.prev, b2, b2.next) > 0);
+}
+function area(p2, q, r2) {
+  return (q.y - p2.y) * (r2.x - q.x) - (q.x - p2.x) * (r2.y - q.y);
+}
+function equals(p1, p2) {
+  return p1.x === p2.x && p1.y === p2.y;
+}
+function intersects(p1, q1, p2, q2) {
+  const o1 = sign(area(p1, q1, p2));
+  const o2 = sign(area(p1, q1, q2));
+  const o3 = sign(area(p2, q2, p1));
+  const o4 = sign(area(p2, q2, q1));
+  if (o1 !== o2 && o3 !== o4) return true;
+  if (o1 === 0 && onSegment(p1, p2, q1)) return true;
+  if (o2 === 0 && onSegment(p1, q2, q1)) return true;
+  if (o3 === 0 && onSegment(p2, p1, q2)) return true;
+  if (o4 === 0 && onSegment(p2, q1, q2)) return true;
+  return false;
+}
+function onSegment(p2, q, r2) {
+  return q.x <= Math.max(p2.x, r2.x) && q.x >= Math.min(p2.x, r2.x) && q.y <= Math.max(p2.y, r2.y) && q.y >= Math.min(p2.y, r2.y);
+}
+function sign(num) {
+  return num > 0 ? 1 : num < 0 ? -1 : 0;
+}
+function intersectsPolygon(a2, b2) {
+  let p2 = a2;
+  do {
+    if (p2.i !== a2.i && p2.next.i !== a2.i && p2.i !== b2.i && p2.next.i !== b2.i && intersects(p2, p2.next, a2, b2)) return true;
+    p2 = p2.next;
+  } while (p2 !== a2);
+  return false;
+}
+function locallyInside(a2, b2) {
+  return area(a2.prev, a2, a2.next) < 0 ? area(a2, b2, a2.next) >= 0 && area(a2, a2.prev, b2) >= 0 : area(a2, b2, a2.prev) < 0 || area(a2, a2.next, b2) < 0;
+}
+function middleInside(a2, b2) {
+  let p2 = a2;
+  let inside = false;
+  const px = (a2.x + b2.x) / 2;
+  const py = (a2.y + b2.y) / 2;
+  do {
+    if (p2.y > py !== p2.next.y > py && p2.next.y !== p2.y && px < (p2.next.x - p2.x) * (py - p2.y) / (p2.next.y - p2.y) + p2.x)
+      inside = !inside;
+    p2 = p2.next;
+  } while (p2 !== a2);
+  return inside;
+}
+function splitPolygon(a2, b2) {
+  const a22 = createNode(a2.i, a2.x, a2.y), b22 = createNode(b2.i, b2.x, b2.y), an = a2.next, bp = b2.prev;
+  a2.next = b2;
+  b2.prev = a2;
+  a22.next = an;
+  an.prev = a22;
+  b22.next = a22;
+  a22.prev = b22;
+  bp.next = b22;
+  b22.prev = bp;
+  return b22;
+}
+function insertNode(i2, x2, y2, last) {
+  const p2 = createNode(i2, x2, y2);
+  if (!last) {
+    p2.prev = p2;
+    p2.next = p2;
+  } else {
+    p2.next = last.next;
+    p2.prev = last;
+    last.next.prev = p2;
+    last.next = p2;
+  }
+  return p2;
+}
+function removeNode(p2) {
+  p2.next.prev = p2.prev;
+  p2.prev.next = p2.next;
+  if (p2.prevZ) p2.prevZ.nextZ = p2.nextZ;
+  if (p2.nextZ) p2.nextZ.prevZ = p2.prevZ;
+}
+function createNode(i2, x2, y2) {
+  return {
+    i: i2,
+    // vertex index in coordinates array
+    x: x2,
+    y: y2,
+    // vertex coordinates
+    prev: null,
+    // previous and next vertex nodes in a polygon ring
+    next: null,
+    z: 0,
+    // z-order curve value
+    prevZ: null,
+    // previous and next nodes in z-order
+    nextZ: null,
+    steiner: false
+    // indicates whether this is a steiner point
+  };
+}
+function signedArea(data, start, end, dim) {
+  let sum = 0;
+  for (let i2 = start, j2 = end - dim; i2 < end; i2 += dim) {
+    sum += (data[j2] - data[i2]) * (data[i2 + 1] + data[j2 + 1]);
+    j2 = i2;
+  }
+  return sum;
+}
+var init_earcut = __esm({
+  "node_modules/earcut/src/earcut.js"() {
+  }
+});
+
+// node_modules/pixi.js/lib/utils/utils.mjs
+var earcut2;
+var init_utils = __esm({
+  "node_modules/pixi.js/lib/utils/utils.mjs"() {
+    init_earcut();
+    init_eventemitter3();
+    earcut2 = earcut.default || earcut;
+  }
+});
+
+// node_modules/pixi.js/lib/rendering/renderers/gl/const.mjs
+var CLEAR;
+var init_const3 = __esm({
+  "node_modules/pixi.js/lib/rendering/renderers/gl/const.mjs"() {
+    "use strict";
+    CLEAR = /* @__PURE__ */ ((CLEAR2) => {
+      CLEAR2[CLEAR2["NONE"] = 0] = "NONE";
+      CLEAR2[CLEAR2["COLOR"] = 16384] = "COLOR";
+      CLEAR2[CLEAR2["STENCIL"] = 1024] = "STENCIL";
+      CLEAR2[CLEAR2["DEPTH"] = 256] = "DEPTH";
+      CLEAR2[CLEAR2["COLOR_DEPTH"] = 16640] = "COLOR_DEPTH";
+      CLEAR2[CLEAR2["COLOR_STENCIL"] = 17408] = "COLOR_STENCIL";
+      CLEAR2[CLEAR2["DEPTH_STENCIL"] = 1280] = "DEPTH_STENCIL";
+      CLEAR2[CLEAR2["ALL"] = 17664] = "ALL";
+      return CLEAR2;
+    })(CLEAR || {});
+  }
+});
+
+// node_modules/pixi.js/lib/rendering/renderers/shared/system/SystemRunner.mjs
+var SystemRunner;
+var init_SystemRunner = __esm({
+  "node_modules/pixi.js/lib/rendering/renderers/shared/system/SystemRunner.mjs"() {
+    "use strict";
+    SystemRunner = class {
+      /**
+       * @param name - The function name that will be executed on the listeners added to this Runner.
+       */
+      constructor(name) {
+        this.items = [];
+        this._name = name;
+      }
+      /* jsdoc/check-param-names */
+      /**
+       * Dispatch/Broadcast Runner to all listeners added to the queue.
+       * @param {...any} params - (optional) parameters to pass to each listener
+       */
+      /* jsdoc/check-param-names */
+      emit(a0, a1, a2, a3, a4, a5, a6, a7) {
+        const { name, items } = this;
+        for (let i2 = 0, len = items.length; i2 < len; i2++) {
+          items[i2][name](a0, a1, a2, a3, a4, a5, a6, a7);
+        }
+        return this;
+      }
+      /**
+       * Add a listener to the Runner
+       *
+       * Runners do not need to have scope or functions passed to them.
+       * All that is required is to pass the listening object and ensure that it has contains a function that has the same name
+       * as the name provided to the Runner when it was created.
+       *
+       * Eg A listener passed to this Runner will require a 'complete' function.
+       *
+       * ```ts
+       * import { Runner } from 'pixi.js';
+       *
+       * const complete = new Runner('complete');
+       * ```
+       *
+       * The scope used will be the object itself.
+       * @param {any} item - The object that will be listening.
+       */
+      add(item) {
+        if (item[this._name]) {
+          this.remove(item);
+          this.items.push(item);
+        }
+        return this;
+      }
+      /**
+       * Remove a single listener from the dispatch queue.
+       * @param {any} item - The listener that you would like to remove.
+       */
+      remove(item) {
+        const index = this.items.indexOf(item);
+        if (index !== -1) {
+          this.items.splice(index, 1);
+        }
+        return this;
+      }
+      /**
+       * Check to see if the listener is already in the Runner
+       * @param {any} item - The listener that you would like to check.
+       */
+      contains(item) {
+        return this.items.indexOf(item) !== -1;
+      }
+      /** Remove all listeners from the Runner */
+      removeAll() {
+        this.items.length = 0;
+        return this;
+      }
+      /** Remove all references, don't use after this. */
+      destroy() {
+        this.removeAll();
+        this.items = null;
+        this._name = null;
+      }
+      /**
+       * `true` if there are no this Runner contains no listeners
+       * @readonly
+       */
+      get empty() {
+        return this.items.length === 0;
+      }
+      /**
+       * The name of the runner.
+       * @readonly
+       */
+      get name() {
+        return this._name;
+      }
+    };
+  }
+});
+
+// node_modules/pixi.js/lib/rendering/renderers/shared/system/AbstractRenderer.mjs
+var defaultRunners, _AbstractRenderer, AbstractRenderer;
+var init_AbstractRenderer = __esm({
+  "node_modules/pixi.js/lib/rendering/renderers/shared/system/AbstractRenderer.mjs"() {
+    init_Color();
+    init_autoDetectEnvironment();
+    init_Container();
+    init_unsafeEvalSupported();
+    init_uid();
+    init_deprecation();
+    init_GlobalResourceRegistry();
+    init_const3();
+    init_SystemRunner();
+    init_eventemitter3();
+    defaultRunners = [
+      "init",
+      "destroy",
+      "contextChange",
+      "resolutionChange",
+      "resetState",
+      "renderEnd",
+      "renderStart",
+      "render",
+      "update",
+      "postrender",
+      "prerender"
+    ];
+    _AbstractRenderer = class _AbstractRenderer2 extends eventemitter3_default {
+      /**
+       * Set up a system with a collection of SystemClasses and runners.
+       * Systems are attached dynamically to this class when added.
+       * @param config - the config for the system manager
+       */
+      constructor(config) {
+        super();
+        this.tick = 0;
+        this.uid = uid("renderer");
+        this.runners = /* @__PURE__ */ Object.create(null);
+        this.renderPipes = /* @__PURE__ */ Object.create(null);
+        this._initOptions = {};
+        this._systemsHash = /* @__PURE__ */ Object.create(null);
+        this.type = config.type;
+        this.name = config.name;
+        this.config = config;
+        const combinedRunners = [...defaultRunners, ...this.config.runners ?? []];
+        this._addRunners(...combinedRunners);
+        this._unsafeEvalCheck();
+      }
+      /**
+       * Initialize the renderer.
+       * @param options - The options to use to create the renderer.
+       */
+      async init(options = {}) {
+        const skip = options.skipExtensionImports === true ? true : options.manageImports === false;
+        await loadEnvironmentExtensions(skip);
+        this._addSystems(this.config.systems);
+        this._addPipes(this.config.renderPipes, this.config.renderPipeAdaptors);
+        for (const systemName in this._systemsHash) {
+          const system = this._systemsHash[systemName];
+          const defaultSystemOptions = system.constructor.defaultOptions;
+          options = { ...defaultSystemOptions, ...options };
+        }
+        options = { ..._AbstractRenderer2.defaultOptions, ...options };
+        this._roundPixels = options.roundPixels ? 1 : 0;
+        for (let i2 = 0; i2 < this.runners.init.items.length; i2++) {
+          await this.runners.init.items[i2].init(options);
+        }
+        this._initOptions = options;
+      }
+      render(args, deprecated) {
+        this.tick++;
+        let options = args;
+        if (options instanceof Container) {
+          options = { container: options };
+          if (deprecated) {
+            deprecation(v8_0_0, "passing a second argument is deprecated, please use render options instead");
+            options.target = deprecated.renderTexture;
+          }
+        }
+        options.target || (options.target = this.view.renderTarget);
+        if (options.target === this.view.renderTarget) {
+          this._lastObjectRendered = options.container;
+          options.clearColor ?? (options.clearColor = this.background.colorRgba);
+          options.clear ?? (options.clear = this.background.clearBeforeRender);
+        }
+        if (options.clearColor) {
+          const isRGBAArray = Array.isArray(options.clearColor) && options.clearColor.length === 4;
+          options.clearColor = isRGBAArray ? options.clearColor : Color.shared.setValue(options.clearColor).toArray();
+        }
+        if (!options.transform) {
+          options.container.updateLocalTransform();
+          options.transform = options.container.localTransform;
+        }
+        if (!options.container.visible) {
+          return;
+        }
+        options.container.enableRenderGroup();
+        this.runners.prerender.emit(options);
+        this.runners.renderStart.emit(options);
+        this.runners.render.emit(options);
+        this.runners.renderEnd.emit(options);
+        this.runners.postrender.emit(options);
+      }
+      /**
+       * Resizes the WebGL view to the specified width and height.
+       * @param desiredScreenWidth - The desired width of the screen.
+       * @param desiredScreenHeight - The desired height of the screen.
+       * @param resolution - The resolution / device pixel ratio of the renderer.
+       */
+      resize(desiredScreenWidth, desiredScreenHeight, resolution) {
+        const previousResolution = this.view.resolution;
+        this.view.resize(desiredScreenWidth, desiredScreenHeight, resolution);
+        this.emit("resize", this.view.screen.width, this.view.screen.height, this.view.resolution);
+        if (resolution !== void 0 && resolution !== previousResolution) {
+          this.runners.resolutionChange.emit(resolution);
+        }
+      }
+      /**
+       * Clears the render target.
+       * @param options - The options to use when clearing the render target.
+       * @param options.target - The render target to clear.
+       * @param options.clearColor - The color to clear with.
+       * @param options.clear - The clear mode to use.
+       * @advanced
+       */
+      clear(options = {}) {
+        const renderer = this;
+        options.target || (options.target = renderer.renderTarget.renderTarget);
+        options.clearColor || (options.clearColor = this.background.colorRgba);
+        options.clear ?? (options.clear = CLEAR.ALL);
+        const { clear, clearColor, target, mipLevel, layer } = options;
+        Color.shared.setValue(clearColor ?? this.background.colorRgba);
+        renderer.renderTarget.clear(target, clear, Color.shared.toArray(), mipLevel ?? 0, layer ?? 0);
+      }
+      /** The resolution / device pixel ratio of the renderer. */
+      get resolution() {
+        return this.view.resolution;
+      }
+      set resolution(value) {
+        this.view.resolution = value;
+        this.runners.resolutionChange.emit(value);
+      }
+      /**
+       * Same as view.width, actual number of pixels in the canvas by horizontal.
+       * @type {number}
+       * @readonly
+       * @default 800
+       */
+      get width() {
+        return this.view.texture.frame.width;
+      }
+      /**
+       * Same as view.height, actual number of pixels in the canvas by vertical.
+       * @default 600
+       */
+      get height() {
+        return this.view.texture.frame.height;
+      }
+      // NOTE: this was `view` in v7
+      /**
+       * The canvas element that everything is drawn to.
+       * @type {environment.ICanvas}
+       */
+      get canvas() {
+        return this.view.canvas;
+      }
+      /**
+       * the last object rendered by the renderer. Useful for other plugins like interaction managers
+       * @readonly
+       */
+      get lastObjectRendered() {
+        return this._lastObjectRendered;
+      }
+      /**
+       * Flag if we are rendering to the screen vs renderTexture
+       * @readonly
+       * @default true
+       */
+      get renderingToScreen() {
+        const renderer = this;
+        return renderer.renderTarget.renderingToScreen;
+      }
+      /**
+       * Measurements of the screen. (0, 0, screenWidth, screenHeight).
+       *
+       * Its safe to use as filterArea or hitArea for the whole stage.
+       */
+      get screen() {
+        return this.view.screen;
+      }
+      /**
+       * Create a bunch of runners based of a collection of ids
+       * @param runnerIds - the runner ids to add
+       */
+      _addRunners(...runnerIds) {
+        runnerIds.forEach((runnerId) => {
+          this.runners[runnerId] = new SystemRunner(runnerId);
+        });
+      }
+      _addSystems(systems4) {
+        let i2;
+        for (i2 in systems4) {
+          const val = systems4[i2];
+          this._addSystem(val.value, val.name);
+        }
+      }
+      /**
+       * Add a new system to the renderer.
+       * @param ClassRef - Class reference
+       * @param name - Property name for system, if not specified
+       *        will use a static `name` property on the class itself. This
+       *        name will be assigned as s property on the Renderer so make
+       *        sure it doesn't collide with properties on Renderer.
+       * @returns Return instance of renderer
+       */
+      _addSystem(ClassRef, name) {
+        const system = new ClassRef(this);
+        if (this[name]) {
+          throw new Error(`Whoops! The name "${name}" is already in use`);
+        }
+        this[name] = system;
+        this._systemsHash[name] = system;
+        for (const i2 in this.runners) {
+          this.runners[i2].add(system);
+        }
+        return this;
+      }
+      _addPipes(pipes, pipeAdaptors) {
+        const adaptors = pipeAdaptors.reduce((acc, adaptor) => {
+          acc[adaptor.name] = adaptor.value;
+          return acc;
+        }, {});
+        pipes.forEach((pipe) => {
+          const PipeClass = pipe.value;
+          const name = pipe.name;
+          const Adaptor = adaptors[name];
+          this.renderPipes[name] = new PipeClass(
+            this,
+            Adaptor ? new Adaptor() : null
+          );
+          this.runners.destroy.add(this.renderPipes[name]);
+        });
+      }
+      destroy(options = false) {
+        this.runners.destroy.items.reverse();
+        this.runners.destroy.emit(options);
+        if (options === true || typeof options === "object" && options.releaseGlobalResources) {
+          GlobalResourceRegistry.release();
+        }
+        Object.values(this.runners).forEach((runner) => {
+          runner.destroy();
+        });
+        this._systemsHash = null;
+        this.renderPipes = null;
+        this.removeAllListeners();
+      }
+      /**
+       * Generate a texture from a container.
+       * @param options - options or container target to use when generating the texture
+       * @returns a texture
+       */
+      generateTexture(options) {
+        return this.textureGenerator.generateTexture(options);
+      }
+      /**
+       * Whether the renderer will round coordinates to whole pixels when rendering.
+       * Can be overridden on a per scene item basis.
+       */
+      get roundPixels() {
+        return !!this._roundPixels;
+      }
+      /**
+       * Overridable function by `pixi.js/unsafe-eval` to silence
+       * throwing an error if platform doesn't support unsafe-evals.
+       * @private
+       * @ignore
+       */
+      _unsafeEvalCheck() {
+        if (!unsafeEvalSupported()) {
+          throw new Error("Current environment does not allow unsafe-eval, please use pixi.js/unsafe-eval module to enable support.");
+        }
+      }
+      /**
+       * Resets the rendering state of the renderer.
+       * This is useful when you want to use the WebGL context directly and need to ensure PixiJS's internal state
+       * stays synchronized. When modifying the WebGL context state externally, calling this method before the next Pixi
+       * render will reset all internal caches and ensure it executes correctly.
+       *
+       * This is particularly useful when combining PixiJS with other rendering engines like Three.js:
+       * ```js
+       * // Reset Three.js state
+       * threeRenderer.resetState();
+       *
+       * // Render a Three.js scene
+       * threeRenderer.render(threeScene, threeCamera);
+       *
+       * // Reset PixiJS state since Three.js modified the WebGL context
+       * pixiRenderer.resetState();
+       *
+       * // Now render Pixi content
+       * pixiRenderer.render(pixiScene);
+       * ```
+       * @advanced
+       */
+      resetState() {
+        this.runners.resetState.emit();
+      }
+    };
+    _AbstractRenderer.defaultOptions = {
+      /**
+       * Default resolution / device pixel ratio of the renderer.
+       * @default 1
+       */
+      resolution: 1,
+      /**
+       * Should the `failIfMajorPerformanceCaveat` flag be enabled as a context option used in the `isWebGLSupported`
+       * function. If set to true, a WebGL renderer can fail to be created if the browser thinks there could be
+       * performance issues when using WebGL.
+       *
+       * In PixiJS v6 this has changed from true to false by default, to allow WebGL to work in as many
+       * scenarios as possible. However, some users may have a poor experience, for example, if a user has a gpu or
+       * driver version blacklisted by the
+       * browser.
+       *
+       * If your application requires high performance rendering, you may wish to set this to false.
+       * We recommend one of two options if you decide to set this flag to false:
+       *
+       * 1: Use the Canvas renderer as a fallback in case high performance WebGL is
+       *    not supported.
+       *
+       * 2: Call `isWebGLSupported` (which if found in the utils package) in your code before attempting to create a
+       *    PixiJS renderer, and show an error message to the user if the function returns false, explaining that their
+       *    device & browser combination does not support high performance WebGL.
+       *    This is a much better strategy than trying to create a PixiJS renderer and finding it then fails.
+       * @default false
+       */
+      failIfMajorPerformanceCaveat: false,
+      /**
+       * Should round pixels be forced when rendering?
+       * @default false
+       */
+      roundPixels: false
+    };
+    AbstractRenderer = _AbstractRenderer;
+  }
+});
+
+// node_modules/pixi.js/lib/rendering/renderers/shared/geometry/utils/ensureIsBuffer.mjs
+function ensureIsBuffer(buffer, index) {
+  if (!(buffer instanceof Buffer2)) {
+    let usage = index ? BufferUsage.INDEX : BufferUsage.VERTEX;
+    if (buffer instanceof Array) {
+      if (index) {
+        buffer = new Uint32Array(buffer);
+        usage = BufferUsage.INDEX | BufferUsage.COPY_DST;
+      } else {
+        buffer = new Float32Array(buffer);
+        usage = BufferUsage.VERTEX | BufferUsage.COPY_DST;
+      }
+    }
+    buffer = new Buffer2({
+      data: buffer,
+      label: index ? "index-mesh-buffer" : "vertex-mesh-buffer",
+      usage
+    });
+  }
+  return buffer;
+}
+var init_ensureIsBuffer = __esm({
+  "node_modules/pixi.js/lib/rendering/renderers/shared/geometry/utils/ensureIsBuffer.mjs"() {
+    init_Buffer();
+    init_const();
+  }
+});
+
+// node_modules/pixi.js/lib/rendering/renderers/shared/geometry/utils/getGeometryBounds.mjs
+function getGeometryBounds(geometry, attributeId, bounds) {
+  const attribute = geometry.getAttribute(attributeId);
+  if (!attribute) {
+    bounds.minX = 0;
+    bounds.minY = 0;
+    bounds.maxX = 0;
+    bounds.maxY = 0;
+    return bounds;
+  }
+  const data = attribute.buffer.data;
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  const byteSize = data.BYTES_PER_ELEMENT;
+  const offset = (attribute.offset || 0) / byteSize;
+  const stride = (attribute.stride || 2 * 4) / byteSize;
+  for (let i2 = offset; i2 < data.length; i2 += stride) {
+    const x2 = data[i2];
+    const y2 = data[i2 + 1];
+    if (x2 > maxX) maxX = x2;
+    if (y2 > maxY) maxY = y2;
+    if (x2 < minX) minX = x2;
+    if (y2 < minY) minY = y2;
+  }
+  bounds.minX = minX;
+  bounds.minY = minY;
+  bounds.maxX = maxX;
+  bounds.maxY = maxY;
+  return bounds;
+}
+var init_getGeometryBounds = __esm({
+  "node_modules/pixi.js/lib/rendering/renderers/shared/geometry/utils/getGeometryBounds.mjs"() {
+    "use strict";
+  }
+});
+
+// node_modules/pixi.js/lib/rendering/renderers/shared/geometry/Geometry.mjs
+function ensureIsAttribute(attribute) {
+  if (attribute instanceof Buffer2 || Array.isArray(attribute) || attribute.BYTES_PER_ELEMENT) {
+    attribute = {
+      buffer: attribute
+    };
+  }
+  attribute.buffer = ensureIsBuffer(attribute.buffer, false);
+  return attribute;
+}
+var Geometry;
+var init_Geometry = __esm({
+  "node_modules/pixi.js/lib/rendering/renderers/shared/geometry/Geometry.mjs"() {
+    init_eventemitter3();
+    init_Bounds();
+    init_uid();
+    init_Buffer();
+    init_ensureIsBuffer();
+    init_getGeometryBounds();
+    Geometry = class extends eventemitter3_default {
+      /**
+       * Create a new instance of a geometry
+       * @param options - The options for the geometry.
+       */
+      constructor(options = {}) {
+        super();
+        this._gpuData = /* @__PURE__ */ Object.create(null);
+        this.autoGarbageCollect = true;
+        this._gcLastUsed = -1;
+        this.uid = uid("geometry");
+        this._layoutKey = 0;
+        this.instanceCount = 1;
+        this._bounds = new Bounds();
+        this._boundsDirty = true;
+        const { attributes, indexBuffer, topology } = options;
+        this.buffers = [];
+        this.attributes = {};
+        if (attributes) {
+          for (const i2 in attributes) {
+            this.addAttribute(i2, attributes[i2]);
+          }
+        }
+        this.instanceCount = options.instanceCount ?? 1;
+        if (indexBuffer) {
+          this.addIndex(indexBuffer);
+        }
+        this.topology = topology || "triangle-list";
+      }
+      onBufferUpdate() {
+        this._boundsDirty = true;
+        this.emit("update", this);
+      }
+      /**
+       * Returns the requested attribute.
+       * @param id - The name of the attribute required
+       * @returns - The attribute requested.
+       */
+      getAttribute(id) {
+        return this.attributes[id];
+      }
+      /**
+       * Returns the index buffer
+       * @returns - The index buffer.
+       */
+      getIndex() {
+        return this.indexBuffer;
+      }
+      /**
+       * Returns the requested buffer.
+       * @param id - The name of the buffer required.
+       * @returns - The buffer requested.
+       */
+      getBuffer(id) {
+        return this.getAttribute(id).buffer;
+      }
+      /**
+       * Used to figure out how many vertices there are in this geometry
+       * @returns the number of vertices in the geometry
+       */
+      getSize() {
+        for (const i2 in this.attributes) {
+          const attribute = this.attributes[i2];
+          const buffer = attribute.buffer;
+          return buffer.data.length / (attribute.stride / 4 || attribute.size);
+        }
+        return 0;
+      }
+      /**
+       * Adds an attribute to the geometry.
+       * @param name - The name of the attribute to add.
+       * @param attributeOption - The attribute option to add.
+       */
+      addAttribute(name, attributeOption) {
+        const attribute = ensureIsAttribute(attributeOption);
+        const bufferIndex = this.buffers.indexOf(attribute.buffer);
+        if (bufferIndex === -1) {
+          this.buffers.push(attribute.buffer);
+          attribute.buffer.on("update", this.onBufferUpdate, this);
+          attribute.buffer.on("change", this.onBufferUpdate, this);
+        }
+        this.attributes[name] = attribute;
+      }
+      /**
+       * Adds an index buffer to the geometry.
+       * @param indexBuffer - The index buffer to add. Can be a Buffer, TypedArray, or an array of numbers.
+       */
+      addIndex(indexBuffer) {
+        this.indexBuffer = ensureIsBuffer(indexBuffer, true);
+        this.buffers.push(this.indexBuffer);
+      }
+      /** Returns the bounds of the geometry. */
+      get bounds() {
+        if (!this._boundsDirty) return this._bounds;
+        this._boundsDirty = false;
+        return getGeometryBounds(this, "aPosition", this._bounds);
+      }
+      /** Unloads the geometry from the GPU. */
+      unload() {
+        this.emit("unload", this);
+        for (const key in this._gpuData) {
+          this._gpuData[key]?.destroy();
+        }
+        this._gpuData = /* @__PURE__ */ Object.create(null);
+      }
+      /**
+       * destroys the geometry.
+       * @param destroyBuffers - destroy the buffers associated with this geometry
+       */
+      destroy(destroyBuffers = false) {
+        this.emit("destroy", this);
+        this.removeAllListeners();
+        if (destroyBuffers) {
+          this.buffers.forEach((buffer) => buffer.destroy());
+        }
+        this.unload();
+        this.indexBuffer?.destroy();
+        this.attributes = null;
+        this.buffers = null;
+        this.indexBuffer = null;
+        this._bounds = null;
+      }
+    };
+  }
+});
+
+// node_modules/pixi.js/lib/utils/data/ViewableBuffer.mjs
+var ViewableBuffer;
+var init_ViewableBuffer = __esm({
+  "node_modules/pixi.js/lib/utils/data/ViewableBuffer.mjs"() {
+    "use strict";
+    ViewableBuffer = class {
+      constructor(sizeOrBuffer) {
+        if (typeof sizeOrBuffer === "number") {
+          this.rawBinaryData = new ArrayBuffer(sizeOrBuffer);
+        } else if (sizeOrBuffer instanceof Uint8Array) {
+          this.rawBinaryData = sizeOrBuffer.buffer;
+        } else {
+          this.rawBinaryData = sizeOrBuffer;
+        }
+        this.uint32View = new Uint32Array(this.rawBinaryData);
+        this.float32View = new Float32Array(this.rawBinaryData);
+        this.size = this.rawBinaryData.byteLength;
+      }
+      /** View on the raw binary data as a `Int8Array`. */
+      get int8View() {
+        if (!this._int8View) {
+          this._int8View = new Int8Array(this.rawBinaryData);
+        }
+        return this._int8View;
+      }
+      /** View on the raw binary data as a `Uint8Array`. */
+      get uint8View() {
+        if (!this._uint8View) {
+          this._uint8View = new Uint8Array(this.rawBinaryData);
+        }
+        return this._uint8View;
+      }
+      /**  View on the raw binary data as a `Int16Array`. */
+      get int16View() {
+        if (!this._int16View) {
+          this._int16View = new Int16Array(this.rawBinaryData);
+        }
+        return this._int16View;
+      }
+      /** View on the raw binary data as a `Int32Array`. */
+      get int32View() {
+        if (!this._int32View) {
+          this._int32View = new Int32Array(this.rawBinaryData);
+        }
+        return this._int32View;
+      }
+      /** View on the raw binary data as a `Float64Array`. */
+      get float64View() {
+        if (!this._float64Array) {
+          this._float64Array = new Float64Array(this.rawBinaryData);
+        }
+        return this._float64Array;
+      }
+      /** View on the raw binary data as a `BigUint64Array`. */
+      get bigUint64View() {
+        if (!this._bigUint64Array) {
+          this._bigUint64Array = new BigUint64Array(this.rawBinaryData);
+        }
+        return this._bigUint64Array;
+      }
+      /**
+       * Returns the view of the given type.
+       * @param type - One of `int8`, `uint8`, `int16`,
+       *    `uint16`, `int32`, `uint32`, and `float32`.
+       * @returns - typed array of given type
+       */
+      view(type) {
+        return this[`${type}View`];
+      }
+      /** Destroys all buffer references. Do not use after calling this. */
+      destroy() {
+        this.rawBinaryData = null;
+        this.uint32View = null;
+        this.float32View = null;
+        this.uint16View = null;
+        this._int8View = null;
+        this._uint8View = null;
+        this._int16View = null;
+        this._int32View = null;
+        this._float64Array = null;
+        this._bigUint64Array = null;
+      }
+      /**
+       * Returns the size of the given type in bytes.
+       * @param type - One of `int8`, `uint8`, `int16`,
+       *   `uint16`, `int32`, `uint32`, and `float32`.
+       * @returns - size of the type in bytes
+       */
+      static sizeOf(type) {
+        switch (type) {
+          case "int8":
+          case "uint8":
+            return 1;
+          case "int16":
+          case "uint16":
+            return 2;
+          case "int32":
+          case "uint32":
+          case "float32":
+            return 4;
+          default:
+            throw new Error(`${type} isn't a valid view type`);
+        }
+      }
+    };
+  }
+});
+
 // node_modules/pixi.js/lib/ticker/const.mjs
 var UPDATE_PRIORITY;
-var init_const2 = __esm({
+var init_const4 = __esm({
   "node_modules/pixi.js/lib/ticker/const.mjs"() {
     "use strict";
     UPDATE_PRIORITY = /* @__PURE__ */ ((UPDATE_PRIORITY2) => {
@@ -7956,7 +11127,7 @@ var init_TickerListener = __esm({
 var _Ticker, Ticker;
 var init_Ticker = __esm({
   "node_modules/pixi.js/lib/ticker/Ticker.mjs"() {
-    init_const2();
+    init_const4();
     init_TickerListener();
     _Ticker = class _Ticker2 {
       constructor() {
@@ -8477,7 +11648,7 @@ var init_Ticker = __esm({
 var CanvasObserver;
 var init_CanvasObserver = __esm({
   "node_modules/pixi.js/lib/dom/CanvasObserver.mjs"() {
-    init_const2();
+    init_const4();
     init_Ticker();
     CanvasObserver = class {
       constructor(options) {
@@ -9676,7 +12847,7 @@ var init_init2 = __esm({
 var EventsTickerClass, EventsTicker;
 var init_EventTicker = __esm({
   "node_modules/pixi.js/lib/events/EventTicker.mjs"() {
-    init_const2();
+    init_const4();
     init_Ticker();
     EventsTickerClass = class {
       constructor() {
@@ -12584,7 +15755,7 @@ var init_Resolver = __esm({
         assetArray.forEach((asset) => {
           const { src } = asset;
           let {
-            data: data2,
+            data,
             format,
             loadParser: userDefinedLoadParser,
             parser: userDefinedParser
@@ -12611,7 +15782,7 @@ var init_Resolver = __esm({
               if (typeof src2 !== "object") {
                 formattedAsset = parseUrl(src2);
               } else {
-                data2 = src2.data ?? data2;
+                data = src2.data ?? data;
                 format = src2.format ?? format;
                 if (src2.loadParser || src2.parser) {
                   userDefinedLoadParser = src2.loadParser ?? userDefinedLoadParser;
@@ -12627,7 +15798,7 @@ var init_Resolver = __esm({
               }
               formattedAsset = this._buildResolvedAsset(formattedAsset, {
                 aliases: aliasesToUse,
-                data: data2,
+                data,
                 format,
                 loadParser: userDefinedLoadParser,
                 parser: userDefinedParser,
@@ -12789,8 +15960,8 @@ var init_Resolver = __esm({
         const paramConnector = /\?/.test(url) ? "&" : "?";
         return `${url}${paramConnector}${this._defaultSearchParams}`;
       }
-      _buildResolvedAsset(formattedAsset, data2) {
-        const { aliases, data: assetData, loadParser, parser, format, progressSize } = data2;
+      _buildResolvedAsset(formattedAsset, data) {
+        const { aliases, data: assetData, loadParser, parser, format, progressSize } = data;
         if (this._basePath || this._rootPath) {
           formattedAsset.src = path.toAbsolute(formattedAsset.src, this._basePath, this._rootPath);
         }
@@ -12842,14 +16013,14 @@ var init_Spritesheet = __esm({
             data: arg1
           };
         }
-        const { texture, data: data2, cachePrefix = "" } = options;
+        const { texture, data, cachePrefix = "" } = options;
         this.cachePrefix = cachePrefix;
         this._texture = texture instanceof Texture ? texture : null;
         this.textureSource = texture.source;
         this.textures = {};
         this.animations = {};
-        this.data = data2;
-        const metaResolution = parseFloat(data2.meta.scale);
+        this.data = data;
+        const metaResolution = parseFloat(data.meta.scale);
         if (metaResolution) {
           this.resolution = metaResolution;
           texture.source.resolution = this.resolution;
@@ -12903,19 +16074,19 @@ var init_Spritesheet = __esm({
         const maxFrames = processAll ? Infinity : _Spritesheet2.BATCH_SIZE;
         while (frameIndex - initialFrameIndex < maxFrames && frameIndex < this._frameKeys.length) {
           const i2 = this._frameKeys[frameIndex];
-          const data2 = this._frames[i2];
-          const rect = data2.frame;
+          const data = this._frames[i2];
+          const rect = data.frame;
           if (rect) {
             let frame = null;
             let trim = null;
-            const sourceSize = data2.trimmed !== false && data2.sourceSize ? data2.sourceSize : data2.frame;
+            const sourceSize = data.trimmed !== false && data.sourceSize ? data.sourceSize : data.frame;
             const orig = new Rectangle(
               0,
               0,
               Math.floor(sourceSize.w) / this.resolution,
               Math.floor(sourceSize.h) / this.resolution
             );
-            if (data2.rotated) {
+            if (data.rotated) {
               frame = new Rectangle(
                 Math.floor(rect.x) / this.resolution,
                 Math.floor(rect.y) / this.resolution,
@@ -12930,10 +16101,10 @@ var init_Spritesheet = __esm({
                 Math.floor(rect.h) / this.resolution
               );
             }
-            if (data2.trimmed !== false && data2.spriteSourceSize) {
+            if (data.trimmed !== false && data.spriteSourceSize) {
               trim = new Rectangle(
-                Math.floor(data2.spriteSourceSize.x) / this.resolution,
-                Math.floor(data2.spriteSourceSize.y) / this.resolution,
+                Math.floor(data.spriteSourceSize.x) / this.resolution,
+                Math.floor(data.spriteSourceSize.y) / this.resolution,
                 Math.floor(rect.w) / this.resolution,
                 Math.floor(rect.h) / this.resolution
               );
@@ -12943,9 +16114,9 @@ var init_Spritesheet = __esm({
               frame,
               orig,
               trim,
-              rotate: data2.rotated ? 2 : 0,
-              defaultAnchor: data2.anchor,
-              defaultBorders: data2.borders,
+              rotate: data.rotated ? 2 : 0,
+              defaultAnchor: data.anchor,
+              defaultBorders: data.borders,
               label: i2.toString()
             });
           }
@@ -13266,11 +16437,11 @@ var init_Sprite = __esm({
        * @see {@link Texture.from} For texture creation details
        * @see {@link Assets} For asset loading and management
        */
-      static from(source5, skipCache = false) {
-        if (source5 instanceof Texture) {
-          return new _Sprite(source5);
+      static from(source3, skipCache = false) {
+        if (source3 instanceof Texture) {
+          return new _Sprite(source3);
         }
-        return new _Sprite(Texture.from(source5, skipCache));
+        return new _Sprite(Texture.from(source3, skipCache));
       }
       set texture(value) {
         value || (value = Texture.EMPTY);
@@ -13926,25 +17097,25 @@ var init_VideoSource = __esm({
         if (this._load) {
           return this._load;
         }
-        const source5 = this.resource;
+        const source3 = this.resource;
         const options = this.options;
-        if ((source5.readyState === source5.HAVE_ENOUGH_DATA || source5.readyState === source5.HAVE_FUTURE_DATA) && source5.width && source5.height) {
-          source5.complete = true;
+        if ((source3.readyState === source3.HAVE_ENOUGH_DATA || source3.readyState === source3.HAVE_FUTURE_DATA) && source3.width && source3.height) {
+          source3.complete = true;
         }
-        source5.addEventListener("play", this._onPlayStart);
-        source5.addEventListener("pause", this._onPlayStop);
-        source5.addEventListener("seeked", this._onSeeked);
+        source3.addEventListener("play", this._onPlayStart);
+        source3.addEventListener("pause", this._onPlayStop);
+        source3.addEventListener("seeked", this._onSeeked);
         if (!this._isSourceReady()) {
           if (!options.preload) {
-            source5.addEventListener("canplay", this._onCanPlay);
+            source3.addEventListener("canplay", this._onCanPlay);
           }
-          source5.addEventListener("canplaythrough", this._onCanPlayThrough);
-          source5.addEventListener("error", this._onError, true);
+          source3.addEventListener("canplaythrough", this._onCanPlayThrough);
+          source3.addEventListener("error", this._onError, true);
         } else {
           this._mediaReady();
         }
         if (!this.isValid) {
-          source5.addEventListener("loadedmetadata", this._onLoadedMetadata);
+          source3.addEventListener("loadedmetadata", this._onLoadedMetadata);
         }
         this.alphaMode = await detectVideoAlphaMode();
         this._load = new Promise((resolve, reject) => {
@@ -13958,7 +17129,7 @@ var init_VideoSource = __esm({
                 this._onError(new ErrorEvent(`Preload exceeded timeout of ${options.preloadTimeoutMs}ms`));
               });
             }
-            source5.load();
+            source3.load();
           }
         });
         return this._load;
@@ -13981,16 +17152,16 @@ var init_VideoSource = __esm({
        * @returns True if playing.
        */
       _isSourcePlaying() {
-        const source5 = this.resource;
-        return !source5.paused && !source5.ended;
+        const source3 = this.resource;
+        return !source3.paused && !source3.ended;
       }
       /**
        * Checks if the underlying source is ready for playing.
        * @returns True if ready.
        */
       _isSourceReady() {
-        const source5 = this.resource;
-        return source5.readyState > 2;
+        const source3 = this.resource;
+        return source3.readyState > 2;
       }
       /** Runs the update loop when the video is ready to play. */
       _onPlayStart() {
@@ -14016,13 +17187,13 @@ var init_VideoSource = __esm({
         this._mediaReady();
       }
       _onCanPlay() {
-        const source5 = this.resource;
-        source5.removeEventListener("canplay", this._onCanPlay);
+        const source3 = this.resource;
+        source3.removeEventListener("canplay", this._onCanPlay);
         this._mediaReady();
       }
       _onCanPlayThrough() {
-        const source5 = this.resource;
-        source5.removeEventListener("canplaythrough", this._onCanPlayThrough);
+        const source3 = this.resource;
+        source3.removeEventListener("canplaythrough", this._onCanPlayThrough);
         if (this._preloadTimeout) {
           clearTimeout(this._preloadTimeout);
           this._preloadTimeout = void 0;
@@ -14031,10 +17202,10 @@ var init_VideoSource = __esm({
       }
       /** Fired when the video is loaded and ready to play. */
       _mediaReady() {
-        const source5 = this.resource;
+        const source3 = this.resource;
         if (this.isValid) {
           this.isReady = true;
-          this.resize(source5.videoWidth, source5.videoHeight);
+          this.resize(source3.videoWidth, source3.videoHeight);
         }
         this._msToNextUpdate = 0;
         this.updateFrame();
@@ -14053,18 +17224,18 @@ var init_VideoSource = __esm({
       /** Cleans up resources and event listeners associated with this texture. */
       destroy() {
         this._configureAutoUpdate();
-        const source5 = this.resource;
-        if (source5) {
-          source5.removeEventListener("play", this._onPlayStart);
-          source5.removeEventListener("pause", this._onPlayStop);
-          source5.removeEventListener("seeked", this._onSeeked);
-          source5.removeEventListener("canplay", this._onCanPlay);
-          source5.removeEventListener("canplaythrough", this._onCanPlayThrough);
-          source5.removeEventListener("loadedmetadata", this._onLoadedMetadata);
-          source5.removeEventListener("error", this._onError, true);
-          source5.pause();
-          source5.src = "";
-          source5.load();
+        const source3 = this.resource;
+        if (source3) {
+          source3.removeEventListener("play", this._onPlayStart);
+          source3.removeEventListener("pause", this._onPlayStop);
+          source3.removeEventListener("seeked", this._onSeeked);
+          source3.removeEventListener("canplay", this._onCanPlay);
+          source3.removeEventListener("canplaythrough", this._onCanPlayThrough);
+          source3.removeEventListener("loadedmetadata", this._onLoadedMetadata);
+          source3.removeEventListener("error", this._onError, true);
+          source3.pause();
+          source3.src = "";
+          source3.load();
         }
         super.destroy();
       }
@@ -14378,8 +17549,8 @@ function canUseNewCanvasBlendModes() {
     if (!imageData) {
       canUseNewCanvasBlendModesValue = false;
     } else {
-      const data2 = imageData.data;
-      canUseNewCanvasBlendModesValue = data2[0] === 255 && data2[1] === 0 && data2[2] === 0;
+      const data = imageData.data;
+      canUseNewCanvasBlendModesValue = data[0] === 255 && data[1] === 0 && data[2] === 0;
     }
   } catch (_error) {
     canUseNewCanvasBlendModesValue = false;
@@ -14410,82 +17581,82 @@ var init_canvasUtils = __esm({
       _canvasSourceCache: /* @__PURE__ */ new WeakMap(),
       _unpremultipliedCache: /* @__PURE__ */ new WeakMap(),
       getCanvasSource: (texture) => {
-        const source5 = texture.source;
-        const resource = source5?.resource;
+        const source3 = texture.source;
+        const resource = source3?.resource;
         if (!resource) {
           return null;
         }
-        const isPMA = source5.alphaMode === "premultiplied-alpha";
-        const resourceWidth = source5.resourceWidth ?? source5.pixelWidth;
-        const resourceHeight = source5.resourceHeight ?? source5.pixelHeight;
-        const needsResize = resourceWidth !== source5.pixelWidth || resourceHeight !== source5.pixelHeight;
+        const isPMA = source3.alphaMode === "premultiplied-alpha";
+        const resourceWidth = source3.resourceWidth ?? source3.pixelWidth;
+        const resourceHeight = source3.resourceHeight ?? source3.pixelHeight;
+        const needsResize = resourceWidth !== source3.pixelWidth || resourceHeight !== source3.pixelHeight;
         if (isPMA) {
           if (resource instanceof HTMLCanvasElement || typeof OffscreenCanvas !== "undefined" && resource instanceof OffscreenCanvas) {
             if (!needsResize) {
               return resource;
             }
           }
-          const cached = canvasUtils._unpremultipliedCache.get(source5);
-          if (cached?.resourceId === source5._resourceId) {
+          const cached = canvasUtils._unpremultipliedCache.get(source3);
+          if (cached?.resourceId === source3._resourceId) {
             return cached.canvas;
           }
         }
         if (resource instanceof Uint8Array || resource instanceof Uint8ClampedArray || resource instanceof Int8Array || resource instanceof Uint16Array || resource instanceof Int16Array || resource instanceof Uint32Array || resource instanceof Int32Array || resource instanceof Float32Array || resource instanceof ArrayBuffer) {
-          const cached = canvasUtils._canvasSourceCache.get(source5);
-          if (cached?.resourceId === source5._resourceId) {
+          const cached = canvasUtils._canvasSourceCache.get(source3);
+          if (cached?.resourceId === source3._resourceId) {
             return cached.canvas;
           }
-          const canvas = DOMAdapter.get().createCanvas(source5.pixelWidth, source5.pixelHeight);
+          const canvas = DOMAdapter.get().createCanvas(source3.pixelWidth, source3.pixelHeight);
           const context2 = canvas.getContext("2d");
-          const imageData = context2.createImageData(source5.pixelWidth, source5.pixelHeight);
-          const data2 = imageData.data;
+          const imageData = context2.createImageData(source3.pixelWidth, source3.pixelHeight);
+          const data = imageData.data;
           const bytes = resource instanceof ArrayBuffer ? new Uint8Array(resource) : new Uint8Array(resource.buffer, resource.byteOffset, resource.byteLength);
-          if (source5.format === "bgra8unorm") {
-            for (let i2 = 0; i2 < data2.length && i2 + 3 < bytes.length; i2 += 4) {
-              data2[i2] = bytes[i2 + 2];
-              data2[i2 + 1] = bytes[i2 + 1];
-              data2[i2 + 2] = bytes[i2];
-              data2[i2 + 3] = bytes[i2 + 3];
+          if (source3.format === "bgra8unorm") {
+            for (let i2 = 0; i2 < data.length && i2 + 3 < bytes.length; i2 += 4) {
+              data[i2] = bytes[i2 + 2];
+              data[i2 + 1] = bytes[i2 + 1];
+              data[i2 + 2] = bytes[i2];
+              data[i2 + 3] = bytes[i2 + 3];
             }
           } else {
-            data2.set(bytes.subarray(0, data2.length));
+            data.set(bytes.subarray(0, data.length));
           }
           context2.putImageData(imageData, 0, 0);
-          canvasUtils._canvasSourceCache.set(source5, { canvas, resourceId: source5._resourceId });
+          canvasUtils._canvasSourceCache.set(source3, { canvas, resourceId: source3._resourceId });
           return canvas;
         }
         if (isPMA) {
-          const canvas = DOMAdapter.get().createCanvas(source5.pixelWidth, source5.pixelHeight);
+          const canvas = DOMAdapter.get().createCanvas(source3.pixelWidth, source3.pixelHeight);
           const context2 = canvas.getContext("2d", { willReadFrequently: true });
-          canvas.width = source5.pixelWidth;
-          canvas.height = source5.pixelHeight;
+          canvas.width = source3.pixelWidth;
+          canvas.height = source3.pixelHeight;
           context2.drawImage(resource, 0, 0);
           const imageData = context2.getImageData(0, 0, canvas.width, canvas.height);
-          const data2 = imageData.data;
-          for (let i2 = 0; i2 < data2.length; i2 += 4) {
-            const a2 = data2[i2 + 3];
+          const data = imageData.data;
+          for (let i2 = 0; i2 < data.length; i2 += 4) {
+            const a2 = data[i2 + 3];
             if (a2 > 0) {
               const alphaInv = 255 / a2;
-              data2[i2] = Math.min(255, data2[i2] * alphaInv + 0.5);
-              data2[i2 + 1] = Math.min(255, data2[i2 + 1] * alphaInv + 0.5);
-              data2[i2 + 2] = Math.min(255, data2[i2 + 2] * alphaInv + 0.5);
+              data[i2] = Math.min(255, data[i2] * alphaInv + 0.5);
+              data[i2 + 1] = Math.min(255, data[i2 + 1] * alphaInv + 0.5);
+              data[i2 + 2] = Math.min(255, data[i2 + 2] * alphaInv + 0.5);
             }
           }
           context2.putImageData(imageData, 0, 0);
-          canvasUtils._unpremultipliedCache.set(source5, { canvas, resourceId: source5._resourceId });
+          canvasUtils._unpremultipliedCache.set(source3, { canvas, resourceId: source3._resourceId });
           return canvas;
         }
         if (needsResize) {
-          const cached = canvasUtils._canvasSourceCache.get(source5);
-          if (cached?.resourceId === source5._resourceId) {
+          const cached = canvasUtils._canvasSourceCache.get(source3);
+          if (cached?.resourceId === source3._resourceId) {
             return cached.canvas;
           }
-          const canvas = DOMAdapter.get().createCanvas(source5.pixelWidth, source5.pixelHeight);
+          const canvas = DOMAdapter.get().createCanvas(source3.pixelWidth, source3.pixelHeight);
           const context2 = canvas.getContext("2d");
-          canvas.width = source5.pixelWidth;
-          canvas.height = source5.pixelHeight;
+          canvas.width = source3.pixelWidth;
+          canvas.height = source3.pixelHeight;
           context2.drawImage(resource, 0, 0);
-          canvasUtils._canvasSourceCache.set(source5, { canvas, resourceId: source5._resourceId });
+          canvasUtils._canvasSourceCache.set(source3, { canvas, resourceId: source3._resourceId });
           return canvas;
         }
         return resource;
@@ -14569,8 +17740,8 @@ var init_canvasUtils = __esm({
         context2.fillStyle = Color.shared.setValue(color).toHex();
         context2.fillRect(0, 0, outWidth, outHeight);
         context2.globalCompositeOperation = "multiply";
-        const source5 = canvasUtils.getCanvasSource(texture);
-        if (!source5) {
+        const source3 = canvasUtils.getCanvasSource(texture);
+        if (!source3) {
           context2.restore();
           return;
         }
@@ -14578,7 +17749,7 @@ var init_canvasUtils = __esm({
           canvasUtils._applyInverseRotation(context2, rotate, crop.width, crop.height);
         }
         context2.drawImage(
-          source5,
+          source3,
           crop.x,
           crop.y,
           crop.width,
@@ -14590,7 +17761,7 @@ var init_canvasUtils = __esm({
         );
         context2.globalCompositeOperation = "destination-atop";
         context2.drawImage(
-          source5,
+          source3,
           crop.x,
           crop.y,
           crop.width,
@@ -14621,8 +17792,8 @@ var init_canvasUtils = __esm({
         context2.fillStyle = Color.shared.setValue(color).toHex();
         context2.fillRect(0, 0, outWidth, outHeight);
         context2.globalCompositeOperation = "destination-atop";
-        const source5 = canvasUtils.getCanvasSource(texture);
-        if (!source5) {
+        const source3 = canvasUtils.getCanvasSource(texture);
+        if (!source3) {
           context2.restore();
           return;
         }
@@ -14630,7 +17801,7 @@ var init_canvasUtils = __esm({
           canvasUtils._applyInverseRotation(context2, rotate, crop.width, crop.height);
         }
         context2.drawImage(
-          source5,
+          source3,
           crop.x,
           crop.y,
           crop.width,
@@ -14658,8 +17829,8 @@ var init_canvasUtils = __esm({
         canvas.height = Math.ceil(outHeight);
         context2.save();
         context2.globalCompositeOperation = "copy";
-        const source5 = canvasUtils.getCanvasSource(texture);
-        if (!source5) {
+        const source3 = canvasUtils.getCanvasSource(texture);
+        if (!source3) {
           context2.restore();
           return;
         }
@@ -14667,7 +17838,7 @@ var init_canvasUtils = __esm({
           canvasUtils._applyInverseRotation(context2, rotate, crop.width, crop.height);
         }
         context2.drawImage(
-          source5,
+          source3,
           crop.x,
           crop.y,
           crop.width,
@@ -14682,11 +17853,11 @@ var init_canvasUtils = __esm({
         const g2 = color >> 8 & 255;
         const b2 = color & 255;
         const imageData = context2.getImageData(0, 0, outWidth, outHeight);
-        const data2 = imageData.data;
-        for (let i2 = 0; i2 < data2.length; i2 += 4) {
-          data2[i2] = data2[i2] * r2 / 255;
-          data2[i2 + 1] = data2[i2 + 1] * g2 / 255;
-          data2[i2 + 2] = data2[i2 + 2] * b2 / 255;
+        const data = imageData.data;
+        for (let i2 = 0; i2 < data.length; i2 += 4) {
+          data[i2] = data[i2] * r2 / 255;
+          data[i2 + 1] = data[i2 + 1] * g2 / 255;
+          data[i2 + 2] = data[i2 + 2] * b2 / 255;
         }
         context2.putImageData(imageData, 0, 0);
       },
@@ -16015,8 +19186,8 @@ var init_CanvasFilterSystem = __esm({
         if (cssFilters.length === 0 && alphaMultiplier === 1) {
           return texture;
         }
-        const source5 = canvasUtils.getCanvasSource(texture);
-        if (!source5) {
+        const source3 = canvasUtils.getCanvasSource(texture);
+        if (!source3) {
           return texture;
         }
         const frame = texture.frame;
@@ -16038,7 +19209,7 @@ var init_CanvasFilterSystem = __esm({
         const sw = width * resolution;
         const sh = height * resolution;
         context2.drawImage(
-          source5,
+          source3,
           sx,
           sy,
           sw,
@@ -16165,26 +19336,6 @@ var init_FilterPipe = __esm({
       ],
       name: "filter"
     };
-  }
-});
-
-// node_modules/pixi.js/lib/rendering/renderers/shared/utils/createIdFromString.mjs
-function createIdFromString(value, groupId) {
-  let id = idHash2[value];
-  if (id === void 0) {
-    if (idCounts[groupId] === void 0) {
-      idCounts[groupId] = 1;
-    }
-    idHash2[value] = id = idCounts[groupId]++;
-  }
-  return id;
-}
-var idCounts, idHash2;
-var init_createIdFromString = __esm({
-  "node_modules/pixi.js/lib/rendering/renderers/shared/utils/createIdFromString.mjs"() {
-    "use strict";
-    idCounts = /* @__PURE__ */ Object.create(null);
-    idHash2 = /* @__PURE__ */ Object.create(null);
   }
 });
 
@@ -16369,14 +19520,14 @@ var init_GlProgram = __esm({
           addProgramDefines: isES300,
           insertVersion: isES300
         };
-        let fragment4 = options.fragment;
+        let fragment3 = options.fragment;
         let vertex3 = options.vertex;
         Object.keys(processes).forEach((processKey) => {
           const processOptions = preprocessorOptions[processKey];
-          fragment4 = processes[processKey](fragment4, processOptions, true);
+          fragment3 = processes[processKey](fragment3, processOptions, true);
           vertex3 = processes[processKey](vertex3, processOptions, false);
         });
-        this.fragment = fragment4;
+        this.fragment = fragment3;
         this.vertex = vertex3;
         this.transformFeedbackVaryings = options.transformFeedbackVaryings;
         this._key = createIdFromString(`${this.vertex}:${this.fragment}`, "gl-program");
@@ -16415,49 +19566,6 @@ var init_GlProgram = __esm({
   }
 });
 
-// node_modules/pixi.js/lib/rendering/renderers/shared/geometry/utils/getAttributeInfoFromFormat.mjs
-function getAttributeInfoFromFormat(format) {
-  return attributeFormatData[format] ?? attributeFormatData.float32;
-}
-var attributeFormatData;
-var init_getAttributeInfoFromFormat = __esm({
-  "node_modules/pixi.js/lib/rendering/renderers/shared/geometry/utils/getAttributeInfoFromFormat.mjs"() {
-    "use strict";
-    attributeFormatData = {
-      uint8x2: { size: 2, stride: 2, normalised: false },
-      uint8x4: { size: 4, stride: 4, normalised: false },
-      sint8x2: { size: 2, stride: 2, normalised: false },
-      sint8x4: { size: 4, stride: 4, normalised: false },
-      unorm8x2: { size: 2, stride: 2, normalised: true },
-      unorm8x4: { size: 4, stride: 4, normalised: true },
-      snorm8x2: { size: 2, stride: 2, normalised: true },
-      snorm8x4: { size: 4, stride: 4, normalised: true },
-      uint16x2: { size: 2, stride: 4, normalised: false },
-      uint16x4: { size: 4, stride: 8, normalised: false },
-      sint16x2: { size: 2, stride: 4, normalised: false },
-      sint16x4: { size: 4, stride: 8, normalised: false },
-      unorm16x2: { size: 2, stride: 4, normalised: true },
-      unorm16x4: { size: 4, stride: 8, normalised: true },
-      snorm16x2: { size: 2, stride: 4, normalised: true },
-      snorm16x4: { size: 4, stride: 8, normalised: true },
-      float16x2: { size: 2, stride: 4, normalised: false },
-      float16x4: { size: 4, stride: 8, normalised: false },
-      float32: { size: 1, stride: 4, normalised: false },
-      float32x2: { size: 2, stride: 8, normalised: false },
-      float32x3: { size: 3, stride: 12, normalised: false },
-      float32x4: { size: 4, stride: 16, normalised: false },
-      uint32: { size: 1, stride: 4, normalised: false },
-      uint32x2: { size: 2, stride: 8, normalised: false },
-      uint32x3: { size: 3, stride: 12, normalised: false },
-      uint32x4: { size: 4, stride: 16, normalised: false },
-      sint32: { size: 1, stride: 4, normalised: false },
-      sint32x2: { size: 2, stride: 8, normalised: false },
-      sint32x3: { size: 3, stride: 12, normalised: false },
-      sint32x4: { size: 4, stride: 16, normalised: false }
-    };
-  }
-});
-
 // node_modules/pixi.js/lib/rendering/renderers/gpu/shader/utils/extractAttributesFromGpuProgram.mjs
 function parseLocations(str, results) {
   let match;
@@ -16474,12 +19582,12 @@ function parseLocations(str, results) {
   }
   LOCATION_REGEX.lastIndex = 0;
 }
-function stripComments(source5) {
-  return source5.replace(/\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
+function stripComments(source3) {
+  return source3.replace(/\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
 }
-function extractAttributesFromGpuProgram({ source: source5, entryPoint }) {
+function extractAttributesFromGpuProgram({ source: source3, entryPoint }) {
   const results = {};
-  const cleanSource = stripComments(source5);
+  const cleanSource = stripComments(source3);
   const mainVertStart = cleanSource.indexOf(`fn ${entryPoint}(`);
   if (mainVertStart === -1) {
     return results;
@@ -16591,7 +19699,7 @@ var init_extractStructAndGroups = __esm({
 
 // node_modules/pixi.js/lib/rendering/renderers/shared/shader/const.mjs
 var ShaderStage;
-var init_const3 = __esm({
+var init_const5 = __esm({
   "node_modules/pixi.js/lib/rendering/renderers/shared/shader/const.mjs"() {
     "use strict";
     ShaderStage = /* @__PURE__ */ ((ShaderStage2) => {
@@ -16666,7 +19774,7 @@ function generateGpuLayoutGroups({ groups }) {
 }
 var init_generateGpuLayoutGroups = __esm({
   "node_modules/pixi.js/lib/rendering/renderers/gpu/shader/utils/generateGpuLayoutGroups.mjs"() {
-    init_const3();
+    init_const5();
   }
 });
 
@@ -16734,16 +19842,16 @@ var init_GpuProgram = __esm({
       constructor(options) {
         this._layoutKey = 0;
         this._attributeLocationsKey = 0;
-        const { fragment: fragment4, vertex: vertex3, layout, gpuLayout, name } = options;
+        const { fragment: fragment3, vertex: vertex3, layout, gpuLayout, name } = options;
         this.name = name;
-        this.fragment = fragment4;
+        this.fragment = fragment3;
         this.vertex = vertex3;
-        if (fragment4.source === vertex3.source) {
-          const structsAndGroups = extractStructAndGroups(fragment4.source);
+        if (fragment3.source === vertex3.source) {
+          const structsAndGroups = extractStructAndGroups(fragment3.source);
           this.structsAndGroups = structsAndGroups;
         } else {
           const vertexStructsAndGroups = extractStructAndGroups(vertex3.source);
-          const fragmentStructsAndGroups = extractStructAndGroups(fragment4.source);
+          const fragmentStructsAndGroups = extractStructAndGroups(fragment3.source);
           this.structsAndGroups = removeStructAndGroupDuplicates(vertexStructsAndGroups, fragmentStructsAndGroups);
         }
         this.layout = layout ?? generateLayoutHash(this.structsAndGroups);
@@ -16754,8 +19862,8 @@ var init_GpuProgram = __esm({
       }
       // TODO maker this pure
       _generateProgramKey() {
-        const { vertex: vertex3, fragment: fragment4 } = this;
-        const bigKey = vertex3.source + fragment4.source + vertex3.entryPoint + fragment4.entryPoint;
+        const { vertex: vertex3, fragment: fragment3 } = this;
+        const bigKey = vertex3.source + fragment3.source + vertex3.entryPoint + fragment3.entryPoint;
         this._layoutKey = createIdFromString(bigKey, "program");
       }
       get attributeData() {
@@ -16885,7 +19993,7 @@ var init_BindGroup = __esm({
 
 // node_modules/pixi.js/lib/rendering/renderers/types.mjs
 var RendererType;
-var init_types = __esm({
+var init_types2 = __esm({
   "node_modules/pixi.js/lib/rendering/renderers/types.mjs"() {
     "use strict";
     RendererType = /* @__PURE__ */ ((RendererType2) => {
@@ -16898,160 +20006,6 @@ var init_types = __esm({
   }
 });
 
-// node_modules/pixi.js/lib/rendering/renderers/shared/shader/types.mjs
-var UNIFORM_TYPES_VALUES, UNIFORM_TYPES_MAP;
-var init_types2 = __esm({
-  "node_modules/pixi.js/lib/rendering/renderers/shared/shader/types.mjs"() {
-    "use strict";
-    UNIFORM_TYPES_VALUES = [
-      "f32",
-      "i32",
-      "vec2<f32>",
-      "vec3<f32>",
-      "vec4<f32>",
-      "mat2x2<f32>",
-      "mat3x3<f32>",
-      "mat4x4<f32>",
-      "mat3x2<f32>",
-      "mat4x2<f32>",
-      "mat2x3<f32>",
-      "mat4x3<f32>",
-      "mat2x4<f32>",
-      "mat3x4<f32>",
-      "vec2<i32>",
-      "vec3<i32>",
-      "vec4<i32>"
-    ];
-    UNIFORM_TYPES_MAP = UNIFORM_TYPES_VALUES.reduce((acc, type) => {
-      acc[type] = true;
-      return acc;
-    }, {});
-  }
-});
-
-// node_modules/pixi.js/lib/rendering/renderers/shared/shader/utils/getDefaultUniformValue.mjs
-function getDefaultUniformValue(type, size) {
-  switch (type) {
-    case "f32":
-      return 0;
-    case "vec2<f32>":
-      return new Float32Array(2 * size);
-    case "vec3<f32>":
-      return new Float32Array(3 * size);
-    case "vec4<f32>":
-      return new Float32Array(4 * size);
-    case "mat2x2<f32>":
-      return new Float32Array([
-        1,
-        0,
-        0,
-        1
-      ]);
-    case "mat3x3<f32>":
-      return new Float32Array([
-        1,
-        0,
-        0,
-        0,
-        1,
-        0,
-        0,
-        0,
-        1
-      ]);
-    case "mat4x4<f32>":
-      return new Float32Array([
-        1,
-        0,
-        0,
-        0,
-        0,
-        1,
-        0,
-        0,
-        0,
-        0,
-        1,
-        0,
-        0,
-        0,
-        0,
-        1
-      ]);
-  }
-  return null;
-}
-var init_getDefaultUniformValue = __esm({
-  "node_modules/pixi.js/lib/rendering/renderers/shared/shader/utils/getDefaultUniformValue.mjs"() {
-    "use strict";
-  }
-});
-
-// node_modules/pixi.js/lib/rendering/renderers/shared/shader/UniformGroup.mjs
-var _UniformGroup, UniformGroup;
-var init_UniformGroup = __esm({
-  "node_modules/pixi.js/lib/rendering/renderers/shared/shader/UniformGroup.mjs"() {
-    init_uid();
-    init_createIdFromString();
-    init_types2();
-    init_getDefaultUniformValue();
-    _UniformGroup = class _UniformGroup2 {
-      /**
-       * Create a new Uniform group
-       * @param uniformStructures - The structures of the uniform group
-       * @param options - The optional parameters of this uniform group
-       */
-      constructor(uniformStructures, options) {
-        this._touched = 0;
-        this.uid = uid("uniform");
-        this._resourceType = "uniformGroup";
-        this._resourceId = uid("resource");
-        this.isUniformGroup = true;
-        this._dirtyId = 0;
-        this.destroyed = false;
-        options = { ..._UniformGroup2.defaultOptions, ...options };
-        this.uniformStructures = uniformStructures;
-        const uniforms = {};
-        for (const i2 in uniformStructures) {
-          const uniformData = uniformStructures[i2];
-          uniformData.name = i2;
-          uniformData.size = uniformData.size ?? 1;
-          if (!UNIFORM_TYPES_MAP[uniformData.type]) {
-            const arrayMatch = uniformData.type.match(/^array<(\w+(?:<\w+>)?),\s*(\d+)>$/);
-            if (arrayMatch) {
-              const [, innerType, size] = arrayMatch;
-              throw new Error(
-                `Uniform type ${uniformData.type} is not supported. Use type: '${innerType}', size: ${size} instead.`
-              );
-            }
-            throw new Error(`Uniform type ${uniformData.type} is not supported. Supported uniform types are: ${UNIFORM_TYPES_VALUES.join(", ")}`);
-          }
-          uniformData.value ?? (uniformData.value = getDefaultUniformValue(uniformData.type, uniformData.size));
-          uniforms[i2] = uniformData.value;
-        }
-        this.uniforms = uniforms;
-        this._dirtyId = 1;
-        this.ubo = options.ubo;
-        this.isStatic = options.isStatic;
-        this._signature = createIdFromString(Object.keys(uniforms).map(
-          (i2) => `${i2}-${uniformStructures[i2].type}`
-        ).join("-"), "uniform-group");
-      }
-      /** Call this if you want the uniform groups data to be uploaded to the GPU only useful if `isStatic` is true. */
-      update() {
-        this._dirtyId++;
-      }
-    };
-    _UniformGroup.defaultOptions = {
-      /** if true the UniformGroup is handled as an Uniform buffer object. */
-      ubo: false,
-      /** if true, then you are responsible for when the data is uploaded to the GPU by calling `update()` */
-      isStatic: false
-    };
-    UniformGroup = _UniformGroup;
-  }
-});
-
 // node_modules/pixi.js/lib/rendering/renderers/shared/shader/Shader.mjs
 var Shader;
 var init_Shader = __esm({
@@ -17061,7 +20015,7 @@ var init_Shader = __esm({
     init_GlProgram();
     init_BindGroup();
     init_GpuProgram();
-    init_types();
+    init_types2();
     init_UniformGroup();
     Shader = class _Shader extends eventemitter3_default {
       constructor(options) {
@@ -17108,20 +20062,20 @@ var init_Shader = __esm({
         } else if (gpuProgram && groups && !groupMap) {
           const groupData = gpuProgram.structsAndGroups.groups;
           groupMap = {};
-          groupData.forEach((data2) => {
-            groupMap[data2.group] = groupMap[data2.group] || {};
-            groupMap[data2.group][data2.binding] = data2.name;
-            nameHash[data2.name] = data2;
+          groupData.forEach((data) => {
+            groupMap[data.group] = groupMap[data.group] || {};
+            groupMap[data.group][data.binding] = data.name;
+            nameHash[data.name] = data;
           });
         } else if (resources) {
           groups = {};
           groupMap = {};
           if (gpuProgram) {
             const groupData = gpuProgram.structsAndGroups.groups;
-            groupData.forEach((data2) => {
-              groupMap[data2.group] = groupMap[data2.group] || {};
-              groupMap[data2.group][data2.binding] = data2.name;
-              nameHash[data2.name] = data2;
+            groupData.forEach((data) => {
+              groupMap[data.group] = groupMap[data.group] || {};
+              groupMap[data.group][data.binding] = data.name;
+              nameHash[data.name] = data;
             });
           }
           let bindTick = 0;
@@ -17142,13 +20096,13 @@ var init_Shader = __esm({
             if (!value.source && !value._resourceType) {
               value = new UniformGroup(value);
             }
-            const data2 = nameHash[name];
-            if (data2) {
-              if (!groups[data2.group]) {
-                groups[data2.group] = new BindGroup();
-                this._ownedBindGroups.push(groups[data2.group]);
+            const data = nameHash[name];
+            if (data) {
+              if (!groups[data.group]) {
+                groups[data.group] = new BindGroup();
+                this._ownedBindGroups.push(groups[data.group]);
               }
-              groups[data2.group].setResource(value, data2.binding);
+              groups[data.group].setResource(value, data.binding);
             }
           }
         }
@@ -17175,13 +20129,13 @@ var init_Shader = __esm({
       _buildResourceAccessor(groups, nameHash) {
         const uniformsOut = {};
         for (const i2 in nameHash) {
-          const data2 = nameHash[i2];
-          Object.defineProperty(uniformsOut, data2.name, {
+          const data = nameHash[i2];
+          Object.defineProperty(uniformsOut, data.name, {
             get() {
-              return groups[data2.group].getResource(data2.binding);
+              return groups[data.group].getResource(data.binding);
             },
             set(value) {
-              groups[data2.group].setResource(value, data2.binding);
+              groups[data.group].setResource(value, data.binding);
             }
           });
         }
@@ -17536,366 +20490,6 @@ var init_PassthroughFilter = __esm({
   }
 });
 
-// node_modules/pixi.js/lib/rendering/renderers/shared/buffer/const.mjs
-var BufferUsage;
-var init_const4 = __esm({
-  "node_modules/pixi.js/lib/rendering/renderers/shared/buffer/const.mjs"() {
-    "use strict";
-    BufferUsage = /* @__PURE__ */ ((BufferUsage2) => {
-      BufferUsage2[BufferUsage2["MAP_READ"] = 1] = "MAP_READ";
-      BufferUsage2[BufferUsage2["MAP_WRITE"] = 2] = "MAP_WRITE";
-      BufferUsage2[BufferUsage2["COPY_SRC"] = 4] = "COPY_SRC";
-      BufferUsage2[BufferUsage2["COPY_DST"] = 8] = "COPY_DST";
-      BufferUsage2[BufferUsage2["INDEX"] = 16] = "INDEX";
-      BufferUsage2[BufferUsage2["VERTEX"] = 32] = "VERTEX";
-      BufferUsage2[BufferUsage2["UNIFORM"] = 64] = "UNIFORM";
-      BufferUsage2[BufferUsage2["STORAGE"] = 128] = "STORAGE";
-      BufferUsage2[BufferUsage2["INDIRECT"] = 256] = "INDIRECT";
-      BufferUsage2[BufferUsage2["QUERY_RESOLVE"] = 512] = "QUERY_RESOLVE";
-      BufferUsage2[BufferUsage2["STATIC"] = 1024] = "STATIC";
-      return BufferUsage2;
-    })(BufferUsage || {});
-  }
-});
-
-// node_modules/pixi.js/lib/rendering/renderers/shared/buffer/Buffer.mjs
-var Buffer2;
-var init_Buffer = __esm({
-  "node_modules/pixi.js/lib/rendering/renderers/shared/buffer/Buffer.mjs"() {
-    init_eventemitter3();
-    init_uid();
-    init_const4();
-    Buffer2 = class extends eventemitter3_default {
-      /**
-       * Creates a new Buffer with the given options
-       * @param options - the options for the buffer
-       */
-      constructor(options) {
-        let { data: data2, size } = options;
-        const { usage, label, shrinkToFit } = options;
-        super();
-        this._gpuData = /* @__PURE__ */ Object.create(null);
-        this._gcLastUsed = -1;
-        this.autoGarbageCollect = true;
-        this.uid = uid("buffer");
-        this._resourceType = "buffer";
-        this._resourceId = uid("resource");
-        this._touched = 0;
-        this._updateID = 1;
-        this._dataInt32 = null;
-        this.shrinkToFit = true;
-        this.destroyed = false;
-        if (data2 instanceof Array) {
-          data2 = new Float32Array(data2);
-        }
-        this._data = data2;
-        size ?? (size = data2?.byteLength);
-        const mappedAtCreation = !!data2;
-        this.descriptor = {
-          size,
-          usage,
-          mappedAtCreation,
-          label
-        };
-        this.shrinkToFit = shrinkToFit ?? true;
-      }
-      /** the data in the buffer */
-      get data() {
-        return this._data;
-      }
-      set data(value) {
-        this.setDataWithSize(value, value.length, true);
-      }
-      get dataInt32() {
-        if (!this._dataInt32) {
-          this._dataInt32 = new Int32Array(this.data.buffer);
-        }
-        return this._dataInt32;
-      }
-      /** whether the buffer is static or not */
-      get static() {
-        return !!(this.descriptor.usage & BufferUsage.STATIC);
-      }
-      set static(value) {
-        if (value) {
-          this.descriptor.usage |= BufferUsage.STATIC;
-        } else {
-          this.descriptor.usage &= ~BufferUsage.STATIC;
-        }
-      }
-      /**
-       * Sets the data in the buffer to the given value. This will immediately update the buffer on the GPU.
-       * If you only want to update a subset of the buffer, you can pass in the size of the data.
-       * @param value - the data to set
-       * @param size - the size of the data in bytes
-       * @param syncGPU - should the buffer be updated on the GPU immediately?
-       */
-      setDataWithSize(value, size, syncGPU) {
-        this._updateID++;
-        this._updateSize = size * value.BYTES_PER_ELEMENT;
-        if (this._data === value) {
-          if (syncGPU) this.emit("update", this);
-          return;
-        }
-        const oldData = this._data;
-        this._data = value;
-        this._dataInt32 = null;
-        if (!oldData || oldData.length !== value.length) {
-          if (!this.shrinkToFit && oldData && value.byteLength < oldData.byteLength) {
-            if (syncGPU) this.emit("update", this);
-          } else {
-            this.descriptor.size = value.byteLength;
-            this._resourceId = uid("resource");
-            this.emit("change", this);
-          }
-          return;
-        }
-        if (syncGPU) this.emit("update", this);
-      }
-      /**
-       * updates the buffer on the GPU to reflect the data in the buffer.
-       * By default it will update the entire buffer. If you only want to update a subset of the buffer,
-       * you can pass in the size of the buffer to update.
-       * @param sizeInBytes - the new size of the buffer in bytes
-       */
-      update(sizeInBytes) {
-        this._updateSize = sizeInBytes ?? this._updateSize;
-        this._updateID++;
-        this.emit("update", this);
-      }
-      /** Unloads the buffer from the GPU */
-      unload() {
-        this.emit("unload", this);
-        for (const key in this._gpuData) {
-          this._gpuData[key]?.destroy();
-        }
-        this._gpuData = /* @__PURE__ */ Object.create(null);
-      }
-      /** Destroys the buffer */
-      destroy() {
-        this.destroyed = true;
-        this.unload();
-        this.emit("destroy", this);
-        this.emit("change", this);
-        this._data = null;
-        this.descriptor = null;
-        this.removeAllListeners();
-      }
-    };
-  }
-});
-
-// node_modules/pixi.js/lib/rendering/renderers/shared/geometry/utils/ensureIsBuffer.mjs
-function ensureIsBuffer(buffer, index) {
-  if (!(buffer instanceof Buffer2)) {
-    let usage = index ? BufferUsage.INDEX : BufferUsage.VERTEX;
-    if (buffer instanceof Array) {
-      if (index) {
-        buffer = new Uint32Array(buffer);
-        usage = BufferUsage.INDEX | BufferUsage.COPY_DST;
-      } else {
-        buffer = new Float32Array(buffer);
-        usage = BufferUsage.VERTEX | BufferUsage.COPY_DST;
-      }
-    }
-    buffer = new Buffer2({
-      data: buffer,
-      label: index ? "index-mesh-buffer" : "vertex-mesh-buffer",
-      usage
-    });
-  }
-  return buffer;
-}
-var init_ensureIsBuffer = __esm({
-  "node_modules/pixi.js/lib/rendering/renderers/shared/geometry/utils/ensureIsBuffer.mjs"() {
-    init_Buffer();
-    init_const4();
-  }
-});
-
-// node_modules/pixi.js/lib/rendering/renderers/shared/geometry/utils/getGeometryBounds.mjs
-function getGeometryBounds(geometry, attributeId, bounds) {
-  const attribute = geometry.getAttribute(attributeId);
-  if (!attribute) {
-    bounds.minX = 0;
-    bounds.minY = 0;
-    bounds.maxX = 0;
-    bounds.maxY = 0;
-    return bounds;
-  }
-  const data2 = attribute.buffer.data;
-  let minX = Infinity;
-  let minY = Infinity;
-  let maxX = -Infinity;
-  let maxY = -Infinity;
-  const byteSize = data2.BYTES_PER_ELEMENT;
-  const offset = (attribute.offset || 0) / byteSize;
-  const stride = (attribute.stride || 2 * 4) / byteSize;
-  for (let i2 = offset; i2 < data2.length; i2 += stride) {
-    const x2 = data2[i2];
-    const y2 = data2[i2 + 1];
-    if (x2 > maxX) maxX = x2;
-    if (y2 > maxY) maxY = y2;
-    if (x2 < minX) minX = x2;
-    if (y2 < minY) minY = y2;
-  }
-  bounds.minX = minX;
-  bounds.minY = minY;
-  bounds.maxX = maxX;
-  bounds.maxY = maxY;
-  return bounds;
-}
-var init_getGeometryBounds = __esm({
-  "node_modules/pixi.js/lib/rendering/renderers/shared/geometry/utils/getGeometryBounds.mjs"() {
-    "use strict";
-  }
-});
-
-// node_modules/pixi.js/lib/rendering/renderers/shared/geometry/Geometry.mjs
-function ensureIsAttribute(attribute) {
-  if (attribute instanceof Buffer2 || Array.isArray(attribute) || attribute.BYTES_PER_ELEMENT) {
-    attribute = {
-      buffer: attribute
-    };
-  }
-  attribute.buffer = ensureIsBuffer(attribute.buffer, false);
-  return attribute;
-}
-var Geometry;
-var init_Geometry = __esm({
-  "node_modules/pixi.js/lib/rendering/renderers/shared/geometry/Geometry.mjs"() {
-    init_eventemitter3();
-    init_Bounds();
-    init_uid();
-    init_Buffer();
-    init_ensureIsBuffer();
-    init_getGeometryBounds();
-    Geometry = class extends eventemitter3_default {
-      /**
-       * Create a new instance of a geometry
-       * @param options - The options for the geometry.
-       */
-      constructor(options = {}) {
-        super();
-        this._gpuData = /* @__PURE__ */ Object.create(null);
-        this.autoGarbageCollect = true;
-        this._gcLastUsed = -1;
-        this.uid = uid("geometry");
-        this._layoutKey = 0;
-        this.instanceCount = 1;
-        this._bounds = new Bounds();
-        this._boundsDirty = true;
-        const { attributes, indexBuffer, topology } = options;
-        this.buffers = [];
-        this.attributes = {};
-        if (attributes) {
-          for (const i2 in attributes) {
-            this.addAttribute(i2, attributes[i2]);
-          }
-        }
-        this.instanceCount = options.instanceCount ?? 1;
-        if (indexBuffer) {
-          this.addIndex(indexBuffer);
-        }
-        this.topology = topology || "triangle-list";
-      }
-      onBufferUpdate() {
-        this._boundsDirty = true;
-        this.emit("update", this);
-      }
-      /**
-       * Returns the requested attribute.
-       * @param id - The name of the attribute required
-       * @returns - The attribute requested.
-       */
-      getAttribute(id) {
-        return this.attributes[id];
-      }
-      /**
-       * Returns the index buffer
-       * @returns - The index buffer.
-       */
-      getIndex() {
-        return this.indexBuffer;
-      }
-      /**
-       * Returns the requested buffer.
-       * @param id - The name of the buffer required.
-       * @returns - The buffer requested.
-       */
-      getBuffer(id) {
-        return this.getAttribute(id).buffer;
-      }
-      /**
-       * Used to figure out how many vertices there are in this geometry
-       * @returns the number of vertices in the geometry
-       */
-      getSize() {
-        for (const i2 in this.attributes) {
-          const attribute = this.attributes[i2];
-          const buffer = attribute.buffer;
-          return buffer.data.length / (attribute.stride / 4 || attribute.size);
-        }
-        return 0;
-      }
-      /**
-       * Adds an attribute to the geometry.
-       * @param name - The name of the attribute to add.
-       * @param attributeOption - The attribute option to add.
-       */
-      addAttribute(name, attributeOption) {
-        const attribute = ensureIsAttribute(attributeOption);
-        const bufferIndex = this.buffers.indexOf(attribute.buffer);
-        if (bufferIndex === -1) {
-          this.buffers.push(attribute.buffer);
-          attribute.buffer.on("update", this.onBufferUpdate, this);
-          attribute.buffer.on("change", this.onBufferUpdate, this);
-        }
-        this.attributes[name] = attribute;
-      }
-      /**
-       * Adds an index buffer to the geometry.
-       * @param indexBuffer - The index buffer to add. Can be a Buffer, TypedArray, or an array of numbers.
-       */
-      addIndex(indexBuffer) {
-        this.indexBuffer = ensureIsBuffer(indexBuffer, true);
-        this.buffers.push(this.indexBuffer);
-      }
-      /** Returns the bounds of the geometry. */
-      get bounds() {
-        if (!this._boundsDirty) return this._bounds;
-        this._boundsDirty = false;
-        return getGeometryBounds(this, "aPosition", this._bounds);
-      }
-      /** Unloads the geometry from the GPU. */
-      unload() {
-        this.emit("unload", this);
-        for (const key in this._gpuData) {
-          this._gpuData[key]?.destroy();
-        }
-        this._gpuData = /* @__PURE__ */ Object.create(null);
-      }
-      /**
-       * destroys the geometry.
-       * @param destroyBuffers - destroy the buffers associated with this geometry
-       */
-      destroy(destroyBuffers = false) {
-        this.emit("destroy", this);
-        this.removeAllListeners();
-        if (destroyBuffers) {
-          this.buffers.forEach((buffer) => buffer.destroy());
-        }
-        this.unload();
-        this.indexBuffer?.destroy();
-        this.attributes = null;
-        this.buffers = null;
-        this.indexBuffer = null;
-        this._bounds = null;
-      }
-    };
-  }
-});
-
 // node_modules/pixi.js/lib/filters/FilterSystem.mjs
 var quadGeometry, FilterData, FilterSystem;
 var init_FilterSystem = __esm({
@@ -17908,7 +20502,7 @@ var init_FilterSystem = __esm({
     init_UniformGroup();
     init_Texture();
     init_TexturePool();
-    init_types();
+    init_types2();
     init_Bounds();
     init_getRenderableBounds();
     init_warn();
@@ -18158,14 +20752,14 @@ var init_FilterSystem = __esm({
        * @returns The mapped matrix.
        */
       calculateSpriteMatrix(outputMatrix, sprite) {
-        const data2 = this._activeFilterData;
+        const data = this._activeFilterData;
         const mappedMatrix = outputMatrix.set(
-          data2.inputTexture._source.width,
+          data.inputTexture._source.width,
           0,
           0,
-          data2.inputTexture._source.height,
-          data2.bounds.minX,
-          data2.bounds.minY
+          data.inputTexture._source.height,
+          data.bounds.minX,
+          data.bounds.minY
         );
         const worldTransform = sprite.worldTransform.copyTo(Matrix.shared);
         const renderGroup = sprite.renderGroup || sprite.parentRenderGroup;
@@ -18527,945 +21121,6 @@ var init_webworkerAll = __esm({
   }
 });
 
-// node_modules/pixi.js/lib/environment/autoDetectEnvironment.mjs
-async function loadEnvironmentExtensions(skip) {
-  if (skip) return;
-  for (let i2 = 0; i2 < environments.length; i2++) {
-    const env = environments[i2];
-    if (env.value.test()) {
-      await env.value.load();
-      return;
-    }
-  }
-}
-var environments;
-var init_autoDetectEnvironment = __esm({
-  "node_modules/pixi.js/lib/environment/autoDetectEnvironment.mjs"() {
-    init_Extensions();
-    environments = [];
-    extensions.handleByNamedList(ExtensionType.Environment, environments);
-  }
-});
-
-// node_modules/pixi.js/lib/utils/browser/unsafeEvalSupported.mjs
-function unsafeEvalSupported() {
-  if (typeof unsafeEval === "boolean") {
-    return unsafeEval;
-  }
-  try {
-    const func = new Function("param1", "param2", "param3", "return param1[param2] === param3;");
-    unsafeEval = func({ a: "b" }, "a", "b") === true;
-  } catch (_e) {
-    unsafeEval = false;
-  }
-  return unsafeEval;
-}
-var unsafeEval;
-var init_unsafeEvalSupported = __esm({
-  "node_modules/pixi.js/lib/utils/browser/unsafeEvalSupported.mjs"() {
-    "use strict";
-  }
-});
-
-// node_modules/earcut/src/earcut.js
-function earcut(data2, holeIndices, dim = 2) {
-  const hasHoles = holeIndices && holeIndices.length;
-  const outerLen = hasHoles ? holeIndices[0] * dim : data2.length;
-  let outerNode = linkedList(data2, 0, outerLen, dim, true);
-  const triangles = [];
-  if (!outerNode || outerNode.next === outerNode.prev) return triangles;
-  let minX, minY, invSize;
-  if (hasHoles) outerNode = eliminateHoles(data2, holeIndices, outerNode, dim);
-  if (data2.length > 80 * dim) {
-    minX = data2[0];
-    minY = data2[1];
-    let maxX = minX;
-    let maxY = minY;
-    for (let i2 = dim; i2 < outerLen; i2 += dim) {
-      const x2 = data2[i2];
-      const y2 = data2[i2 + 1];
-      if (x2 < minX) minX = x2;
-      if (y2 < minY) minY = y2;
-      if (x2 > maxX) maxX = x2;
-      if (y2 > maxY) maxY = y2;
-    }
-    invSize = Math.max(maxX - minX, maxY - minY);
-    invSize = invSize !== 0 ? 32767 / invSize : 0;
-  }
-  earcutLinked(outerNode, triangles, dim, minX, minY, invSize, 0);
-  return triangles;
-}
-function linkedList(data2, start, end, dim, clockwise) {
-  let last;
-  if (clockwise === signedArea(data2, start, end, dim) > 0) {
-    for (let i2 = start; i2 < end; i2 += dim) last = insertNode(i2 / dim | 0, data2[i2], data2[i2 + 1], last);
-  } else {
-    for (let i2 = end - dim; i2 >= start; i2 -= dim) last = insertNode(i2 / dim | 0, data2[i2], data2[i2 + 1], last);
-  }
-  if (last && equals(last, last.next)) {
-    removeNode(last);
-    last = last.next;
-  }
-  return last;
-}
-function filterPoints(start, end) {
-  if (!start) return start;
-  if (!end) end = start;
-  let p2 = start, again;
-  do {
-    again = false;
-    if (!p2.steiner && (equals(p2, p2.next) || area(p2.prev, p2, p2.next) === 0)) {
-      removeNode(p2);
-      p2 = end = p2.prev;
-      if (p2 === p2.next) break;
-      again = true;
-    } else {
-      p2 = p2.next;
-    }
-  } while (again || p2 !== end);
-  return end;
-}
-function earcutLinked(ear, triangles, dim, minX, minY, invSize, pass) {
-  if (!ear) return;
-  if (!pass && invSize) indexCurve(ear, minX, minY, invSize);
-  let stop = ear;
-  while (ear.prev !== ear.next) {
-    const prev = ear.prev;
-    const next = ear.next;
-    if (invSize ? isEarHashed(ear, minX, minY, invSize) : isEar(ear)) {
-      triangles.push(prev.i, ear.i, next.i);
-      removeNode(ear);
-      ear = next.next;
-      stop = next.next;
-      continue;
-    }
-    ear = next;
-    if (ear === stop) {
-      if (!pass) {
-        earcutLinked(filterPoints(ear), triangles, dim, minX, minY, invSize, 1);
-      } else if (pass === 1) {
-        ear = cureLocalIntersections(filterPoints(ear), triangles);
-        earcutLinked(ear, triangles, dim, minX, minY, invSize, 2);
-      } else if (pass === 2) {
-        splitEarcut(ear, triangles, dim, minX, minY, invSize);
-      }
-      break;
-    }
-  }
-}
-function isEar(ear) {
-  const a2 = ear.prev, b2 = ear, c2 = ear.next;
-  if (area(a2, b2, c2) >= 0) return false;
-  const ax = a2.x, bx = b2.x, cx = c2.x, ay = a2.y, by = b2.y, cy = c2.y;
-  const x0 = Math.min(ax, bx, cx), y0 = Math.min(ay, by, cy), x1 = Math.max(ax, bx, cx), y1 = Math.max(ay, by, cy);
-  let p2 = c2.next;
-  while (p2 !== a2) {
-    if (p2.x >= x0 && p2.x <= x1 && p2.y >= y0 && p2.y <= y1 && pointInTriangleExceptFirst(ax, ay, bx, by, cx, cy, p2.x, p2.y) && area(p2.prev, p2, p2.next) >= 0) return false;
-    p2 = p2.next;
-  }
-  return true;
-}
-function isEarHashed(ear, minX, minY, invSize) {
-  const a2 = ear.prev, b2 = ear, c2 = ear.next;
-  if (area(a2, b2, c2) >= 0) return false;
-  const ax = a2.x, bx = b2.x, cx = c2.x, ay = a2.y, by = b2.y, cy = c2.y;
-  const x0 = Math.min(ax, bx, cx), y0 = Math.min(ay, by, cy), x1 = Math.max(ax, bx, cx), y1 = Math.max(ay, by, cy);
-  const minZ = zOrder(x0, y0, minX, minY, invSize), maxZ = zOrder(x1, y1, minX, minY, invSize);
-  let p2 = ear.prevZ, n2 = ear.nextZ;
-  while (p2 && p2.z >= minZ && n2 && n2.z <= maxZ) {
-    if (p2.x >= x0 && p2.x <= x1 && p2.y >= y0 && p2.y <= y1 && p2 !== a2 && p2 !== c2 && pointInTriangleExceptFirst(ax, ay, bx, by, cx, cy, p2.x, p2.y) && area(p2.prev, p2, p2.next) >= 0) return false;
-    p2 = p2.prevZ;
-    if (n2.x >= x0 && n2.x <= x1 && n2.y >= y0 && n2.y <= y1 && n2 !== a2 && n2 !== c2 && pointInTriangleExceptFirst(ax, ay, bx, by, cx, cy, n2.x, n2.y) && area(n2.prev, n2, n2.next) >= 0) return false;
-    n2 = n2.nextZ;
-  }
-  while (p2 && p2.z >= minZ) {
-    if (p2.x >= x0 && p2.x <= x1 && p2.y >= y0 && p2.y <= y1 && p2 !== a2 && p2 !== c2 && pointInTriangleExceptFirst(ax, ay, bx, by, cx, cy, p2.x, p2.y) && area(p2.prev, p2, p2.next) >= 0) return false;
-    p2 = p2.prevZ;
-  }
-  while (n2 && n2.z <= maxZ) {
-    if (n2.x >= x0 && n2.x <= x1 && n2.y >= y0 && n2.y <= y1 && n2 !== a2 && n2 !== c2 && pointInTriangleExceptFirst(ax, ay, bx, by, cx, cy, n2.x, n2.y) && area(n2.prev, n2, n2.next) >= 0) return false;
-    n2 = n2.nextZ;
-  }
-  return true;
-}
-function cureLocalIntersections(start, triangles) {
-  let p2 = start;
-  do {
-    const a2 = p2.prev, b2 = p2.next.next;
-    if (!equals(a2, b2) && intersects(a2, p2, p2.next, b2) && locallyInside(a2, b2) && locallyInside(b2, a2)) {
-      triangles.push(a2.i, p2.i, b2.i);
-      removeNode(p2);
-      removeNode(p2.next);
-      p2 = start = b2;
-    }
-    p2 = p2.next;
-  } while (p2 !== start);
-  return filterPoints(p2);
-}
-function splitEarcut(start, triangles, dim, minX, minY, invSize) {
-  let a2 = start;
-  do {
-    let b2 = a2.next.next;
-    while (b2 !== a2.prev) {
-      if (a2.i !== b2.i && isValidDiagonal(a2, b2)) {
-        let c2 = splitPolygon(a2, b2);
-        a2 = filterPoints(a2, a2.next);
-        c2 = filterPoints(c2, c2.next);
-        earcutLinked(a2, triangles, dim, minX, minY, invSize, 0);
-        earcutLinked(c2, triangles, dim, minX, minY, invSize, 0);
-        return;
-      }
-      b2 = b2.next;
-    }
-    a2 = a2.next;
-  } while (a2 !== start);
-}
-function eliminateHoles(data2, holeIndices, outerNode, dim) {
-  const queue = [];
-  for (let i2 = 0, len = holeIndices.length; i2 < len; i2++) {
-    const start = holeIndices[i2] * dim;
-    const end = i2 < len - 1 ? holeIndices[i2 + 1] * dim : data2.length;
-    const list = linkedList(data2, start, end, dim, false);
-    if (list === list.next) list.steiner = true;
-    queue.push(getLeftmost(list));
-  }
-  queue.sort(compareXYSlope);
-  for (let i2 = 0; i2 < queue.length; i2++) {
-    outerNode = eliminateHole(queue[i2], outerNode);
-  }
-  return outerNode;
-}
-function compareXYSlope(a2, b2) {
-  let result = a2.x - b2.x;
-  if (result === 0) {
-    result = a2.y - b2.y;
-    if (result === 0) {
-      const aSlope = (a2.next.y - a2.y) / (a2.next.x - a2.x);
-      const bSlope = (b2.next.y - b2.y) / (b2.next.x - b2.x);
-      result = aSlope - bSlope;
-    }
-  }
-  return result;
-}
-function eliminateHole(hole, outerNode) {
-  const bridge = findHoleBridge(hole, outerNode);
-  if (!bridge) {
-    return outerNode;
-  }
-  const bridgeReverse = splitPolygon(bridge, hole);
-  filterPoints(bridgeReverse, bridgeReverse.next);
-  return filterPoints(bridge, bridge.next);
-}
-function findHoleBridge(hole, outerNode) {
-  let p2 = outerNode;
-  const hx = hole.x;
-  const hy = hole.y;
-  let qx = -Infinity;
-  let m2;
-  if (equals(hole, p2)) return p2;
-  do {
-    if (equals(hole, p2.next)) return p2.next;
-    else if (hy <= p2.y && hy >= p2.next.y && p2.next.y !== p2.y) {
-      const x2 = p2.x + (hy - p2.y) * (p2.next.x - p2.x) / (p2.next.y - p2.y);
-      if (x2 <= hx && x2 > qx) {
-        qx = x2;
-        m2 = p2.x < p2.next.x ? p2 : p2.next;
-        if (x2 === hx) return m2;
-      }
-    }
-    p2 = p2.next;
-  } while (p2 !== outerNode);
-  if (!m2) return null;
-  const stop = m2;
-  const mx = m2.x;
-  const my = m2.y;
-  let tanMin = Infinity;
-  p2 = m2;
-  do {
-    if (hx >= p2.x && p2.x >= mx && hx !== p2.x && pointInTriangle(hy < my ? hx : qx, hy, mx, my, hy < my ? qx : hx, hy, p2.x, p2.y)) {
-      const tan = Math.abs(hy - p2.y) / (hx - p2.x);
-      if (locallyInside(p2, hole) && (tan < tanMin || tan === tanMin && (p2.x > m2.x || p2.x === m2.x && sectorContainsSector(m2, p2)))) {
-        m2 = p2;
-        tanMin = tan;
-      }
-    }
-    p2 = p2.next;
-  } while (p2 !== stop);
-  return m2;
-}
-function sectorContainsSector(m2, p2) {
-  return area(m2.prev, m2, p2.prev) < 0 && area(p2.next, m2, m2.next) < 0;
-}
-function indexCurve(start, minX, minY, invSize) {
-  let p2 = start;
-  do {
-    if (p2.z === 0) p2.z = zOrder(p2.x, p2.y, minX, minY, invSize);
-    p2.prevZ = p2.prev;
-    p2.nextZ = p2.next;
-    p2 = p2.next;
-  } while (p2 !== start);
-  p2.prevZ.nextZ = null;
-  p2.prevZ = null;
-  sortLinked(p2);
-}
-function sortLinked(list) {
-  let numMerges;
-  let inSize = 1;
-  do {
-    let p2 = list;
-    let e2;
-    list = null;
-    let tail = null;
-    numMerges = 0;
-    while (p2) {
-      numMerges++;
-      let q = p2;
-      let pSize = 0;
-      for (let i2 = 0; i2 < inSize; i2++) {
-        pSize++;
-        q = q.nextZ;
-        if (!q) break;
-      }
-      let qSize = inSize;
-      while (pSize > 0 || qSize > 0 && q) {
-        if (pSize !== 0 && (qSize === 0 || !q || p2.z <= q.z)) {
-          e2 = p2;
-          p2 = p2.nextZ;
-          pSize--;
-        } else {
-          e2 = q;
-          q = q.nextZ;
-          qSize--;
-        }
-        if (tail) tail.nextZ = e2;
-        else list = e2;
-        e2.prevZ = tail;
-        tail = e2;
-      }
-      p2 = q;
-    }
-    tail.nextZ = null;
-    inSize *= 2;
-  } while (numMerges > 1);
-  return list;
-}
-function zOrder(x2, y2, minX, minY, invSize) {
-  x2 = (x2 - minX) * invSize | 0;
-  y2 = (y2 - minY) * invSize | 0;
-  x2 = (x2 | x2 << 8) & 16711935;
-  x2 = (x2 | x2 << 4) & 252645135;
-  x2 = (x2 | x2 << 2) & 858993459;
-  x2 = (x2 | x2 << 1) & 1431655765;
-  y2 = (y2 | y2 << 8) & 16711935;
-  y2 = (y2 | y2 << 4) & 252645135;
-  y2 = (y2 | y2 << 2) & 858993459;
-  y2 = (y2 | y2 << 1) & 1431655765;
-  return x2 | y2 << 1;
-}
-function getLeftmost(start) {
-  let p2 = start, leftmost = start;
-  do {
-    if (p2.x < leftmost.x || p2.x === leftmost.x && p2.y < leftmost.y) leftmost = p2;
-    p2 = p2.next;
-  } while (p2 !== start);
-  return leftmost;
-}
-function pointInTriangle(ax, ay, bx, by, cx, cy, px, py) {
-  return (cx - px) * (ay - py) >= (ax - px) * (cy - py) && (ax - px) * (by - py) >= (bx - px) * (ay - py) && (bx - px) * (cy - py) >= (cx - px) * (by - py);
-}
-function pointInTriangleExceptFirst(ax, ay, bx, by, cx, cy, px, py) {
-  return !(ax === px && ay === py) && pointInTriangle(ax, ay, bx, by, cx, cy, px, py);
-}
-function isValidDiagonal(a2, b2) {
-  return a2.next.i !== b2.i && a2.prev.i !== b2.i && !intersectsPolygon(a2, b2) && // doesn't intersect other edges
-  (locallyInside(a2, b2) && locallyInside(b2, a2) && middleInside(a2, b2) && // locally visible
-  (area(a2.prev, a2, b2.prev) || area(a2, b2.prev, b2)) || // does not create opposite-facing sectors
-  equals(a2, b2) && area(a2.prev, a2, a2.next) > 0 && area(b2.prev, b2, b2.next) > 0);
-}
-function area(p2, q, r2) {
-  return (q.y - p2.y) * (r2.x - q.x) - (q.x - p2.x) * (r2.y - q.y);
-}
-function equals(p1, p2) {
-  return p1.x === p2.x && p1.y === p2.y;
-}
-function intersects(p1, q1, p2, q2) {
-  const o1 = sign(area(p1, q1, p2));
-  const o2 = sign(area(p1, q1, q2));
-  const o3 = sign(area(p2, q2, p1));
-  const o4 = sign(area(p2, q2, q1));
-  if (o1 !== o2 && o3 !== o4) return true;
-  if (o1 === 0 && onSegment(p1, p2, q1)) return true;
-  if (o2 === 0 && onSegment(p1, q2, q1)) return true;
-  if (o3 === 0 && onSegment(p2, p1, q2)) return true;
-  if (o4 === 0 && onSegment(p2, q1, q2)) return true;
-  return false;
-}
-function onSegment(p2, q, r2) {
-  return q.x <= Math.max(p2.x, r2.x) && q.x >= Math.min(p2.x, r2.x) && q.y <= Math.max(p2.y, r2.y) && q.y >= Math.min(p2.y, r2.y);
-}
-function sign(num) {
-  return num > 0 ? 1 : num < 0 ? -1 : 0;
-}
-function intersectsPolygon(a2, b2) {
-  let p2 = a2;
-  do {
-    if (p2.i !== a2.i && p2.next.i !== a2.i && p2.i !== b2.i && p2.next.i !== b2.i && intersects(p2, p2.next, a2, b2)) return true;
-    p2 = p2.next;
-  } while (p2 !== a2);
-  return false;
-}
-function locallyInside(a2, b2) {
-  return area(a2.prev, a2, a2.next) < 0 ? area(a2, b2, a2.next) >= 0 && area(a2, a2.prev, b2) >= 0 : area(a2, b2, a2.prev) < 0 || area(a2, a2.next, b2) < 0;
-}
-function middleInside(a2, b2) {
-  let p2 = a2;
-  let inside = false;
-  const px = (a2.x + b2.x) / 2;
-  const py = (a2.y + b2.y) / 2;
-  do {
-    if (p2.y > py !== p2.next.y > py && p2.next.y !== p2.y && px < (p2.next.x - p2.x) * (py - p2.y) / (p2.next.y - p2.y) + p2.x)
-      inside = !inside;
-    p2 = p2.next;
-  } while (p2 !== a2);
-  return inside;
-}
-function splitPolygon(a2, b2) {
-  const a22 = createNode(a2.i, a2.x, a2.y), b22 = createNode(b2.i, b2.x, b2.y), an = a2.next, bp = b2.prev;
-  a2.next = b2;
-  b2.prev = a2;
-  a22.next = an;
-  an.prev = a22;
-  b22.next = a22;
-  a22.prev = b22;
-  bp.next = b22;
-  b22.prev = bp;
-  return b22;
-}
-function insertNode(i2, x2, y2, last) {
-  const p2 = createNode(i2, x2, y2);
-  if (!last) {
-    p2.prev = p2;
-    p2.next = p2;
-  } else {
-    p2.next = last.next;
-    p2.prev = last;
-    last.next.prev = p2;
-    last.next = p2;
-  }
-  return p2;
-}
-function removeNode(p2) {
-  p2.next.prev = p2.prev;
-  p2.prev.next = p2.next;
-  if (p2.prevZ) p2.prevZ.nextZ = p2.nextZ;
-  if (p2.nextZ) p2.nextZ.prevZ = p2.prevZ;
-}
-function createNode(i2, x2, y2) {
-  return {
-    i: i2,
-    // vertex index in coordinates array
-    x: x2,
-    y: y2,
-    // vertex coordinates
-    prev: null,
-    // previous and next vertex nodes in a polygon ring
-    next: null,
-    z: 0,
-    // z-order curve value
-    prevZ: null,
-    // previous and next nodes in z-order
-    nextZ: null,
-    steiner: false
-    // indicates whether this is a steiner point
-  };
-}
-function signedArea(data2, start, end, dim) {
-  let sum = 0;
-  for (let i2 = start, j2 = end - dim; i2 < end; i2 += dim) {
-    sum += (data2[j2] - data2[i2]) * (data2[i2 + 1] + data2[j2 + 1]);
-    j2 = i2;
-  }
-  return sum;
-}
-var init_earcut = __esm({
-  "node_modules/earcut/src/earcut.js"() {
-  }
-});
-
-// node_modules/pixi.js/lib/utils/utils.mjs
-var earcut2;
-var init_utils = __esm({
-  "node_modules/pixi.js/lib/utils/utils.mjs"() {
-    init_earcut();
-    init_eventemitter3();
-    earcut2 = earcut.default || earcut;
-  }
-});
-
-// node_modules/pixi.js/lib/rendering/renderers/gl/const.mjs
-var CLEAR;
-var init_const5 = __esm({
-  "node_modules/pixi.js/lib/rendering/renderers/gl/const.mjs"() {
-    "use strict";
-    CLEAR = /* @__PURE__ */ ((CLEAR2) => {
-      CLEAR2[CLEAR2["NONE"] = 0] = "NONE";
-      CLEAR2[CLEAR2["COLOR"] = 16384] = "COLOR";
-      CLEAR2[CLEAR2["STENCIL"] = 1024] = "STENCIL";
-      CLEAR2[CLEAR2["DEPTH"] = 256] = "DEPTH";
-      CLEAR2[CLEAR2["COLOR_DEPTH"] = 16640] = "COLOR_DEPTH";
-      CLEAR2[CLEAR2["COLOR_STENCIL"] = 17408] = "COLOR_STENCIL";
-      CLEAR2[CLEAR2["DEPTH_STENCIL"] = 1280] = "DEPTH_STENCIL";
-      CLEAR2[CLEAR2["ALL"] = 17664] = "ALL";
-      return CLEAR2;
-    })(CLEAR || {});
-  }
-});
-
-// node_modules/pixi.js/lib/rendering/renderers/shared/system/SystemRunner.mjs
-var SystemRunner;
-var init_SystemRunner = __esm({
-  "node_modules/pixi.js/lib/rendering/renderers/shared/system/SystemRunner.mjs"() {
-    "use strict";
-    SystemRunner = class {
-      /**
-       * @param name - The function name that will be executed on the listeners added to this Runner.
-       */
-      constructor(name) {
-        this.items = [];
-        this._name = name;
-      }
-      /* jsdoc/check-param-names */
-      /**
-       * Dispatch/Broadcast Runner to all listeners added to the queue.
-       * @param {...any} params - (optional) parameters to pass to each listener
-       */
-      /* jsdoc/check-param-names */
-      emit(a0, a1, a2, a3, a4, a5, a6, a7) {
-        const { name, items } = this;
-        for (let i2 = 0, len = items.length; i2 < len; i2++) {
-          items[i2][name](a0, a1, a2, a3, a4, a5, a6, a7);
-        }
-        return this;
-      }
-      /**
-       * Add a listener to the Runner
-       *
-       * Runners do not need to have scope or functions passed to them.
-       * All that is required is to pass the listening object and ensure that it has contains a function that has the same name
-       * as the name provided to the Runner when it was created.
-       *
-       * Eg A listener passed to this Runner will require a 'complete' function.
-       *
-       * ```ts
-       * import { Runner } from 'pixi.js';
-       *
-       * const complete = new Runner('complete');
-       * ```
-       *
-       * The scope used will be the object itself.
-       * @param {any} item - The object that will be listening.
-       */
-      add(item) {
-        if (item[this._name]) {
-          this.remove(item);
-          this.items.push(item);
-        }
-        return this;
-      }
-      /**
-       * Remove a single listener from the dispatch queue.
-       * @param {any} item - The listener that you would like to remove.
-       */
-      remove(item) {
-        const index = this.items.indexOf(item);
-        if (index !== -1) {
-          this.items.splice(index, 1);
-        }
-        return this;
-      }
-      /**
-       * Check to see if the listener is already in the Runner
-       * @param {any} item - The listener that you would like to check.
-       */
-      contains(item) {
-        return this.items.indexOf(item) !== -1;
-      }
-      /** Remove all listeners from the Runner */
-      removeAll() {
-        this.items.length = 0;
-        return this;
-      }
-      /** Remove all references, don't use after this. */
-      destroy() {
-        this.removeAll();
-        this.items = null;
-        this._name = null;
-      }
-      /**
-       * `true` if there are no this Runner contains no listeners
-       * @readonly
-       */
-      get empty() {
-        return this.items.length === 0;
-      }
-      /**
-       * The name of the runner.
-       * @readonly
-       */
-      get name() {
-        return this._name;
-      }
-    };
-  }
-});
-
-// node_modules/pixi.js/lib/rendering/renderers/shared/system/AbstractRenderer.mjs
-var defaultRunners, _AbstractRenderer, AbstractRenderer;
-var init_AbstractRenderer = __esm({
-  "node_modules/pixi.js/lib/rendering/renderers/shared/system/AbstractRenderer.mjs"() {
-    init_Color();
-    init_autoDetectEnvironment();
-    init_Container();
-    init_unsafeEvalSupported();
-    init_uid();
-    init_deprecation();
-    init_GlobalResourceRegistry();
-    init_const5();
-    init_SystemRunner();
-    init_eventemitter3();
-    defaultRunners = [
-      "init",
-      "destroy",
-      "contextChange",
-      "resolutionChange",
-      "resetState",
-      "renderEnd",
-      "renderStart",
-      "render",
-      "update",
-      "postrender",
-      "prerender"
-    ];
-    _AbstractRenderer = class _AbstractRenderer2 extends eventemitter3_default {
-      /**
-       * Set up a system with a collection of SystemClasses and runners.
-       * Systems are attached dynamically to this class when added.
-       * @param config - the config for the system manager
-       */
-      constructor(config) {
-        super();
-        this.tick = 0;
-        this.uid = uid("renderer");
-        this.runners = /* @__PURE__ */ Object.create(null);
-        this.renderPipes = /* @__PURE__ */ Object.create(null);
-        this._initOptions = {};
-        this._systemsHash = /* @__PURE__ */ Object.create(null);
-        this.type = config.type;
-        this.name = config.name;
-        this.config = config;
-        const combinedRunners = [...defaultRunners, ...this.config.runners ?? []];
-        this._addRunners(...combinedRunners);
-        this._unsafeEvalCheck();
-      }
-      /**
-       * Initialize the renderer.
-       * @param options - The options to use to create the renderer.
-       */
-      async init(options = {}) {
-        const skip = options.skipExtensionImports === true ? true : options.manageImports === false;
-        await loadEnvironmentExtensions(skip);
-        this._addSystems(this.config.systems);
-        this._addPipes(this.config.renderPipes, this.config.renderPipeAdaptors);
-        for (const systemName in this._systemsHash) {
-          const system = this._systemsHash[systemName];
-          const defaultSystemOptions = system.constructor.defaultOptions;
-          options = { ...defaultSystemOptions, ...options };
-        }
-        options = { ..._AbstractRenderer2.defaultOptions, ...options };
-        this._roundPixels = options.roundPixels ? 1 : 0;
-        for (let i2 = 0; i2 < this.runners.init.items.length; i2++) {
-          await this.runners.init.items[i2].init(options);
-        }
-        this._initOptions = options;
-      }
-      render(args, deprecated) {
-        this.tick++;
-        let options = args;
-        if (options instanceof Container) {
-          options = { container: options };
-          if (deprecated) {
-            deprecation(v8_0_0, "passing a second argument is deprecated, please use render options instead");
-            options.target = deprecated.renderTexture;
-          }
-        }
-        options.target || (options.target = this.view.renderTarget);
-        if (options.target === this.view.renderTarget) {
-          this._lastObjectRendered = options.container;
-          options.clearColor ?? (options.clearColor = this.background.colorRgba);
-          options.clear ?? (options.clear = this.background.clearBeforeRender);
-        }
-        if (options.clearColor) {
-          const isRGBAArray = Array.isArray(options.clearColor) && options.clearColor.length === 4;
-          options.clearColor = isRGBAArray ? options.clearColor : Color.shared.setValue(options.clearColor).toArray();
-        }
-        if (!options.transform) {
-          options.container.updateLocalTransform();
-          options.transform = options.container.localTransform;
-        }
-        if (!options.container.visible) {
-          return;
-        }
-        options.container.enableRenderGroup();
-        this.runners.prerender.emit(options);
-        this.runners.renderStart.emit(options);
-        this.runners.render.emit(options);
-        this.runners.renderEnd.emit(options);
-        this.runners.postrender.emit(options);
-      }
-      /**
-       * Resizes the WebGL view to the specified width and height.
-       * @param desiredScreenWidth - The desired width of the screen.
-       * @param desiredScreenHeight - The desired height of the screen.
-       * @param resolution - The resolution / device pixel ratio of the renderer.
-       */
-      resize(desiredScreenWidth, desiredScreenHeight, resolution) {
-        const previousResolution = this.view.resolution;
-        this.view.resize(desiredScreenWidth, desiredScreenHeight, resolution);
-        this.emit("resize", this.view.screen.width, this.view.screen.height, this.view.resolution);
-        if (resolution !== void 0 && resolution !== previousResolution) {
-          this.runners.resolutionChange.emit(resolution);
-        }
-      }
-      /**
-       * Clears the render target.
-       * @param options - The options to use when clearing the render target.
-       * @param options.target - The render target to clear.
-       * @param options.clearColor - The color to clear with.
-       * @param options.clear - The clear mode to use.
-       * @advanced
-       */
-      clear(options = {}) {
-        const renderer = this;
-        options.target || (options.target = renderer.renderTarget.renderTarget);
-        options.clearColor || (options.clearColor = this.background.colorRgba);
-        options.clear ?? (options.clear = CLEAR.ALL);
-        const { clear, clearColor, target, mipLevel, layer } = options;
-        Color.shared.setValue(clearColor ?? this.background.colorRgba);
-        renderer.renderTarget.clear(target, clear, Color.shared.toArray(), mipLevel ?? 0, layer ?? 0);
-      }
-      /** The resolution / device pixel ratio of the renderer. */
-      get resolution() {
-        return this.view.resolution;
-      }
-      set resolution(value) {
-        this.view.resolution = value;
-        this.runners.resolutionChange.emit(value);
-      }
-      /**
-       * Same as view.width, actual number of pixels in the canvas by horizontal.
-       * @type {number}
-       * @readonly
-       * @default 800
-       */
-      get width() {
-        return this.view.texture.frame.width;
-      }
-      /**
-       * Same as view.height, actual number of pixels in the canvas by vertical.
-       * @default 600
-       */
-      get height() {
-        return this.view.texture.frame.height;
-      }
-      // NOTE: this was `view` in v7
-      /**
-       * The canvas element that everything is drawn to.
-       * @type {environment.ICanvas}
-       */
-      get canvas() {
-        return this.view.canvas;
-      }
-      /**
-       * the last object rendered by the renderer. Useful for other plugins like interaction managers
-       * @readonly
-       */
-      get lastObjectRendered() {
-        return this._lastObjectRendered;
-      }
-      /**
-       * Flag if we are rendering to the screen vs renderTexture
-       * @readonly
-       * @default true
-       */
-      get renderingToScreen() {
-        const renderer = this;
-        return renderer.renderTarget.renderingToScreen;
-      }
-      /**
-       * Measurements of the screen. (0, 0, screenWidth, screenHeight).
-       *
-       * Its safe to use as filterArea or hitArea for the whole stage.
-       */
-      get screen() {
-        return this.view.screen;
-      }
-      /**
-       * Create a bunch of runners based of a collection of ids
-       * @param runnerIds - the runner ids to add
-       */
-      _addRunners(...runnerIds) {
-        runnerIds.forEach((runnerId) => {
-          this.runners[runnerId] = new SystemRunner(runnerId);
-        });
-      }
-      _addSystems(systems4) {
-        let i2;
-        for (i2 in systems4) {
-          const val = systems4[i2];
-          this._addSystem(val.value, val.name);
-        }
-      }
-      /**
-       * Add a new system to the renderer.
-       * @param ClassRef - Class reference
-       * @param name - Property name for system, if not specified
-       *        will use a static `name` property on the class itself. This
-       *        name will be assigned as s property on the Renderer so make
-       *        sure it doesn't collide with properties on Renderer.
-       * @returns Return instance of renderer
-       */
-      _addSystem(ClassRef, name) {
-        const system = new ClassRef(this);
-        if (this[name]) {
-          throw new Error(`Whoops! The name "${name}" is already in use`);
-        }
-        this[name] = system;
-        this._systemsHash[name] = system;
-        for (const i2 in this.runners) {
-          this.runners[i2].add(system);
-        }
-        return this;
-      }
-      _addPipes(pipes, pipeAdaptors) {
-        const adaptors = pipeAdaptors.reduce((acc, adaptor) => {
-          acc[adaptor.name] = adaptor.value;
-          return acc;
-        }, {});
-        pipes.forEach((pipe) => {
-          const PipeClass = pipe.value;
-          const name = pipe.name;
-          const Adaptor = adaptors[name];
-          this.renderPipes[name] = new PipeClass(
-            this,
-            Adaptor ? new Adaptor() : null
-          );
-          this.runners.destroy.add(this.renderPipes[name]);
-        });
-      }
-      destroy(options = false) {
-        this.runners.destroy.items.reverse();
-        this.runners.destroy.emit(options);
-        if (options === true || typeof options === "object" && options.releaseGlobalResources) {
-          GlobalResourceRegistry.release();
-        }
-        Object.values(this.runners).forEach((runner) => {
-          runner.destroy();
-        });
-        this._systemsHash = null;
-        this.renderPipes = null;
-        this.removeAllListeners();
-      }
-      /**
-       * Generate a texture from a container.
-       * @param options - options or container target to use when generating the texture
-       * @returns a texture
-       */
-      generateTexture(options) {
-        return this.textureGenerator.generateTexture(options);
-      }
-      /**
-       * Whether the renderer will round coordinates to whole pixels when rendering.
-       * Can be overridden on a per scene item basis.
-       */
-      get roundPixels() {
-        return !!this._roundPixels;
-      }
-      /**
-       * Overridable function by `pixi.js/unsafe-eval` to silence
-       * throwing an error if platform doesn't support unsafe-evals.
-       * @private
-       * @ignore
-       */
-      _unsafeEvalCheck() {
-        if (!unsafeEvalSupported()) {
-          throw new Error("Current environment does not allow unsafe-eval, please use pixi.js/unsafe-eval module to enable support.");
-        }
-      }
-      /**
-       * Resets the rendering state of the renderer.
-       * This is useful when you want to use the WebGL context directly and need to ensure PixiJS's internal state
-       * stays synchronized. When modifying the WebGL context state externally, calling this method before the next Pixi
-       * render will reset all internal caches and ensure it executes correctly.
-       *
-       * This is particularly useful when combining PixiJS with other rendering engines like Three.js:
-       * ```js
-       * // Reset Three.js state
-       * threeRenderer.resetState();
-       *
-       * // Render a Three.js scene
-       * threeRenderer.render(threeScene, threeCamera);
-       *
-       * // Reset PixiJS state since Three.js modified the WebGL context
-       * pixiRenderer.resetState();
-       *
-       * // Now render Pixi content
-       * pixiRenderer.render(pixiScene);
-       * ```
-       * @advanced
-       */
-      resetState() {
-        this.runners.resetState.emit();
-      }
-    };
-    _AbstractRenderer.defaultOptions = {
-      /**
-       * Default resolution / device pixel ratio of the renderer.
-       * @default 1
-       */
-      resolution: 1,
-      /**
-       * Should the `failIfMajorPerformanceCaveat` flag be enabled as a context option used in the `isWebGLSupported`
-       * function. If set to true, a WebGL renderer can fail to be created if the browser thinks there could be
-       * performance issues when using WebGL.
-       *
-       * In PixiJS v6 this has changed from true to false by default, to allow WebGL to work in as many
-       * scenarios as possible. However, some users may have a poor experience, for example, if a user has a gpu or
-       * driver version blacklisted by the
-       * browser.
-       *
-       * If your application requires high performance rendering, you may wish to set this to false.
-       * We recommend one of two options if you decide to set this flag to false:
-       *
-       * 1: Use the Canvas renderer as a fallback in case high performance WebGL is
-       *    not supported.
-       *
-       * 2: Call `isWebGLSupported` (which if found in the utils package) in your code before attempting to create a
-       *    PixiJS renderer, and show an error message to the user if the function returns false, explaining that their
-       *    device & browser combination does not support high performance WebGL.
-       *    This is a much better strategy than trying to create a PixiJS renderer and finding it then fails.
-       * @default false
-       */
-      failIfMajorPerformanceCaveat: false,
-      /**
-       * Should round pixels be forced when rendering?
-       * @default false
-       */
-      roundPixels: false
-    };
-    AbstractRenderer = _AbstractRenderer;
-  }
-});
-
 // node_modules/pixi.js/lib/rendering/batcher/gpu/getTextureBatchBindGroup.mjs
 function getTextureBatchBindGroup(textures, size, maxTextures) {
   let uid3 = 2166136261;
@@ -19552,9 +21207,9 @@ function extractInputs(fragmentSource, out2) {
 function compileInputs(fragments, template, sort = false) {
   const results = [];
   extractInputs(template, results);
-  fragments.forEach((fragment4) => {
-    if (fragment4.header) {
-      extractInputs(fragment4.header, results);
+  fragments.forEach((fragment3) => {
+    if (fragment3.header) {
+      extractInputs(fragment3.header, results);
     }
   });
   const mainInput = results;
@@ -19594,9 +21249,9 @@ function stripVariable(value) {
 function compileOutputs(fragments, template) {
   const results = [];
   extractOutputs(template, results);
-  fragments.forEach((fragment4) => {
-    if (fragment4.header) {
-      extractOutputs(fragment4.header, results);
+  fragments.forEach((fragment3) => {
+    if (fragment3.header) {
+      extractOutputs(fragment3.header, results);
     }
   });
   let index = 0;
@@ -19656,8 +21311,8 @@ function compileHighShader({
 }) {
   const cacheId = generateCacheId(template, bits);
   if (cacheMap[cacheId]) return cacheMap[cacheId];
-  const { vertex: vertex3, fragment: fragment4 } = compileInputsAndOutputs(template, bits);
-  cacheMap[cacheId] = compileBits(vertex3, fragment4, bits);
+  const { vertex: vertex3, fragment: fragment3 } = compileInputsAndOutputs(template, bits);
+  cacheMap[cacheId] = compileBits(vertex3, fragment3, bits);
   return cacheMap[cacheId];
 }
 function compileHighShaderGl({
@@ -19688,16 +21343,16 @@ function generateCacheId(template, bits) {
     return bitCacheMap.get(highFragment);
   }).sort((a2, b2) => a2 - b2).join("-") + template.vertex + template.fragment;
 }
-function compileBits(vertex3, fragment4, bits) {
+function compileBits(vertex3, fragment3, bits) {
   const vertexParts = compileHooks(vertex3);
-  const fragmentParts = compileHooks(fragment4);
+  const fragmentParts = compileHooks(fragment3);
   bits.forEach((shaderBit) => {
     addBits(shaderBit.vertex, vertexParts, shaderBit.name);
     addBits(shaderBit.fragment, fragmentParts, shaderBit.name);
   });
   return {
     vertex: injectBits(vertex3, vertexParts),
-    fragment: injectBits(fragment4, fragmentParts)
+    fragment: injectBits(fragment3, fragmentParts)
   };
 }
 var cacheMap, bitCacheMap, CACHE_UID;
@@ -19896,7 +21551,7 @@ var init_globalUniformsBit = __esm({
 
 // node_modules/pixi.js/lib/rendering/high-shader/compileHighShaderToProgram.mjs
 function compileHighShaderGpuProgram({ bits, name }) {
-  const source5 = compileHighShader({
+  const source3 = compileHighShader({
     template: {
       fragment: fragmentGPUTemplate,
       vertex: vertexGPUTemplate
@@ -19909,11 +21564,11 @@ function compileHighShaderGpuProgram({ bits, name }) {
   return GpuProgram.from({
     name,
     vertex: {
-      source: source5.vertex,
+      source: source3.vertex,
       entryPoint: "main"
     },
     fragment: {
-      source: source5.fragment,
+      source: source3.fragment,
       entryPoint: "main"
     }
   });
@@ -21143,114 +22798,6 @@ var init_globalHooks = __esm({
   }
 });
 
-// node_modules/pixi.js/lib/utils/data/ViewableBuffer.mjs
-var ViewableBuffer;
-var init_ViewableBuffer = __esm({
-  "node_modules/pixi.js/lib/utils/data/ViewableBuffer.mjs"() {
-    "use strict";
-    ViewableBuffer = class {
-      constructor(sizeOrBuffer) {
-        if (typeof sizeOrBuffer === "number") {
-          this.rawBinaryData = new ArrayBuffer(sizeOrBuffer);
-        } else if (sizeOrBuffer instanceof Uint8Array) {
-          this.rawBinaryData = sizeOrBuffer.buffer;
-        } else {
-          this.rawBinaryData = sizeOrBuffer;
-        }
-        this.uint32View = new Uint32Array(this.rawBinaryData);
-        this.float32View = new Float32Array(this.rawBinaryData);
-        this.size = this.rawBinaryData.byteLength;
-      }
-      /** View on the raw binary data as a `Int8Array`. */
-      get int8View() {
-        if (!this._int8View) {
-          this._int8View = new Int8Array(this.rawBinaryData);
-        }
-        return this._int8View;
-      }
-      /** View on the raw binary data as a `Uint8Array`. */
-      get uint8View() {
-        if (!this._uint8View) {
-          this._uint8View = new Uint8Array(this.rawBinaryData);
-        }
-        return this._uint8View;
-      }
-      /**  View on the raw binary data as a `Int16Array`. */
-      get int16View() {
-        if (!this._int16View) {
-          this._int16View = new Int16Array(this.rawBinaryData);
-        }
-        return this._int16View;
-      }
-      /** View on the raw binary data as a `Int32Array`. */
-      get int32View() {
-        if (!this._int32View) {
-          this._int32View = new Int32Array(this.rawBinaryData);
-        }
-        return this._int32View;
-      }
-      /** View on the raw binary data as a `Float64Array`. */
-      get float64View() {
-        if (!this._float64Array) {
-          this._float64Array = new Float64Array(this.rawBinaryData);
-        }
-        return this._float64Array;
-      }
-      /** View on the raw binary data as a `BigUint64Array`. */
-      get bigUint64View() {
-        if (!this._bigUint64Array) {
-          this._bigUint64Array = new BigUint64Array(this.rawBinaryData);
-        }
-        return this._bigUint64Array;
-      }
-      /**
-       * Returns the view of the given type.
-       * @param type - One of `int8`, `uint8`, `int16`,
-       *    `uint16`, `int32`, `uint32`, and `float32`.
-       * @returns - typed array of given type
-       */
-      view(type) {
-        return this[`${type}View`];
-      }
-      /** Destroys all buffer references. Do not use after calling this. */
-      destroy() {
-        this.rawBinaryData = null;
-        this.uint32View = null;
-        this.float32View = null;
-        this.uint16View = null;
-        this._int8View = null;
-        this._uint8View = null;
-        this._int16View = null;
-        this._int32View = null;
-        this._float64Array = null;
-        this._bigUint64Array = null;
-      }
-      /**
-       * Returns the size of the given type in bytes.
-       * @param type - One of `int8`, `uint8`, `int16`,
-       *   `uint16`, `int32`, `uint32`, and `float32`.
-       * @returns - size of the type in bytes
-       */
-      static sizeOf(type) {
-        switch (type) {
-          case "int8":
-          case "uint8":
-            return 1;
-          case "int16":
-          case "uint16":
-            return 2;
-          case "int32":
-          case "uint32":
-          case "float32":
-            return 4;
-          default:
-            throw new Error(`${type} isn't a valid view type`);
-        }
-      }
-    };
-  }
-});
-
 // node_modules/pixi.js/lib/rendering/renderers/shared/buffer/utils/fastCopy.mjs
 function fastCopy(sourceBuffer, destinationBuffer, sourceOffset, byteLength) {
   sourceOffset ?? (sourceOffset = 0);
@@ -21550,11 +23097,11 @@ var init_Batcher = __esm({
           const element = elements[i2];
           elements[i2] = null;
           const texture = element.texture;
-          const source5 = texture._source;
-          const adjustedBlendMode = getAdjustedBlendModeBlend(element.blendMode, source5);
+          const source3 = texture._source;
+          const adjustedBlendMode = getAdjustedBlendModeBlend(element.blendMode, source3);
           const breakRequired = blendMode !== adjustedBlendMode || topology !== element.topology;
-          if (source5._batchTick === BATCH_TICK && !breakRequired) {
-            element._textureId = source5._textureBindLocation;
+          if (source3._batchTick === BATCH_TICK && !breakRequired) {
+            element._textureId = source3._textureBindLocation;
             size += element.indexSize;
             if (element.packAsQuad) {
               this.packQuadAttributes(
@@ -21588,7 +23135,7 @@ var init_Batcher = __esm({
             batchElements.push(element);
             continue;
           }
-          source5._batchTick = BATCH_TICK;
+          source3._batchTick = BATCH_TICK;
           if (textureBatch.count >= maxTextures || breakRequired) {
             this._finishBatch(
               batch,
@@ -21611,9 +23158,9 @@ var init_Batcher = __esm({
             batchElements = [];
             ++BATCH_TICK;
           }
-          element._textureId = source5._textureBindLocation = textureBatch.count;
-          textureBatch.ids[source5.uid] = textureBatch.count;
-          textureBatch.textures[textureBatch.count++] = source5;
+          element._textureId = source3._textureBindLocation = textureBatch.count;
+          textureBatch.ids[source3.uid] = textureBatch.count;
+          textureBatch.textures[textureBatch.count++] = source3;
           element._batch = batch;
           batchElements.push(element);
           size += element.indexSize;
@@ -21776,7 +23323,7 @@ var placeHolderBufferData, placeHolderIndexData, BatchGeometry;
 var init_BatchGeometry = __esm({
   "node_modules/pixi.js/lib/rendering/batcher/shared/BatchGeometry.mjs"() {
     init_Buffer();
-    init_const4();
+    init_const();
     init_Geometry();
     placeHolderBufferData = new Float32Array(1);
     placeHolderIndexData = new Uint32Array(1);
@@ -22236,7 +23783,7 @@ var init_AlphaMaskPipe = __esm({
     init_PoolGroup();
     init_Texture();
     init_TexturePool();
-    init_types();
+    init_types2();
     tempBounds3 = new Bounds();
     AlphaMaskEffect = class extends FilterEffect {
       constructor() {
@@ -22469,7 +24016,7 @@ var StencilMaskPipe;
 var init_StencilMaskPipe = __esm({
   "node_modules/pixi.js/lib/rendering/mask/stencil/StencilMaskPipe.mjs"() {
     init_Extensions();
-    init_const5();
+    init_const3();
     init_const7();
     StencilMaskPipe = class {
       constructor(renderer) {
@@ -23724,7 +25271,7 @@ var init_GlobalUniformSystem = __esm({
     init_Point();
     init_colorToUniform();
     init_BindGroup();
-    init_types();
+    init_types2();
     init_UniformGroup();
     GlobalUniformSystem = class {
       constructor(renderer) {
@@ -23977,7 +25524,7 @@ var init_HelloSystem = __esm({
   "node_modules/pixi.js/lib/rendering/renderers/shared/startup/HelloSystem.mjs"() {
     init_Extensions();
     init_sayHello();
-    init_types();
+    init_types2();
     HelloSystem = class {
       constructor(renderer) {
         this._renderer = renderer;
@@ -24309,8 +25856,8 @@ var init_RenderTarget = __esm({
       get colorTexture() {
         return this.colorTextures[0];
       }
-      onSourceResize(source5) {
-        this.resize(source5.width, source5.height, source5._resolution, true);
+      onSourceResize(source3) {
+        this.resize(source3.width, source3.height, source3._resolution, true);
       }
       /**
        * This will ensure a depthStencil texture is created for this render target.
@@ -24746,16 +26293,16 @@ var init_GpuBufferSystem = __esm({
       }
       updateBuffer(buffer) {
         const gpuBuffer = this.getGPUBuffer(buffer);
-        const data2 = buffer.data;
-        if (buffer._updateID && data2) {
+        const data = buffer.data;
+        if (buffer._updateID && data) {
           buffer._updateID = 0;
           this._gpu.device.queue.writeBuffer(
             gpuBuffer,
             0,
-            data2.buffer,
+            data.buffer,
             0,
             // round to the nearest 4 bytes
-            (buffer._updateSize || data2.byteLength) + 3 & ~3
+            (buffer._updateSize || data.byteLength) + 3 & ~3
           );
         }
         return gpuBuffer;
@@ -25159,536 +26706,6 @@ var init_GpuStencilSystem = __esm({
   }
 });
 
-// node_modules/pixi.js/lib/rendering/renderers/shared/shader/UboSystem.mjs
-var UboSystem;
-var init_UboSystem = __esm({
-  "node_modules/pixi.js/lib/rendering/renderers/shared/shader/UboSystem.mjs"() {
-    init_unsafeEvalSupported();
-    init_Buffer();
-    init_const4();
-    UboSystem = class {
-      constructor(adaptor) {
-        this._syncFunctionHash = /* @__PURE__ */ Object.create(null);
-        this._adaptor = adaptor;
-        this._systemCheck();
-      }
-      /**
-       * Overridable function by `pixi.js/unsafe-eval` to silence
-       * throwing an error if platform doesn't support unsafe-evals.
-       * @private
-       */
-      _systemCheck() {
-        if (!unsafeEvalSupported()) {
-          throw new Error("Current environment does not allow unsafe-eval, please use pixi.js/unsafe-eval module to enable support.");
-        }
-      }
-      ensureUniformGroup(uniformGroup) {
-        const uniformData = this.getUniformGroupData(uniformGroup);
-        uniformGroup.buffer || (uniformGroup.buffer = new Buffer2({
-          data: new Float32Array(uniformData.layout.size / 4),
-          usage: BufferUsage.UNIFORM | BufferUsage.COPY_DST
-        }));
-      }
-      getUniformGroupData(uniformGroup) {
-        return this._syncFunctionHash[uniformGroup._signature] || this._initUniformGroup(uniformGroup);
-      }
-      _initUniformGroup(uniformGroup) {
-        const uniformGroupSignature = uniformGroup._signature;
-        let uniformData = this._syncFunctionHash[uniformGroupSignature];
-        if (!uniformData) {
-          const elements = Object.keys(uniformGroup.uniformStructures).map((i2) => uniformGroup.uniformStructures[i2]);
-          const layout = this._adaptor.createUboElements(elements);
-          const syncFunction = this._generateUboSync(layout.uboElements);
-          uniformData = this._syncFunctionHash[uniformGroupSignature] = {
-            layout,
-            syncFunction
-          };
-        }
-        return this._syncFunctionHash[uniformGroupSignature];
-      }
-      _generateUboSync(uboElements) {
-        return this._adaptor.generateUboSync(uboElements);
-      }
-      syncUniformGroup(uniformGroup, data2, offset) {
-        const uniformGroupData = this.getUniformGroupData(uniformGroup);
-        uniformGroup.buffer || (uniformGroup.buffer = new Buffer2({
-          data: new Float32Array(uniformGroupData.layout.size / 4),
-          usage: BufferUsage.UNIFORM | BufferUsage.COPY_DST
-        }));
-        let dataInt32 = null;
-        if (!data2) {
-          data2 = uniformGroup.buffer.data;
-          dataInt32 = uniformGroup.buffer.dataInt32;
-        }
-        offset || (offset = 0);
-        uniformGroupData.syncFunction(uniformGroup.uniforms, data2, dataInt32, offset);
-        return true;
-      }
-      updateUniformGroup(uniformGroup) {
-        if (uniformGroup.isStatic && !uniformGroup._dirtyId) return false;
-        uniformGroup._dirtyId = 0;
-        const synced = this.syncUniformGroup(uniformGroup);
-        uniformGroup.buffer.update();
-        return synced;
-      }
-      destroy() {
-        this._syncFunctionHash = null;
-      }
-    };
-  }
-});
-
-// node_modules/pixi.js/lib/rendering/renderers/gpu/shader/utils/createUboElementsWGSL.mjs
-function createUboElementsWGSL(uniformData) {
-  const uboElements = uniformData.map((data2) => ({
-    data: data2,
-    offset: 0,
-    size: 0
-  }));
-  let offset = 0;
-  for (let i2 = 0; i2 < uboElements.length; i2++) {
-    const uboElement = uboElements[i2];
-    let size = WGSL_ALIGN_SIZE_DATA[uboElement.data.type].size;
-    const align = WGSL_ALIGN_SIZE_DATA[uboElement.data.type].align;
-    if (!WGSL_ALIGN_SIZE_DATA[uboElement.data.type]) {
-      throw new Error(`[Pixi.js] WebGPU UniformBuffer: Unknown type ${uboElement.data.type}`);
-    }
-    if (uboElement.data.size > 1) {
-      size = Math.max(size, align) * uboElement.data.size;
-    }
-    offset = Math.ceil(offset / align) * align;
-    uboElement.size = size;
-    uboElement.offset = offset;
-    offset += size;
-  }
-  offset = Math.ceil(offset / 16) * 16;
-  return { uboElements, size: offset };
-}
-var WGSL_ALIGN_SIZE_DATA;
-var init_createUboElementsWGSL = __esm({
-  "node_modules/pixi.js/lib/rendering/renderers/gpu/shader/utils/createUboElementsWGSL.mjs"() {
-    "use strict";
-    WGSL_ALIGN_SIZE_DATA = {
-      i32: { align: 4, size: 4 },
-      u32: { align: 4, size: 4 },
-      f32: { align: 4, size: 4 },
-      f16: { align: 2, size: 2 },
-      "vec2<i32>": { align: 8, size: 8 },
-      "vec2<u32>": { align: 8, size: 8 },
-      "vec2<f32>": { align: 8, size: 8 },
-      "vec2<f16>": { align: 4, size: 4 },
-      "vec3<i32>": { align: 16, size: 12 },
-      "vec3<u32>": { align: 16, size: 12 },
-      "vec3<f32>": { align: 16, size: 12 },
-      "vec3<f16>": { align: 8, size: 6 },
-      "vec4<i32>": { align: 16, size: 16 },
-      "vec4<u32>": { align: 16, size: 16 },
-      "vec4<f32>": { align: 16, size: 16 },
-      "vec4<f16>": { align: 8, size: 8 },
-      "mat2x2<f32>": { align: 8, size: 16 },
-      "mat2x2<f16>": { align: 4, size: 8 },
-      "mat3x2<f32>": { align: 8, size: 24 },
-      "mat3x2<f16>": { align: 4, size: 12 },
-      "mat4x2<f32>": { align: 8, size: 32 },
-      "mat4x2<f16>": { align: 4, size: 16 },
-      "mat2x3<f32>": { align: 16, size: 32 },
-      "mat2x3<f16>": { align: 8, size: 16 },
-      "mat3x3<f32>": { align: 16, size: 48 },
-      "mat3x3<f16>": { align: 8, size: 24 },
-      "mat4x3<f32>": { align: 16, size: 64 },
-      "mat4x3<f16>": { align: 8, size: 32 },
-      "mat2x4<f32>": { align: 16, size: 32 },
-      "mat2x4<f16>": { align: 8, size: 16 },
-      "mat3x4<f32>": { align: 16, size: 48 },
-      "mat3x4<f16>": { align: 8, size: 24 },
-      "mat4x4<f32>": { align: 16, size: 64 },
-      "mat4x4<f16>": { align: 8, size: 32 }
-    };
-  }
-});
-
-// node_modules/pixi.js/lib/rendering/renderers/shared/shader/utils/uniformParsers.mjs
-var uniformParsers;
-var init_uniformParsers = __esm({
-  "node_modules/pixi.js/lib/rendering/renderers/shared/shader/utils/uniformParsers.mjs"() {
-    "use strict";
-    uniformParsers = [
-      // uploading pixi matrix object to mat3
-      {
-        type: "mat3x3<f32>",
-        test: (data2) => {
-          const value = data2.value;
-          return value.a !== void 0;
-        },
-        ubo: `
-            var matrix = uv[name].toArray(true);
-            data[offset] = matrix[0];
-            data[offset + 1] = matrix[1];
-            data[offset + 2] = matrix[2];
-            data[offset + 4] = matrix[3];
-            data[offset + 5] = matrix[4];
-            data[offset + 6] = matrix[5];
-            data[offset + 8] = matrix[6];
-            data[offset + 9] = matrix[7];
-            data[offset + 10] = matrix[8];
-        `,
-        uniform: `
-            gl.uniformMatrix3fv(ud[name].location, false, uv[name].toArray(true));
-        `
-      },
-      // uploading a pixi rectangle as a vec4
-      {
-        type: "vec4<f32>",
-        test: (data2) => data2.type === "vec4<f32>" && data2.size === 1 && data2.value.width !== void 0,
-        ubo: `
-            v = uv[name];
-            data[offset] = v.x;
-            data[offset + 1] = v.y;
-            data[offset + 2] = v.width;
-            data[offset + 3] = v.height;
-        `,
-        uniform: `
-            cv = ud[name].value;
-            v = uv[name];
-            if (cv[0] !== v.x || cv[1] !== v.y || cv[2] !== v.width || cv[3] !== v.height) {
-                cv[0] = v.x;
-                cv[1] = v.y;
-                cv[2] = v.width;
-                cv[3] = v.height;
-                gl.uniform4f(ud[name].location, v.x, v.y, v.width, v.height);
-            }
-        `
-      },
-      // uploading a pixi point as a vec2
-      {
-        type: "vec2<f32>",
-        test: (data2) => data2.type === "vec2<f32>" && data2.size === 1 && data2.value.x !== void 0,
-        ubo: `
-            v = uv[name];
-            data[offset] = v.x;
-            data[offset + 1] = v.y;
-        `,
-        uniform: `
-            cv = ud[name].value;
-            v = uv[name];
-            if (cv[0] !== v.x || cv[1] !== v.y) {
-                cv[0] = v.x;
-                cv[1] = v.y;
-                gl.uniform2f(ud[name].location, v.x, v.y);
-            }
-        `
-      },
-      // uploading a pixi color as a vec4
-      {
-        type: "vec4<f32>",
-        test: (data2) => data2.type === "vec4<f32>" && data2.size === 1 && data2.value.red !== void 0,
-        ubo: `
-            v = uv[name];
-            data[offset] = v.red;
-            data[offset + 1] = v.green;
-            data[offset + 2] = v.blue;
-            data[offset + 3] = v.alpha;
-        `,
-        uniform: `
-            cv = ud[name].value;
-            v = uv[name];
-            if (cv[0] !== v.red || cv[1] !== v.green || cv[2] !== v.blue || cv[3] !== v.alpha) {
-                cv[0] = v.red;
-                cv[1] = v.green;
-                cv[2] = v.blue;
-                cv[3] = v.alpha;
-                gl.uniform4f(ud[name].location, v.red, v.green, v.blue, v.alpha);
-            }
-        `
-      },
-      // uploading a pixi color as a vec3
-      {
-        type: "vec3<f32>",
-        test: (data2) => data2.type === "vec3<f32>" && data2.size === 1 && data2.value.red !== void 0,
-        ubo: `
-            v = uv[name];
-            data[offset] = v.red;
-            data[offset + 1] = v.green;
-            data[offset + 2] = v.blue;
-        `,
-        uniform: `
-            cv = ud[name].value;
-            v = uv[name];
-            if (cv[0] !== v.red || cv[1] !== v.green || cv[2] !== v.blue) {
-                cv[0] = v.red;
-                cv[1] = v.green;
-                cv[2] = v.blue;
-                gl.uniform3f(ud[name].location, v.red, v.green, v.blue);
-            }
-        `
-      }
-    ];
-  }
-});
-
-// node_modules/pixi.js/lib/rendering/renderers/shared/shader/utils/createUboSyncFunction.mjs
-function createUboSyncFunction(uboElements, parserCode, arrayGenerationFunction, singleSettersMap) {
-  const funcFragments = [`
-        var v = null;
-        var v2 = null;
-        var t = 0;
-        var index = 0;
-        var name = null;
-        var arrayOffset = null;
-    `];
-  let prev = 0;
-  for (let i2 = 0; i2 < uboElements.length; i2++) {
-    const uboElement = uboElements[i2];
-    const name = uboElement.data.name;
-    let parsed = false;
-    let offset = 0;
-    for (let j2 = 0; j2 < uniformParsers.length; j2++) {
-      const uniformParser = uniformParsers[j2];
-      if (uniformParser.test(uboElement.data)) {
-        offset = uboElement.offset / 4;
-        funcFragments.push(
-          `name = "${name}";`,
-          `offset += ${offset - prev};`,
-          uniformParsers[j2][parserCode] || uniformParsers[j2].ubo
-        );
-        parsed = true;
-        break;
-      }
-    }
-    if (!parsed) {
-      if (uboElement.data.size > 1) {
-        offset = uboElement.offset / 4;
-        funcFragments.push(arrayGenerationFunction(uboElement, offset - prev));
-      } else {
-        const template = singleSettersMap[uboElement.data.type];
-        offset = uboElement.offset / 4;
-        funcFragments.push(
-          /* wgsl */
-          `
-                    v = uv.${name};
-                    offset += ${offset - prev};
-                    ${template};
-                `
-        );
-      }
-    }
-    prev = offset;
-  }
-  const fragmentSrc = funcFragments.join("\n");
-  return new Function(
-    "uv",
-    "data",
-    "dataInt32",
-    "offset",
-    fragmentSrc
-  );
-}
-var init_createUboSyncFunction = __esm({
-  "node_modules/pixi.js/lib/rendering/renderers/shared/shader/utils/createUboSyncFunction.mjs"() {
-    init_uniformParsers();
-  }
-});
-
-// node_modules/pixi.js/lib/rendering/renderers/shared/shader/utils/uboSyncFunctions.mjs
-function loopMatrix(col, row) {
-  const total = col * row;
-  return `
-        for (let i = 0; i < ${total}; i++) {
-            data[offset + (((i / ${col})|0) * 4) + (i % ${col})] = v[i];
-        }
-    `;
-}
-var uboSyncFunctionsSTD40, uboSyncFunctionsWGSL;
-var init_uboSyncFunctions = __esm({
-  "node_modules/pixi.js/lib/rendering/renderers/shared/shader/utils/uboSyncFunctions.mjs"() {
-    "use strict";
-    uboSyncFunctionsSTD40 = {
-      f32: `
-        data[offset] = v;`,
-      i32: `
-        dataInt32[offset] = v;`,
-      "vec2<f32>": `
-        data[offset] = v[0];
-        data[offset + 1] = v[1];`,
-      "vec3<f32>": `
-        data[offset] = v[0];
-        data[offset + 1] = v[1];
-        data[offset + 2] = v[2];`,
-      "vec4<f32>": `
-        data[offset] = v[0];
-        data[offset + 1] = v[1];
-        data[offset + 2] = v[2];
-        data[offset + 3] = v[3];`,
-      "vec2<i32>": `
-        dataInt32[offset] = v[0];
-        dataInt32[offset + 1] = v[1];`,
-      "vec3<i32>": `
-        dataInt32[offset] = v[0];
-        dataInt32[offset + 1] = v[1];
-        dataInt32[offset + 2] = v[2];`,
-      "vec4<i32>": `
-        dataInt32[offset] = v[0];
-        dataInt32[offset + 1] = v[1];
-        dataInt32[offset + 2] = v[2];
-        dataInt32[offset + 3] = v[3];`,
-      "mat2x2<f32>": `
-        data[offset] = v[0];
-        data[offset + 1] = v[1];
-        data[offset + 4] = v[2];
-        data[offset + 5] = v[3];`,
-      "mat3x3<f32>": `
-        data[offset] = v[0];
-        data[offset + 1] = v[1];
-        data[offset + 2] = v[2];
-        data[offset + 4] = v[3];
-        data[offset + 5] = v[4];
-        data[offset + 6] = v[5];
-        data[offset + 8] = v[6];
-        data[offset + 9] = v[7];
-        data[offset + 10] = v[8];`,
-      "mat4x4<f32>": `
-        for (let i = 0; i < 16; i++) {
-            data[offset + i] = v[i];
-        }`,
-      "mat3x2<f32>": loopMatrix(3, 2),
-      "mat4x2<f32>": loopMatrix(4, 2),
-      "mat2x3<f32>": loopMatrix(2, 3),
-      "mat4x3<f32>": loopMatrix(4, 3),
-      "mat2x4<f32>": loopMatrix(2, 4),
-      "mat3x4<f32>": loopMatrix(3, 4)
-    };
-    uboSyncFunctionsWGSL = {
-      ...uboSyncFunctionsSTD40,
-      "mat2x2<f32>": `
-        data[offset] = v[0];
-        data[offset + 1] = v[1];
-        data[offset + 2] = v[2];
-        data[offset + 3] = v[3];
-    `
-    };
-  }
-});
-
-// node_modules/pixi.js/lib/rendering/renderers/gpu/shader/utils/generateArraySyncWGSL.mjs
-function generateArraySyncWGSL(uboElement, offsetToAdd) {
-  const { size, align } = WGSL_ALIGN_SIZE_DATA[uboElement.data.type];
-  const remainder = (align - size) / 4;
-  const data2 = uboElement.data.type.indexOf("i32") >= 0 ? "dataInt32" : "data";
-  return `
-         v = uv.${uboElement.data.name};
-         ${offsetToAdd !== 0 ? `offset += ${offsetToAdd};` : ""}
-
-         arrayOffset = offset;
-
-         t = 0;
-
-         for(var i=0; i < ${uboElement.data.size * (size / 4)}; i++)
-         {
-             for(var j = 0; j < ${size / 4}; j++)
-             {
-                 ${data2}[arrayOffset++] = v[t++];
-             }
-             ${remainder !== 0 ? `arrayOffset += ${remainder};` : ""}
-         }
-     `;
-}
-var init_generateArraySyncWGSL = __esm({
-  "node_modules/pixi.js/lib/rendering/renderers/gpu/shader/utils/generateArraySyncWGSL.mjs"() {
-    init_createUboElementsWGSL();
-  }
-});
-
-// node_modules/pixi.js/lib/rendering/renderers/gpu/shader/utils/createUboSyncFunctionWGSL.mjs
-function createUboSyncFunctionWGSL(uboElements) {
-  return createUboSyncFunction(
-    uboElements,
-    "uboWgsl",
-    generateArraySyncWGSL,
-    uboSyncFunctionsWGSL
-  );
-}
-var init_createUboSyncFunctionWGSL = __esm({
-  "node_modules/pixi.js/lib/rendering/renderers/gpu/shader/utils/createUboSyncFunctionWGSL.mjs"() {
-    init_createUboSyncFunction();
-    init_uboSyncFunctions();
-    init_generateArraySyncWGSL();
-  }
-});
-
-// node_modules/pixi.js/lib/rendering/renderers/gpu/GpuUboSystem.mjs
-var GpuUboSystem;
-var init_GpuUboSystem = __esm({
-  "node_modules/pixi.js/lib/rendering/renderers/gpu/GpuUboSystem.mjs"() {
-    init_Extensions();
-    init_UboSystem();
-    init_createUboElementsWGSL();
-    init_createUboSyncFunctionWGSL();
-    GpuUboSystem = class extends UboSystem {
-      constructor() {
-        super({
-          createUboElements: createUboElementsWGSL,
-          generateUboSync: createUboSyncFunctionWGSL
-        });
-      }
-    };
-    GpuUboSystem.extension = {
-      type: [ExtensionType.WebGPUSystem],
-      name: "ubo"
-    };
-  }
-});
-
-// node_modules/pixi.js/lib/rendering/renderers/shared/buffer/BufferResource.mjs
-var BufferResource;
-var init_BufferResource = __esm({
-  "node_modules/pixi.js/lib/rendering/renderers/shared/buffer/BufferResource.mjs"() {
-    init_eventemitter3();
-    init_uid();
-    BufferResource = class extends eventemitter3_default {
-      /**
-       * Create a new Buffer Resource.
-       * @param options - The options for the buffer resource
-       * @param options.buffer - The underlying buffer that this resource is using
-       * @param options.offset - The offset of the buffer this resource is using.
-       * If not provided, then it will use the offset of the buffer.
-       * @param options.size - The size of the buffer this resource is using.
-       * If not provided, then it will use the size of the buffer.
-       */
-      constructor({ buffer, offset, size }) {
-        super();
-        this.uid = uid("buffer");
-        this._resourceType = "bufferResource";
-        this._touched = 0;
-        this._resourceId = uid("resource");
-        this._bufferResource = true;
-        this.destroyed = false;
-        this.buffer = buffer;
-        this.offset = offset | 0;
-        this.size = size;
-        this.buffer.on("change", this.onBufferChange, this);
-      }
-      onBufferChange() {
-        this._resourceId = uid("resource");
-        this.emit("change", this);
-      }
-      /**
-       * Destroys this resource. Make sure the underlying buffer is not used anywhere else
-       * if you want to destroy it as well, or code will explode
-       * @param destroyBuffer - Should the underlying buffer be destroyed as well?
-       */
-      destroy(destroyBuffer = false) {
-        this.destroyed = true;
-        if (destroyBuffer) {
-          this.buffer.destroy();
-        }
-        this.emit("change", this);
-        this.buffer = null;
-        this.removeAllListeners();
-      }
-    };
-  }
-});
-
 // node_modules/pixi.js/lib/rendering/renderers/gpu/buffer/UboBatch.mjs
 var UboBatch;
 var init_UboBatch = __esm({
@@ -25738,7 +26755,7 @@ var init_GpuUniformBatchPipe = __esm({
     init_Extensions();
     init_Buffer();
     init_BufferResource();
-    init_const4();
+    init_const();
     init_UboBatch();
     init_BindGroup();
     minUniformOffsetAlignment = 128;
@@ -25774,24 +26791,24 @@ var init_GpuUniformBatchPipe = __esm({
           return this._bindGroupHash[group.uid];
         }
         this._renderer.ubo.ensureUniformGroup(group);
-        const data2 = group.buffer.data;
-        const offset = this._batchBuffer.addEmptyGroup(data2.length);
+        const data = group.buffer.data;
+        const offset = this._batchBuffer.addEmptyGroup(data.length);
         this._renderer.ubo.syncUniformGroup(group, this._batchBuffer.data, offset / 4);
         this._bindGroupHash[group.uid] = this._getBindGroup(offset / minUniformOffsetAlignment);
         return this._bindGroupHash[group.uid];
       }
       getUboResource(group) {
         this._renderer.ubo.updateUniformGroup(group);
-        const data2 = group.buffer.data;
-        const offset = this._batchBuffer.addGroup(data2);
+        const data = group.buffer.data;
+        const offset = this._batchBuffer.addGroup(data);
         return this._getBufferResource(offset / minUniformOffsetAlignment);
       }
-      getArrayBindGroup(data2) {
-        const offset = this._batchBuffer.addGroup(data2);
+      getArrayBindGroup(data) {
+        const offset = this._batchBuffer.addGroup(data);
         return this._getBindGroup(offset / minUniformOffsetAlignment);
       }
-      getArrayBufferResource(data2) {
-        const offset = this._batchBuffer.addGroup(data2);
+      getArrayBufferResource(data) {
+        const offset = this._batchBuffer.addGroup(data);
         const index = offset / minUniformOffsetAlignment;
         return this._getBufferResource(index);
       }
@@ -26133,11 +27150,11 @@ var init_PipelineSystem = __esm({
       getBufferNamesToBind(geometry, program) {
         const key = geometry._layoutKey << 16 | program._attributeLocationsKey;
         if (this._bindingNamesCache[key]) return this._bindingNamesCache[key];
-        const data2 = this._createVertexBufferLayouts(geometry, program);
+        const data = this._createVertexBufferLayouts(geometry, program);
         const bufferNamesToBind = /* @__PURE__ */ Object.create(null);
         const attributeData = program.attributeData;
-        for (let i2 = 0; i2 < data2.length; i2++) {
-          const attributes = Object.values(data2[i2].attributes);
+        for (let i2 = 0; i2 < data.length; i2++) {
+          const attributes = Object.values(data[i2].attributes);
           const shaderLocation = attributes[0].shaderLocation;
           for (const j2 in attributeData) {
             if (attributeData[j2].location === shaderLocation) {
@@ -26243,7 +27260,7 @@ var init_RenderTargetSystem = __esm({
   "node_modules/pixi.js/lib/rendering/renderers/shared/renderTarget/RenderTargetSystem.mjs"() {
     init_Matrix();
     init_Rectangle();
-    init_const5();
+    init_const3();
     init_calculateProjection();
     init_SystemRunner();
     init_CanvasSource();
@@ -26343,9 +27360,9 @@ var init_RenderTargetSystem = __esm({
           gpuRenderTarget.width = renderTarget.pixelWidth;
           gpuRenderTarget.height = renderTarget.pixelHeight;
         }
-        const source5 = renderTarget.colorTexture;
+        const source3 = renderTarget.colorTexture;
         const viewport = this.viewport;
-        const arrayLayerCount = source5.arrayLayerCount || 1;
+        const arrayLayerCount = source3.arrayLayerCount || 1;
         if ((layer | 0) !== layer) {
           layer |= 0;
         }
@@ -26354,13 +27371,13 @@ var init_RenderTargetSystem = __esm({
         }
         this.mipLevel = mipLevel | 0;
         this.layer = layer | 0;
-        const pixelWidth = Math.max(source5.pixelWidth >> mipLevel, 1);
-        const pixelHeight = Math.max(source5.pixelHeight >> mipLevel, 1);
+        const pixelWidth = Math.max(source3.pixelWidth >> mipLevel, 1);
+        const pixelHeight = Math.max(source3.pixelHeight >> mipLevel, 1);
         if (!frame && renderSurface instanceof Texture) {
           frame = renderSurface.frame;
         }
         if (frame) {
-          const resolution = source5._resolution;
+          const resolution = source3._resolution;
           const scale = 1 << Math.max(mipLevel | 0, 0);
           const baseX = frame.x * resolution + 0.5 | 0;
           const baseY = frame.y * resolution + 0.5 | 0;
@@ -26388,8 +27405,8 @@ var init_RenderTargetSystem = __esm({
           this.projectionMatrix,
           0,
           0,
-          viewport.width / source5.resolution,
-          viewport.height / source5.resolution,
+          viewport.width / source3.resolution,
+          viewport.height / source3.resolution,
           !renderTarget.isRoot
         );
         this.adaptor.startRenderPass(renderTarget, clear, clearColor, viewport, mipLevel, layer);
@@ -26600,7 +27617,7 @@ var init_GpuRenderTarget = __esm({
 var GpuRenderTargetAdaptor;
 var init_GpuRenderTargetAdaptor = __esm({
   "node_modules/pixi.js/lib/rendering/renderers/gpu/renderTarget/GpuRenderTargetAdaptor.mjs"() {
-    init_const5();
+    init_const3();
     init_CanvasSource();
     init_TextureSource();
     init_GpuRenderTarget();
@@ -27105,21 +28122,21 @@ var init_gpuUploadBufferImageResource = __esm({
     "use strict";
     gpuUploadBufferImageResource = {
       type: "image",
-      upload(source5, gpuTexture, gpu, originZOverride = 0) {
-        const resource = source5.resource;
-        const total = (source5.pixelWidth | 0) * (source5.pixelHeight | 0);
+      upload(source3, gpuTexture, gpu, originZOverride = 0) {
+        const resource = source3.resource;
+        const total = (source3.pixelWidth | 0) * (source3.pixelHeight | 0);
         const bytesPerPixel = resource.byteLength / total;
         gpu.device.queue.writeTexture(
           { texture: gpuTexture, origin: { x: 0, y: 0, z: originZOverride } },
           resource,
           {
             offset: 0,
-            rowsPerImage: source5.pixelHeight,
-            bytesPerRow: source5.pixelWidth * bytesPerPixel
+            rowsPerImage: source3.pixelHeight,
+            bytesPerRow: source3.pixelWidth * bytesPerPixel
           },
           {
-            width: source5.pixelWidth,
-            height: source5.pixelHeight,
+            width: source3.pixelWidth,
+            height: source3.pixelHeight,
             depthOrArrayLayers: 1
           }
         );
@@ -27145,12 +28162,12 @@ var init_gpuUploadCompressedTextureResource = __esm({
     defaultBlockData = { blockBytes: 4, blockWidth: 1, blockHeight: 1 };
     gpuUploadCompressedTextureResource = {
       type: "compressed",
-      upload(source5, gpuTexture, gpu, originZOverride = 0) {
-        let mipWidth = source5.pixelWidth;
-        let mipHeight = source5.pixelHeight;
-        const blockData = blockDataMap[source5.format] || defaultBlockData;
-        for (let i2 = 0; i2 < source5.resource.length; i2++) {
-          const levelBuffer = source5.resource[i2];
+      upload(source3, gpuTexture, gpu, originZOverride = 0) {
+        let mipWidth = source3.pixelWidth;
+        let mipHeight = source3.pixelHeight;
+        const blockData = blockDataMap[source3.format] || defaultBlockData;
+        for (let i2 = 0; i2 < source3.resource.length; i2++) {
+          const levelBuffer = source3.resource[i2];
           const bytesPerRow = Math.ceil(mipWidth / blockData.blockWidth) * blockData.blockBytes;
           gpu.device.queue.writeTexture(
             {
@@ -27181,8 +28198,8 @@ var init_gpuUploadCompressedTextureResource = __esm({
 function createGpuUploadCubeTextureResource(uploaders) {
   return {
     type: "cube",
-    upload(source5, gpuTexture, gpu) {
-      const faces = source5.faces;
+    upload(source3, gpuTexture, gpu) {
+      const faces = source3.faces;
       for (let i2 = 0; i2 < FACE_ORDER.length; i2++) {
         const key = FACE_ORDER[i2];
         const face = faces[key];
@@ -27208,19 +28225,19 @@ var init_gpuUploadImageSource = __esm({
     init_warn();
     gpuUploadImageResource = {
       type: "image",
-      upload(source5, gpuTexture, gpu, originZOverride = 0) {
-        const resource = source5.resource;
+      upload(source3, gpuTexture, gpu, originZOverride = 0) {
+        const resource = source3.resource;
         if (!resource) return;
         if (globalThis.HTMLImageElement && resource instanceof HTMLImageElement) {
           const canvas = DOMAdapter.get().createCanvas(resource.width, resource.height);
           const context2 = canvas.getContext("2d");
           context2.drawImage(resource, 0, 0, resource.width, resource.height);
-          source5.resource = canvas;
+          source3.resource = canvas;
           warn("ImageSource: Image element passed, converting to canvas and replacing resource.");
         }
-        const width = Math.min(gpuTexture.width, source5.resourceWidth || source5.pixelWidth);
-        const height = Math.min(gpuTexture.height, source5.resourceHeight || source5.pixelHeight);
-        const premultipliedAlpha = source5.alphaMode === "premultiply-alpha-on-upload";
+        const width = Math.min(gpuTexture.width, source3.resourceWidth || source3.pixelWidth);
+        const height = Math.min(gpuTexture.height, source3.resourceHeight || source3.pixelHeight);
+        const premultipliedAlpha = source3.alphaMode === "premultiply-alpha-on-upload";
         gpu.device.queue.copyExternalImageToTexture(
           { source: resource },
           { texture: gpuTexture, origin: { x: 0, y: 0, z: originZOverride }, premultipliedAlpha },
@@ -27241,8 +28258,8 @@ var init_gpuUploadVideoSource = __esm({
     init_gpuUploadImageSource();
     gpuUploadVideoResource = {
       type: "video",
-      upload(source5, gpuTexture, gpu, originZOverride) {
-        gpuUploadImageResource.upload(source5, gpuTexture, gpu, originZOverride);
+      upload(source3, gpuTexture, gpu, originZOverride) {
+        gpuUploadImageResource.upload(source3, gpuTexture, gpu, originZOverride);
       }
     };
   }
@@ -27474,83 +28491,83 @@ var init_GpuTextureSystem = __esm({
        * @param source - The texture source to initialize.
        * @returns The initialized texture source.
        */
-      initSource(source5) {
-        return source5._gpuData[this._renderer.uid]?.gpuTexture || this._initSource(source5);
+      initSource(source3) {
+        return source3._gpuData[this._renderer.uid]?.gpuTexture || this._initSource(source3);
       }
-      _initSource(source5) {
-        if (source5.autoGenerateMipmaps) {
-          const biggestDimension = Math.max(source5.pixelWidth, source5.pixelHeight);
-          source5.mipLevelCount = Math.floor(Math.log2(biggestDimension)) + 1;
+      _initSource(source3) {
+        if (source3.autoGenerateMipmaps) {
+          const biggestDimension = Math.max(source3.pixelWidth, source3.pixelHeight);
+          source3.mipLevelCount = Math.floor(Math.log2(biggestDimension)) + 1;
         }
         let usage;
-        if (source5.sampleCount > 1) {
+        if (source3.sampleCount > 1) {
           usage = GPUTextureUsage.RENDER_ATTACHMENT;
-          if (source5.transient && this._renderer.device.extensions.transientAttachment) {
+          if (source3.transient && this._renderer.device.extensions.transientAttachment) {
             usage |= GPUTextureUsage.TRANSIENT_ATTACHMENT;
           }
         } else {
           usage = GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST;
-          if (source5.uploadMethodId !== "compressed") {
+          if (source3.uploadMethodId !== "compressed") {
             usage |= GPUTextureUsage.RENDER_ATTACHMENT;
             usage |= GPUTextureUsage.COPY_SRC;
           }
         }
-        const blockData = blockDataMap[source5.format] || { blockBytes: 4, blockWidth: 1, blockHeight: 1 };
-        const width = Math.ceil(source5.pixelWidth / blockData.blockWidth) * blockData.blockWidth;
-        const height = Math.ceil(source5.pixelHeight / blockData.blockHeight) * blockData.blockHeight;
+        const blockData = blockDataMap[source3.format] || { blockBytes: 4, blockWidth: 1, blockHeight: 1 };
+        const width = Math.ceil(source3.pixelWidth / blockData.blockWidth) * blockData.blockWidth;
+        const height = Math.ceil(source3.pixelHeight / blockData.blockHeight) * blockData.blockHeight;
         const textureDescriptor = {
-          label: source5.label,
-          size: { width, height, depthOrArrayLayers: source5.arrayLayerCount },
-          format: source5.format,
-          sampleCount: source5.sampleCount,
-          mipLevelCount: source5.mipLevelCount,
-          dimension: source5.dimension,
+          label: source3.label,
+          size: { width, height, depthOrArrayLayers: source3.arrayLayerCount },
+          format: source3.format,
+          sampleCount: source3.sampleCount,
+          mipLevelCount: source3.mipLevelCount,
+          dimension: source3.dimension,
           usage
         };
         const gpuTexture = this._gpu.device.createTexture(textureDescriptor);
-        source5._gpuData[this._renderer.uid] = new GPUTextureGpuData(gpuTexture);
-        const added = this._managedTextures.add(source5);
+        source3._gpuData[this._renderer.uid] = new GPUTextureGpuData(gpuTexture);
+        const added = this._managedTextures.add(source3);
         if (added) {
-          source5.on("update", this.onSourceUpdate, this);
-          source5.on("resize", this.onSourceResize, this);
-          source5.on("updateMipmaps", this.onUpdateMipmaps, this);
+          source3.on("update", this.onSourceUpdate, this);
+          source3.on("resize", this.onSourceResize, this);
+          source3.on("updateMipmaps", this.onUpdateMipmaps, this);
         }
-        this.onSourceUpdate(source5);
+        this.onSourceUpdate(source3);
         return gpuTexture;
       }
-      onSourceUpdate(source5) {
-        const gpuTexture = this.getGpuSource(source5);
+      onSourceUpdate(source3) {
+        const gpuTexture = this.getGpuSource(source3);
         if (!gpuTexture) return;
-        if (this._uploads[source5.uploadMethodId]) {
-          this._uploads[source5.uploadMethodId].upload(source5, gpuTexture, this._gpu);
+        if (this._uploads[source3.uploadMethodId]) {
+          this._uploads[source3.uploadMethodId].upload(source3, gpuTexture, this._gpu);
         }
-        if (source5.autoGenerateMipmaps && source5.mipLevelCount > 1) {
-          this.onUpdateMipmaps(source5);
+        if (source3.autoGenerateMipmaps && source3.mipLevelCount > 1) {
+          this.onUpdateMipmaps(source3);
         }
       }
-      onUpdateMipmaps(source5) {
+      onUpdateMipmaps(source3) {
         if (!this._mipmapGenerator) {
           this._mipmapGenerator = new GpuMipmapGenerator(this._gpu.device);
         }
-        const gpuTexture = this.getGpuSource(source5);
+        const gpuTexture = this.getGpuSource(source3);
         this._mipmapGenerator.generateMipmap(gpuTexture);
       }
-      onSourceUnload(source5) {
-        source5.off("update", this.onSourceUpdate, this);
-        source5.off("resize", this.onSourceResize, this);
-        source5.off("updateMipmaps", this.onUpdateMipmaps, this);
+      onSourceUnload(source3) {
+        source3.off("update", this.onSourceUpdate, this);
+        source3.off("resize", this.onSourceResize, this);
+        source3.off("updateMipmaps", this.onUpdateMipmaps, this);
       }
-      onSourceResize(source5) {
-        source5._gcLastUsed = this._renderer.gc.now;
-        const gpuData = source5._gpuData[this._renderer.uid];
+      onSourceResize(source3) {
+        source3._gcLastUsed = this._renderer.gc.now;
+        const gpuData = source3._gpuData[this._renderer.uid];
         const gpuTexture = gpuData?.gpuTexture;
         if (!gpuTexture) {
-          this.initSource(source5);
-        } else if (gpuTexture.width !== source5.pixelWidth || gpuTexture.height !== source5.pixelHeight) {
+          this.initSource(source3);
+        } else if (gpuTexture.width !== source3.pixelWidth || gpuTexture.height !== source3.pixelHeight) {
           gpuData.destroy();
-          this._bindGroupHash[source5.uid] = null;
-          source5._gpuData[this._renderer.uid] = null;
-          this.initSource(source5);
+          this._bindGroupHash[source3.uid] = null;
+          source3._gpuData[this._renderer.uid] = null;
+          this.initSource(source3);
         }
       }
       _initSampler(sampler) {
@@ -27560,9 +28577,9 @@ var init_GpuTextureSystem = __esm({
       getGpuSampler(sampler) {
         return this._gpuSamplers[sampler._resourceId] || this._initSampler(sampler);
       }
-      getGpuSource(source5) {
-        source5._gcLastUsed = this._renderer.gc.now;
-        return source5._gpuData[this._renderer.uid]?.gpuTexture || this.initSource(source5);
+      getGpuSource(source3) {
+        source3._gcLastUsed = this._renderer.gc.now;
+        return source3._gpuData[this._renderer.uid]?.gpuTexture || this.initSource(source3);
       }
       /**
        * this returns s bind group for a specific texture, the bind group contains
@@ -27577,10 +28594,10 @@ var init_GpuTextureSystem = __esm({
         return this._bindGroupHash[texture.uid] || this._createTextureBindGroup(texture);
       }
       _createTextureBindGroup(texture) {
-        const source5 = texture.source;
+        const source3 = texture.source;
         this._bindGroupHash[texture.uid] = new BindGroup({
-          0: source5,
-          1: source5.style,
+          0: source3,
+          1: source3.style,
           2: new UniformGroup({
             uTextureMatrix: { type: "mat3x3<f32>", value: texture.textureMatrix.mapCoord }
           })
@@ -27588,14 +28605,14 @@ var init_GpuTextureSystem = __esm({
         return this._bindGroupHash[texture.uid];
       }
       getTextureView(texture) {
-        const source5 = texture.source;
-        source5._gcLastUsed = this._renderer.gc.now;
-        let gpuData = source5._gpuData[this._renderer.uid];
+        const source3 = texture.source;
+        source3._gcLastUsed = this._renderer.gc.now;
+        let gpuData = source3._gpuData[this._renderer.uid];
         if (!gpuData) {
-          this.initSource(source5);
-          gpuData = source5._gpuData[this._renderer.uid];
+          this.initSource(source3);
+          gpuData = source3._gpuData[this._renderer.uid];
         }
-        gpuData.textureView || (gpuData.textureView = gpuData.gpuTexture.createView({ dimension: source5.viewDimension }));
+        gpuData.textureView || (gpuData.textureView = gpuData.gpuTexture.createView({ dimension: source3.viewDimension }));
         return gpuData.textureView;
       }
       generateCanvas(texture) {
@@ -27677,7 +28694,7 @@ var init_WebGPURenderer = __esm({
     init_GpuBatchAdaptor();
     init_AbstractRenderer();
     init_SharedSystems();
-    init_types();
+    init_types2();
     init_BindGroupSystem();
     init_GpuBufferSystem();
     init_GpuColorMaskSystem();
@@ -27848,9 +28865,9 @@ var init_GlMeshAdaptor = __esm({
         if (!shader) {
           shader = this._shader;
           const texture = mesh.texture;
-          const source5 = texture.source;
-          shader.resources.uTexture = source5;
-          shader.resources.uSampler = source5.style;
+          const source3 = texture.source;
+          shader.resources.uTexture = source3;
+          shader.resources.uSampler = source3.style;
           shader.resources.textureUniforms.uniforms.uTextureMatrix = texture.textureMatrix.mapCoord;
         } else if (!shader.glProgram) {
           warn("Mesh shader has no glProgram", mesh.shader);
@@ -27971,7 +28988,7 @@ var init_GlBufferSystem = __esm({
   "node_modules/pixi.js/lib/rendering/renderers/gl/buffer/GlBufferSystem.mjs"() {
     init_Extensions();
     init_GCManagedHash();
-    init_const4();
+    init_const();
     init_const8();
     init_GlBuffer();
     GlBufferSystem = class {
@@ -28106,14 +29123,14 @@ var init_GlBufferSystem = __esm({
         }
         glBuffer.updateID = buffer._updateID;
         gl.bindBuffer(glBuffer.type, glBuffer.buffer);
-        const data2 = buffer.data;
+        const data = buffer.data;
         const drawType = buffer.descriptor.usage & BufferUsage.STATIC ? gl.STATIC_DRAW : gl.DYNAMIC_DRAW;
-        if (data2) {
-          if (glBuffer.byteLength >= data2.byteLength) {
-            gl.bufferSubData(glBuffer.type, 0, data2, 0, buffer._updateSize / data2.BYTES_PER_ELEMENT);
+        if (data) {
+          if (glBuffer.byteLength >= data.byteLength) {
+            gl.bufferSubData(glBuffer.type, 0, data, 0, buffer._updateSize / data.BYTES_PER_ELEMENT);
           } else {
-            glBuffer.byteLength = data2.byteLength;
-            gl.bufferData(glBuffer.type, data2, drawType);
+            glBuffer.byteLength = data.byteLength;
+            gl.bufferData(glBuffer.type, data, drawType);
           }
         } else {
           glBuffer.byteLength = buffer.descriptor.size;
@@ -29164,145 +30181,6 @@ var init_GlStencilSystem = __esm({
   }
 });
 
-// node_modules/pixi.js/lib/rendering/renderers/gl/shader/utils/createUboElementsSTD40.mjs
-function createUboElementsSTD40(uniformData) {
-  const uboElements = uniformData.map((data2) => ({
-    data: data2,
-    offset: 0,
-    size: 0
-  }));
-  const chunkSize = 16;
-  let size = 0;
-  let offset = 0;
-  for (let i2 = 0; i2 < uboElements.length; i2++) {
-    const uboElement = uboElements[i2];
-    size = WGSL_TO_STD40_SIZE[uboElement.data.type];
-    if (!size) {
-      throw new Error(`Unknown type ${uboElement.data.type}`);
-    }
-    if (uboElement.data.size > 1) {
-      size = Math.max(size, chunkSize) * uboElement.data.size;
-    }
-    const boundary = size === 12 ? 16 : size;
-    uboElement.size = size;
-    const curOffset = offset % chunkSize;
-    if (curOffset > 0 && chunkSize - curOffset < boundary) {
-      offset += (chunkSize - curOffset) % 16;
-    } else {
-      offset += (size - curOffset % size) % size;
-    }
-    uboElement.offset = offset;
-    offset += size;
-  }
-  offset = Math.ceil(offset / 16) * 16;
-  return { uboElements, size: offset };
-}
-var WGSL_TO_STD40_SIZE;
-var init_createUboElementsSTD40 = __esm({
-  "node_modules/pixi.js/lib/rendering/renderers/gl/shader/utils/createUboElementsSTD40.mjs"() {
-    "use strict";
-    WGSL_TO_STD40_SIZE = {
-      f32: 4,
-      i32: 4,
-      "vec2<f32>": 8,
-      "vec3<f32>": 12,
-      "vec4<f32>": 16,
-      "vec2<i32>": 8,
-      "vec3<i32>": 12,
-      "vec4<i32>": 16,
-      "mat2x2<f32>": 16 * 2,
-      "mat3x3<f32>": 16 * 3,
-      "mat4x4<f32>": 16 * 4
-      // TODO - not essential for now but support these in the future
-      // int:      4,
-      // ivec2:    8,
-      // ivec3:    12,
-      // ivec4:    16,
-      // uint:     4,
-      // uvec2:    8,
-      // uvec3:    12,
-      // uvec4:    16,
-      // bool:     4,
-      // bvec2:    8,
-      // bvec3:    12,
-      // bvec4:    16,
-      // mat2:     16 * 2,
-      // mat3:     16 * 3,
-      // mat4:     16 * 4,
-    };
-  }
-});
-
-// node_modules/pixi.js/lib/rendering/renderers/gl/shader/utils/generateArraySyncSTD40.mjs
-function generateArraySyncSTD40(uboElement, offsetToAdd) {
-  const rowSize = Math.max(WGSL_TO_STD40_SIZE[uboElement.data.type] / 16, 1);
-  const elementSize = uboElement.data.value.length / uboElement.data.size;
-  const remainder = (4 - elementSize % 4) % 4;
-  const data2 = uboElement.data.type.indexOf("i32") >= 0 ? "dataInt32" : "data";
-  return `
-        v = uv.${uboElement.data.name};
-        offset += ${offsetToAdd};
-
-        arrayOffset = offset;
-
-        t = 0;
-
-        for(var i=0; i < ${uboElement.data.size * rowSize}; i++)
-        {
-            for(var j = 0; j < ${elementSize}; j++)
-            {
-                ${data2}[arrayOffset++] = v[t++];
-            }
-            ${remainder !== 0 ? `arrayOffset += ${remainder};` : ""}
-        }
-    `;
-}
-var init_generateArraySyncSTD40 = __esm({
-  "node_modules/pixi.js/lib/rendering/renderers/gl/shader/utils/generateArraySyncSTD40.mjs"() {
-    init_createUboElementsSTD40();
-  }
-});
-
-// node_modules/pixi.js/lib/rendering/renderers/gl/shader/utils/createUboSyncSTD40.mjs
-function createUboSyncFunctionSTD40(uboElements) {
-  return createUboSyncFunction(
-    uboElements,
-    "uboStd40",
-    generateArraySyncSTD40,
-    uboSyncFunctionsSTD40
-  );
-}
-var init_createUboSyncSTD40 = __esm({
-  "node_modules/pixi.js/lib/rendering/renderers/gl/shader/utils/createUboSyncSTD40.mjs"() {
-    init_createUboSyncFunction();
-    init_uboSyncFunctions();
-    init_generateArraySyncSTD40();
-  }
-});
-
-// node_modules/pixi.js/lib/rendering/renderers/gl/GlUboSystem.mjs
-var GlUboSystem;
-var init_GlUboSystem = __esm({
-  "node_modules/pixi.js/lib/rendering/renderers/gl/GlUboSystem.mjs"() {
-    init_Extensions();
-    init_UboSystem();
-    init_createUboElementsSTD40();
-    init_createUboSyncSTD40();
-    GlUboSystem = class extends UboSystem {
-      constructor() {
-        super({
-          createUboElements: createUboElementsSTD40,
-          generateUboSync: createUboSyncFunctionSTD40
-        });
-      }
-    };
-    GlUboSystem.extension = {
-      type: [ExtensionType.WebGLSystem],
-      name: "ubo"
-    };
-  }
-});
-
 // node_modules/pixi.js/lib/rendering/renderers/gl/GlRenderTarget.mjs
 var GlRenderTarget;
 var init_GlRenderTarget = __esm({
@@ -29328,7 +30206,7 @@ var init_GlRenderTargetAdaptor = __esm({
     init_Rectangle();
     init_warn();
     init_CanvasSource();
-    init_const5();
+    init_const3();
     init_GlRenderTarget();
     GlRenderTargetAdaptor = class {
       constructor() {
@@ -29371,7 +30249,7 @@ var init_GlRenderTargetAdaptor = __esm({
       }
       startRenderPass(renderTarget, clear = true, clearColor, viewport, mipLevel = 0, layer = 0) {
         const renderTargetSystem = this._renderTargetSystem;
-        const source5 = renderTarget.colorTexture;
+        const source3 = renderTarget.colorTexture;
         const gpuRenderTarget = renderTargetSystem.getGpuRenderTarget(renderTarget);
         if (layer !== 0 && this._renderer.context.webGLVersion < 2) {
           throw new Error("[RenderTargetSystem] Rendering to array layers requires WebGL2.");
@@ -29386,7 +30264,7 @@ var init_GlRenderTargetAdaptor = __esm({
         }
         let viewPortY = viewport.y;
         if (renderTarget.isRoot) {
-          viewPortY = source5.pixelHeight - viewport.height - viewport.y;
+          viewPortY = source3.pixelHeight - viewport.height - viewport.y;
         }
         renderTarget.colorTextures.forEach((texture) => {
           this._renderer.texture.unbind(texture);
@@ -29556,16 +30434,16 @@ var init_GlRenderTargetAdaptor = __esm({
         glRenderTarget.height = renderTarget.colorTexture.source.pixelHeight;
         const colorTextures = renderTarget.colorTextures;
         colorTextures.forEach((colorTexture, i2) => {
-          const source5 = colorTexture.source;
-          if (source5.antialias) {
+          const source3 = colorTexture.source;
+          if (source3.antialias) {
             if (renderer.context.supports.msaa) {
               glRenderTarget.msaa = true;
             } else {
               warn("[RenderTexture] Antialiasing on textures is not supported in WebGL1");
             }
           }
-          renderer.texture.bindSource(source5, 0);
-          const glSource = renderer.texture.getGlSource(source5);
+          renderer.texture.bindSource(source3, 0);
+          const glSource = renderer.texture.getGlSource(source3);
           const glTexture = glSource.texture;
           if (glSource.target === gl.TEXTURE_2D) {
             gl.framebufferTexture2D(
@@ -29612,14 +30490,14 @@ var init_GlRenderTargetAdaptor = __esm({
         this._resizeColor(renderTarget, glRenderTarget);
       }
       _resizeColor(renderTarget, glRenderTarget) {
-        const source5 = renderTarget.colorTexture.source;
-        glRenderTarget.width = source5.pixelWidth;
-        glRenderTarget.height = source5.pixelHeight;
+        const source3 = renderTarget.colorTexture.source;
+        glRenderTarget.width = source3.pixelWidth;
+        glRenderTarget.height = source3.pixelHeight;
         glRenderTarget._attachedMipLevel = 0;
         glRenderTarget._attachedLayer = 0;
         renderTarget.colorTextures.forEach((colorTexture, i2) => {
           if (i2 === 0) return;
-          colorTexture.source.resize(source5.width, source5.height, source5._resolution);
+          colorTexture.source.resize(source3.width, source3.height, source3._resolution);
         });
         if (glRenderTarget.msaa) {
           const renderer = this._renderer;
@@ -29745,884 +30623,6 @@ var init_GlRenderTargetSystem = __esm({
     GlRenderTargetSystem.extension = {
       type: [ExtensionType.WebGLSystem],
       name: "renderTarget"
-    };
-  }
-});
-
-// node_modules/pixi.js/lib/rendering/renderers/gl/shader/GenerateShaderSyncCode.mjs
-function generateShaderSyncCode(shader, shaderSystem) {
-  const funcFragments = [];
-  const headerFragments = [`
-        var g = s.groups;
-        var sS = r.shader;
-        var p = s.glProgram;
-        var ugS = r.uniformGroup;
-        var resources;
-    `];
-  let addedTextreSystem = false;
-  let textureCount = 0;
-  const programData = shaderSystem._getProgramData(shader.glProgram);
-  for (const i2 in shader.groups) {
-    const group = shader.groups[i2];
-    funcFragments.push(`
-            resources = g[${i2}].resources;
-        `);
-    for (const j2 in group.resources) {
-      const resource = group.resources[j2];
-      if (resource instanceof UniformGroup) {
-        if (resource.ubo) {
-          const resName = shader._uniformBindMap[i2][Number(j2)];
-          funcFragments.push(`
-                        sS.bindUniformBlock(
-                            resources[${j2}],
-                            '${resName}',
-                            ${shader.glProgram._uniformBlockData[resName].index}
-                        );
-                    `);
-        } else {
-          funcFragments.push(`
-                        ugS.updateUniformGroup(resources[${j2}], p, sD);
-                    `);
-        }
-      } else if (resource instanceof BufferResource) {
-        const resName = shader._uniformBindMap[i2][Number(j2)];
-        funcFragments.push(`
-                    sS.bindUniformBlock(
-                        resources[${j2}],
-                        '${resName}',
-                        ${shader.glProgram._uniformBlockData[resName].index}
-                    );
-                `);
-      } else if (resource instanceof TextureSource) {
-        const uniformName = shader._uniformBindMap[i2][j2];
-        const uniformData = programData.uniformData[uniformName];
-        if (uniformData) {
-          if (!addedTextreSystem) {
-            addedTextreSystem = true;
-            headerFragments.push(`
-                        var tS = r.texture;
-                        `);
-          }
-          shaderSystem._gl.uniform1i(uniformData.location, textureCount);
-          funcFragments.push(`
-                        tS.bind(resources[${j2}], ${textureCount});
-                    `);
-          textureCount++;
-        }
-      }
-    }
-  }
-  const functionSource = [...headerFragments, ...funcFragments].join("\n");
-  return new Function("r", "s", "sD", functionSource);
-}
-var init_GenerateShaderSyncCode = __esm({
-  "node_modules/pixi.js/lib/rendering/renderers/gl/shader/GenerateShaderSyncCode.mjs"() {
-    init_BufferResource();
-    init_UniformGroup();
-    init_TextureSource();
-  }
-});
-
-// node_modules/pixi.js/lib/rendering/renderers/gl/shader/GlProgramData.mjs
-var GlProgramData;
-var init_GlProgramData = __esm({
-  "node_modules/pixi.js/lib/rendering/renderers/gl/shader/GlProgramData.mjs"() {
-    "use strict";
-    GlProgramData = class {
-      /**
-       * Makes a new Pixi program.
-       * @param program - webgl program
-       * @param uniformData - uniforms
-       */
-      constructor(program, uniformData) {
-        this.program = program;
-        this.uniformData = uniformData;
-        this.uniformGroups = {};
-        this.uniformDirtyGroups = {};
-        this.uniformBlockBindings = {};
-      }
-      /** Destroys this program. */
-      destroy() {
-        this.uniformData = null;
-        this.uniformGroups = null;
-        this.uniformDirtyGroups = null;
-        this.uniformBlockBindings = null;
-        this.program = null;
-      }
-    };
-  }
-});
-
-// node_modules/pixi.js/lib/rendering/renderers/gl/shader/program/compileShader.mjs
-function compileShader(gl, type, src) {
-  const shader = gl.createShader(type);
-  gl.shaderSource(shader, src);
-  gl.compileShader(shader);
-  return shader;
-}
-var init_compileShader = __esm({
-  "node_modules/pixi.js/lib/rendering/renderers/gl/shader/program/compileShader.mjs"() {
-    "use strict";
-  }
-});
-
-// node_modules/pixi.js/lib/rendering/renderers/gl/shader/program/defaultValue.mjs
-function booleanArray(size) {
-  const array = new Array(size);
-  for (let i2 = 0; i2 < array.length; i2++) {
-    array[i2] = false;
-  }
-  return array;
-}
-function defaultValue(type, size) {
-  switch (type) {
-    case "float":
-      return 0;
-    case "vec2":
-      return new Float32Array(2 * size);
-    case "vec3":
-      return new Float32Array(3 * size);
-    case "vec4":
-      return new Float32Array(4 * size);
-    case "int":
-    case "uint":
-    case "sampler2D":
-    case "sampler2DArray":
-      return 0;
-    case "ivec2":
-      return new Int32Array(2 * size);
-    case "ivec3":
-      return new Int32Array(3 * size);
-    case "ivec4":
-      return new Int32Array(4 * size);
-    case "uvec2":
-      return new Uint32Array(2 * size);
-    case "uvec3":
-      return new Uint32Array(3 * size);
-    case "uvec4":
-      return new Uint32Array(4 * size);
-    case "bool":
-      return false;
-    case "bvec2":
-      return booleanArray(2 * size);
-    case "bvec3":
-      return booleanArray(3 * size);
-    case "bvec4":
-      return booleanArray(4 * size);
-    case "mat2":
-      return new Float32Array([
-        1,
-        0,
-        0,
-        1
-      ]);
-    case "mat3":
-      return new Float32Array([
-        1,
-        0,
-        0,
-        0,
-        1,
-        0,
-        0,
-        0,
-        1
-      ]);
-    case "mat4":
-      return new Float32Array([
-        1,
-        0,
-        0,
-        0,
-        0,
-        1,
-        0,
-        0,
-        0,
-        0,
-        1,
-        0,
-        0,
-        0,
-        0,
-        1
-      ]);
-  }
-  return null;
-}
-var init_defaultValue = __esm({
-  "node_modules/pixi.js/lib/rendering/renderers/gl/shader/program/defaultValue.mjs"() {
-    "use strict";
-  }
-});
-
-// node_modules/pixi.js/lib/rendering/renderers/gl/shader/program/mapType.mjs
-function mapType(gl, type) {
-  if (!GL_TABLE) {
-    const typeNames = Object.keys(GL_TO_GLSL_TYPES);
-    GL_TABLE = {};
-    for (let i2 = 0; i2 < typeNames.length; ++i2) {
-      const tn = typeNames[i2];
-      GL_TABLE[gl[tn]] = GL_TO_GLSL_TYPES[tn];
-    }
-  }
-  return GL_TABLE[type];
-}
-function mapGlToVertexFormat(gl, type) {
-  const typeValue = mapType(gl, type);
-  return GLSL_TO_VERTEX_TYPES[typeValue] || "float32";
-}
-var GL_TABLE, GL_TO_GLSL_TYPES, GLSL_TO_VERTEX_TYPES;
-var init_mapType = __esm({
-  "node_modules/pixi.js/lib/rendering/renderers/gl/shader/program/mapType.mjs"() {
-    "use strict";
-    GL_TABLE = null;
-    GL_TO_GLSL_TYPES = {
-      FLOAT: "float",
-      FLOAT_VEC2: "vec2",
-      FLOAT_VEC3: "vec3",
-      FLOAT_VEC4: "vec4",
-      INT: "int",
-      INT_VEC2: "ivec2",
-      INT_VEC3: "ivec3",
-      INT_VEC4: "ivec4",
-      UNSIGNED_INT: "uint",
-      UNSIGNED_INT_VEC2: "uvec2",
-      UNSIGNED_INT_VEC3: "uvec3",
-      UNSIGNED_INT_VEC4: "uvec4",
-      BOOL: "bool",
-      BOOL_VEC2: "bvec2",
-      BOOL_VEC3: "bvec3",
-      BOOL_VEC4: "bvec4",
-      FLOAT_MAT2: "mat2",
-      FLOAT_MAT3: "mat3",
-      FLOAT_MAT4: "mat4",
-      SAMPLER_2D: "sampler2D",
-      INT_SAMPLER_2D: "sampler2D",
-      UNSIGNED_INT_SAMPLER_2D: "sampler2D",
-      SAMPLER_CUBE: "samplerCube",
-      INT_SAMPLER_CUBE: "samplerCube",
-      UNSIGNED_INT_SAMPLER_CUBE: "samplerCube",
-      SAMPLER_2D_ARRAY: "sampler2DArray",
-      INT_SAMPLER_2D_ARRAY: "sampler2DArray",
-      UNSIGNED_INT_SAMPLER_2D_ARRAY: "sampler2DArray"
-    };
-    GLSL_TO_VERTEX_TYPES = {
-      float: "float32",
-      vec2: "float32x2",
-      vec3: "float32x3",
-      vec4: "float32x4",
-      int: "sint32",
-      ivec2: "sint32x2",
-      ivec3: "sint32x3",
-      ivec4: "sint32x4",
-      uint: "uint32",
-      uvec2: "uint32x2",
-      uvec3: "uint32x3",
-      uvec4: "uint32x4",
-      bool: "uint32",
-      bvec2: "uint32x2",
-      bvec3: "uint32x3",
-      bvec4: "uint32x4"
-    };
-  }
-});
-
-// node_modules/pixi.js/lib/rendering/renderers/gl/shader/program/extractAttributesFromGlProgram.mjs
-function extractAttributesFromGlProgram(program, gl, sortAttributes = false) {
-  const attributes = {};
-  const totalAttributes = gl.getProgramParameter(program, gl.ACTIVE_ATTRIBUTES);
-  for (let i2 = 0; i2 < totalAttributes; i2++) {
-    const attribData = gl.getActiveAttrib(program, i2);
-    if (attribData.name.startsWith("gl_")) {
-      continue;
-    }
-    const format = mapGlToVertexFormat(gl, attribData.type);
-    attributes[attribData.name] = {
-      location: 0,
-      // set further down..
-      format,
-      stride: getAttributeInfoFromFormat(format).stride,
-      offset: 0,
-      instance: false,
-      start: 0
-    };
-  }
-  const keys = Object.keys(attributes);
-  if (sortAttributes) {
-    keys.sort((a2, b2) => a2 > b2 ? 1 : -1);
-    for (let i2 = 0; i2 < keys.length; i2++) {
-      attributes[keys[i2]].location = i2;
-      gl.bindAttribLocation(program, i2, keys[i2]);
-    }
-    gl.linkProgram(program);
-  } else {
-    for (let i2 = 0; i2 < keys.length; i2++) {
-      attributes[keys[i2]].location = gl.getAttribLocation(program, keys[i2]);
-    }
-  }
-  return attributes;
-}
-var init_extractAttributesFromGlProgram = __esm({
-  "node_modules/pixi.js/lib/rendering/renderers/gl/shader/program/extractAttributesFromGlProgram.mjs"() {
-    init_getAttributeInfoFromFormat();
-    init_mapType();
-  }
-});
-
-// node_modules/pixi.js/lib/rendering/renderers/gl/shader/program/getUboData.mjs
-function getUboData(program, gl) {
-  if (!gl.ACTIVE_UNIFORM_BLOCKS) return {};
-  const uniformBlocks = {};
-  const totalUniformsBlocks = gl.getProgramParameter(program, gl.ACTIVE_UNIFORM_BLOCKS);
-  for (let i2 = 0; i2 < totalUniformsBlocks; i2++) {
-    const name = gl.getActiveUniformBlockName(program, i2);
-    const uniformBlockIndex = gl.getUniformBlockIndex(program, name);
-    const size = gl.getActiveUniformBlockParameter(program, i2, gl.UNIFORM_BLOCK_DATA_SIZE);
-    uniformBlocks[name] = {
-      name,
-      index: uniformBlockIndex,
-      size
-    };
-  }
-  return uniformBlocks;
-}
-var init_getUboData = __esm({
-  "node_modules/pixi.js/lib/rendering/renderers/gl/shader/program/getUboData.mjs"() {
-    "use strict";
-  }
-});
-
-// node_modules/pixi.js/lib/rendering/renderers/gl/shader/program/getUniformData.mjs
-function getUniformData(program, gl) {
-  const uniforms = {};
-  const totalUniforms = gl.getProgramParameter(program, gl.ACTIVE_UNIFORMS);
-  for (let i2 = 0; i2 < totalUniforms; i2++) {
-    const uniformData = gl.getActiveUniform(program, i2);
-    const name = uniformData.name.replace(/\[.*?\]$/, "");
-    const isArray = !!uniformData.name.match(/\[.*?\]$/);
-    const type = mapType(gl, uniformData.type);
-    uniforms[name] = {
-      name,
-      index: i2,
-      type,
-      size: uniformData.size,
-      isArray,
-      value: defaultValue(type, uniformData.size)
-    };
-  }
-  return uniforms;
-}
-var init_getUniformData = __esm({
-  "node_modules/pixi.js/lib/rendering/renderers/gl/shader/program/getUniformData.mjs"() {
-    init_defaultValue();
-    init_mapType();
-  }
-});
-
-// node_modules/pixi.js/lib/rendering/renderers/gl/shader/program/logProgramError.mjs
-function logPrettyShaderError(gl, shader) {
-  const rawSource = gl.getShaderSource(shader);
-  if (rawSource === null) {
-    console.error("PixiJS Error: Could not retrieve shader source (WebGL context may be lost).");
-    return;
-  }
-  const shaderSrc = rawSource.split("\n").map((line, index) => `${index}: ${line}`);
-  const shaderLog = gl.getShaderInfoLog(shader) ?? "";
-  const splitShader = shaderLog.split("\n");
-  const dedupe = {};
-  const lineNumbers = splitShader.map((line) => parseFloat(line.replace(/^ERROR\: 0\:([\d]+)\:.*$/, "$1"))).filter((n2) => {
-    if (n2 && !dedupe[n2]) {
-      dedupe[n2] = true;
-      return true;
-    }
-    return false;
-  });
-  const logArgs = [""];
-  lineNumbers.forEach((number2) => {
-    shaderSrc[number2 - 1] = `%c${shaderSrc[number2 - 1]}%c`;
-    logArgs.push("background: #FF0000; color:#FFFFFF; font-size: 10px", "font-size: 10px");
-  });
-  const fragmentSourceToLog = shaderSrc.join("\n");
-  logArgs[0] = fragmentSourceToLog;
-  console.error(shaderLog);
-  console.groupCollapsed("click to view full shader code");
-  console.warn(...logArgs);
-  console.groupEnd();
-}
-function logProgramError(gl, program, vertexShader, fragmentShader) {
-  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-    if (!gl.getShaderParameter(vertexShader, gl.COMPILE_STATUS)) {
-      logPrettyShaderError(gl, vertexShader);
-    }
-    if (!gl.getShaderParameter(fragmentShader, gl.COMPILE_STATUS)) {
-      logPrettyShaderError(gl, fragmentShader);
-    }
-    console.error("PixiJS Error: Could not initialize shader.");
-    if (gl.getProgramInfoLog(program) !== "") {
-      console.warn("PixiJS Warning: gl.getProgramInfoLog()", gl.getProgramInfoLog(program));
-    }
-  }
-}
-var init_logProgramError = __esm({
-  "node_modules/pixi.js/lib/rendering/renderers/gl/shader/program/logProgramError.mjs"() {
-    "use strict";
-  }
-});
-
-// node_modules/pixi.js/lib/rendering/renderers/gl/shader/program/generateProgram.mjs
-function generateProgram(gl, program) {
-  const glVertShader = compileShader(gl, gl.VERTEX_SHADER, program.vertex);
-  const glFragShader = compileShader(gl, gl.FRAGMENT_SHADER, program.fragment);
-  const webGLProgram = gl.createProgram();
-  gl.attachShader(webGLProgram, glVertShader);
-  gl.attachShader(webGLProgram, glFragShader);
-  const transformFeedbackVaryings = program.transformFeedbackVaryings;
-  if (transformFeedbackVaryings) {
-    if (typeof gl.transformFeedbackVaryings !== "function") {
-      warn(`TransformFeedback is not supported but TransformFeedbackVaryings are given.`);
-    } else {
-      gl.transformFeedbackVaryings(
-        webGLProgram,
-        transformFeedbackVaryings.names,
-        transformFeedbackVaryings.bufferMode === "separate" ? gl.SEPARATE_ATTRIBS : gl.INTERLEAVED_ATTRIBS
-      );
-    }
-  }
-  gl.linkProgram(webGLProgram);
-  if (!gl.getProgramParameter(webGLProgram, gl.LINK_STATUS)) {
-    logProgramError(gl, webGLProgram, glVertShader, glFragShader);
-  }
-  program._attributeData = extractAttributesFromGlProgram(
-    webGLProgram,
-    gl,
-    !/^[ \t]*#[ \t]*version[ \t]+300[ \t]+es[ \t]*$/m.test(program.vertex)
-  );
-  program._uniformData = getUniformData(webGLProgram, gl);
-  program._uniformBlockData = getUboData(webGLProgram, gl);
-  gl.deleteShader(glVertShader);
-  gl.deleteShader(glFragShader);
-  const uniformData = {};
-  for (const i2 in program._uniformData) {
-    const data2 = program._uniformData[i2];
-    uniformData[i2] = {
-      location: gl.getUniformLocation(webGLProgram, i2),
-      value: defaultValue(data2.type, data2.size)
-    };
-  }
-  const glProgram = new GlProgramData(webGLProgram, uniformData);
-  return glProgram;
-}
-var init_generateProgram = __esm({
-  "node_modules/pixi.js/lib/rendering/renderers/gl/shader/program/generateProgram.mjs"() {
-    init_warn();
-    init_GlProgramData();
-    init_compileShader();
-    init_defaultValue();
-    init_extractAttributesFromGlProgram();
-    init_getUboData();
-    init_getUniformData();
-    init_logProgramError();
-  }
-});
-
-// node_modules/pixi.js/lib/rendering/renderers/gl/shader/GlShaderSystem.mjs
-var defaultSyncData, GlShaderSystem;
-var init_GlShaderSystem = __esm({
-  "node_modules/pixi.js/lib/rendering/renderers/gl/shader/GlShaderSystem.mjs"() {
-    init_Extensions();
-    init_GenerateShaderSyncCode();
-    init_generateProgram();
-    defaultSyncData = {
-      textureCount: 0,
-      blockIndex: 0
-    };
-    GlShaderSystem = class {
-      constructor(renderer) {
-        this._activeProgram = null;
-        this._programDataHash = /* @__PURE__ */ Object.create(null);
-        this._shaderSyncFunctions = /* @__PURE__ */ Object.create(null);
-        this._renderer = renderer;
-      }
-      contextChange(gl) {
-        this._gl = gl;
-        this._programDataHash = /* @__PURE__ */ Object.create(null);
-        this._shaderSyncFunctions = /* @__PURE__ */ Object.create(null);
-        this._activeProgram = null;
-      }
-      /**
-       * Changes the current shader to the one given in parameter.
-       * @param shader - the new shader
-       * @param skipSync - false if the shader should automatically sync its uniforms.
-       * @returns the glProgram that belongs to the shader.
-       */
-      bind(shader, skipSync) {
-        this._setProgram(shader.glProgram);
-        if (skipSync) return;
-        defaultSyncData.textureCount = 0;
-        defaultSyncData.blockIndex = 0;
-        let syncFunction = this._shaderSyncFunctions[shader.glProgram._key];
-        if (!syncFunction) {
-          syncFunction = this._shaderSyncFunctions[shader.glProgram._key] = this._generateShaderSync(shader, this);
-        }
-        this._renderer.buffer.nextBindBase(!!shader.glProgram.transformFeedbackVaryings);
-        syncFunction(this._renderer, shader, defaultSyncData);
-      }
-      /**
-       * Updates the uniform group.
-       * @param uniformGroup - the uniform group to update
-       */
-      updateUniformGroup(uniformGroup) {
-        this._renderer.uniformGroup.updateUniformGroup(uniformGroup, this._activeProgram, defaultSyncData);
-      }
-      /**
-       * Binds a uniform block to the shader.
-       * @param uniformGroup - the uniform group to bind
-       * @param name - the name of the uniform block
-       * @param index - the index of the uniform block
-       */
-      bindUniformBlock(uniformGroup, name, index = 0) {
-        const bufferSystem = this._renderer.buffer;
-        const programData = this._getProgramData(this._activeProgram);
-        const isBufferResource = uniformGroup._bufferResource;
-        if (!isBufferResource) {
-          this._renderer.ubo.updateUniformGroup(uniformGroup);
-        }
-        const buffer = uniformGroup.buffer;
-        const glBuffer = bufferSystem.updateBuffer(buffer);
-        const boundLocation = bufferSystem.freeLocationForBufferBase(glBuffer);
-        if (isBufferResource) {
-          const { offset, size } = uniformGroup;
-          if (offset === 0 && size === buffer.data.byteLength) {
-            bufferSystem.bindBufferBase(glBuffer, boundLocation);
-          } else {
-            bufferSystem.bindBufferRange(glBuffer, boundLocation, offset);
-          }
-        } else if (bufferSystem.getLastBindBaseLocation(glBuffer) !== boundLocation) {
-          bufferSystem.bindBufferBase(glBuffer, boundLocation);
-        }
-        const uniformBlockIndex = this._activeProgram._uniformBlockData[name].index;
-        if (programData.uniformBlockBindings[index] === boundLocation) return;
-        programData.uniformBlockBindings[index] = boundLocation;
-        this._renderer.gl.uniformBlockBinding(programData.program, uniformBlockIndex, boundLocation);
-      }
-      _setProgram(program) {
-        if (this._activeProgram === program) return;
-        this._activeProgram = program;
-        const programData = this._getProgramData(program);
-        this._gl.useProgram(programData.program);
-      }
-      /**
-       * @param program - the program to get the data for
-       * @internal
-       */
-      _getProgramData(program) {
-        return this._programDataHash[program._key] || this._createProgramData(program);
-      }
-      _createProgramData(program) {
-        const key = program._key;
-        this._programDataHash[key] = generateProgram(this._gl, program);
-        return this._programDataHash[key];
-      }
-      destroy() {
-        for (const key of Object.keys(this._programDataHash)) {
-          this._programDataHash[key].destroy();
-        }
-        this._programDataHash = null;
-        this._shaderSyncFunctions = null;
-        this._activeProgram = null;
-        this._renderer = null;
-        this._gl = null;
-      }
-      /**
-       * Creates a function that can be executed that will sync the shader as efficiently as possible.
-       * Overridden by the unsafe eval package if you don't want eval used in your project.
-       * @param shader - the shader to generate the sync function for
-       * @param shaderSystem - the shader system to use
-       * @returns - the generated sync function
-       * @ignore
-       */
-      _generateShaderSync(shader, shaderSystem) {
-        return generateShaderSyncCode(shader, shaderSystem);
-      }
-      resetState() {
-        this._activeProgram = null;
-      }
-    };
-    GlShaderSystem.extension = {
-      type: [
-        ExtensionType.WebGLSystem
-      ],
-      name: "shader"
-    };
-  }
-});
-
-// node_modules/pixi.js/lib/rendering/renderers/gl/shader/utils/generateUniformsSyncTypes.mjs
-var UNIFORM_TO_SINGLE_SETTERS, UNIFORM_TO_ARRAY_SETTERS;
-var init_generateUniformsSyncTypes = __esm({
-  "node_modules/pixi.js/lib/rendering/renderers/gl/shader/utils/generateUniformsSyncTypes.mjs"() {
-    "use strict";
-    UNIFORM_TO_SINGLE_SETTERS = {
-      f32: `if (cv !== v) {
-            cu.value = v;
-            gl.uniform1f(location, v);
-        }`,
-      "vec2<f32>": `if (cv[0] !== v[0] || cv[1] !== v[1]) {
-            cv[0] = v[0];
-            cv[1] = v[1];
-            gl.uniform2f(location, v[0], v[1]);
-        }`,
-      "vec3<f32>": `if (cv[0] !== v[0] || cv[1] !== v[1] || cv[2] !== v[2]) {
-            cv[0] = v[0];
-            cv[1] = v[1];
-            cv[2] = v[2];
-            gl.uniform3f(location, v[0], v[1], v[2]);
-        }`,
-      "vec4<f32>": `if (cv[0] !== v[0] || cv[1] !== v[1] || cv[2] !== v[2] || cv[3] !== v[3]) {
-            cv[0] = v[0];
-            cv[1] = v[1];
-            cv[2] = v[2];
-            cv[3] = v[3];
-            gl.uniform4f(location, v[0], v[1], v[2], v[3]);
-        }`,
-      i32: `if (cv !== v) {
-            cu.value = v;
-            gl.uniform1i(location, v);
-        }`,
-      "vec2<i32>": `if (cv[0] !== v[0] || cv[1] !== v[1]) {
-            cv[0] = v[0];
-            cv[1] = v[1];
-            gl.uniform2i(location, v[0], v[1]);
-        }`,
-      "vec3<i32>": `if (cv[0] !== v[0] || cv[1] !== v[1] || cv[2] !== v[2]) {
-            cv[0] = v[0];
-            cv[1] = v[1];
-            cv[2] = v[2];
-            gl.uniform3i(location, v[0], v[1], v[2]);
-        }`,
-      "vec4<i32>": `if (cv[0] !== v[0] || cv[1] !== v[1] || cv[2] !== v[2] || cv[3] !== v[3]) {
-            cv[0] = v[0];
-            cv[1] = v[1];
-            cv[2] = v[2];
-            cv[3] = v[3];
-            gl.uniform4i(location, v[0], v[1], v[2], v[3]);
-        }`,
-      u32: `if (cv !== v) {
-            cu.value = v;
-            gl.uniform1ui(location, v);
-        }`,
-      "vec2<u32>": `if (cv[0] !== v[0] || cv[1] !== v[1]) {
-            cv[0] = v[0];
-            cv[1] = v[1];
-            gl.uniform2ui(location, v[0], v[1]);
-        }`,
-      "vec3<u32>": `if (cv[0] !== v[0] || cv[1] !== v[1] || cv[2] !== v[2]) {
-            cv[0] = v[0];
-            cv[1] = v[1];
-            cv[2] = v[2];
-            gl.uniform3ui(location, v[0], v[1], v[2]);
-        }`,
-      "vec4<u32>": `if (cv[0] !== v[0] || cv[1] !== v[1] || cv[2] !== v[2] || cv[3] !== v[3]) {
-            cv[0] = v[0];
-            cv[1] = v[1];
-            cv[2] = v[2];
-            cv[3] = v[3];
-            gl.uniform4ui(location, v[0], v[1], v[2], v[3]);
-        }`,
-      bool: `if (cv !== v) {
-            cu.value = v;
-            gl.uniform1i(location, v);
-        }`,
-      "vec2<bool>": `if (cv[0] !== v[0] || cv[1] !== v[1]) {
-            cv[0] = v[0];
-            cv[1] = v[1];
-            gl.uniform2i(location, v[0], v[1]);
-        }`,
-      "vec3<bool>": `if (cv[0] !== v[0] || cv[1] !== v[1] || cv[2] !== v[2]) {
-            cv[0] = v[0];
-            cv[1] = v[1];
-            cv[2] = v[2];
-            gl.uniform3i(location, v[0], v[1], v[2]);
-        }`,
-      "vec4<bool>": `if (cv[0] !== v[0] || cv[1] !== v[1] || cv[2] !== v[2] || cv[3] !== v[3]) {
-            cv[0] = v[0];
-            cv[1] = v[1];
-            cv[2] = v[2];
-            cv[3] = v[3];
-            gl.uniform4i(location, v[0], v[1], v[2], v[3]);
-        }`,
-      "mat2x2<f32>": `gl.uniformMatrix2fv(location, false, v);`,
-      "mat3x3<f32>": `gl.uniformMatrix3fv(location, false, v);`,
-      "mat4x4<f32>": `gl.uniformMatrix4fv(location, false, v);`
-    };
-    UNIFORM_TO_ARRAY_SETTERS = {
-      f32: `gl.uniform1fv(location, v);`,
-      "vec2<f32>": `gl.uniform2fv(location, v);`,
-      "vec3<f32>": `gl.uniform3fv(location, v);`,
-      "vec4<f32>": `gl.uniform4fv(location, v);`,
-      "mat2x2<f32>": `gl.uniformMatrix2fv(location, false, v);`,
-      "mat3x3<f32>": `gl.uniformMatrix3fv(location, false, v);`,
-      "mat4x4<f32>": `gl.uniformMatrix4fv(location, false, v);`,
-      i32: `gl.uniform1iv(location, v);`,
-      "vec2<i32>": `gl.uniform2iv(location, v);`,
-      "vec3<i32>": `gl.uniform3iv(location, v);`,
-      "vec4<i32>": `gl.uniform4iv(location, v);`,
-      u32: `gl.uniform1iv(location, v);`,
-      "vec2<u32>": `gl.uniform2iv(location, v);`,
-      "vec3<u32>": `gl.uniform3iv(location, v);`,
-      "vec4<u32>": `gl.uniform4iv(location, v);`,
-      bool: `gl.uniform1iv(location, v);`,
-      "vec2<bool>": `gl.uniform2iv(location, v);`,
-      "vec3<bool>": `gl.uniform3iv(location, v);`,
-      "vec4<bool>": `gl.uniform4iv(location, v);`
-    };
-  }
-});
-
-// node_modules/pixi.js/lib/rendering/renderers/gl/shader/utils/generateUniformsSync.mjs
-function generateUniformsSync(group, uniformData) {
-  const funcFragments = [`
-        var v = null;
-        var cv = null;
-        var cu = null;
-        var t = 0;
-        var gl = renderer.gl;
-        var name = null;
-    `];
-  for (const i2 in group.uniforms) {
-    if (!uniformData[i2]) {
-      if (group.uniforms[i2] instanceof UniformGroup) {
-        if (group.uniforms[i2].ubo) {
-          funcFragments.push(`
-                        renderer.shader.bindUniformBlock(uv.${i2}, "${i2}");
-                    `);
-        } else {
-          funcFragments.push(`
-                        renderer.shader.updateUniformGroup(uv.${i2});
-                    `);
-        }
-      } else if (group.uniforms[i2] instanceof BufferResource) {
-        funcFragments.push(`
-                        renderer.shader.bindBufferResource(uv.${i2}, "${i2}");
-                    `);
-      }
-      continue;
-    }
-    const uniform = group.uniformStructures[i2];
-    let parsed = false;
-    for (let j2 = 0; j2 < uniformParsers.length; j2++) {
-      const parser = uniformParsers[j2];
-      if (uniform.type === parser.type && parser.test(uniform)) {
-        funcFragments.push(`name = "${i2}";`, uniformParsers[j2].uniform);
-        parsed = true;
-        break;
-      }
-    }
-    if (!parsed) {
-      const templateType = uniform.size === 1 ? UNIFORM_TO_SINGLE_SETTERS : UNIFORM_TO_ARRAY_SETTERS;
-      const template = templateType[uniform.type].replace("location", `ud["${i2}"].location`);
-      funcFragments.push(`
-            cu = ud["${i2}"];
-            cv = cu.value;
-            v = uv["${i2}"];
-            ${template};`);
-    }
-  }
-  return new Function("ud", "uv", "renderer", "syncData", funcFragments.join("\n"));
-}
-var init_generateUniformsSync = __esm({
-  "node_modules/pixi.js/lib/rendering/renderers/gl/shader/utils/generateUniformsSync.mjs"() {
-    init_BufferResource();
-    init_UniformGroup();
-    init_uniformParsers();
-    init_generateUniformsSyncTypes();
-  }
-});
-
-// node_modules/pixi.js/lib/rendering/renderers/gl/shader/GlUniformGroupSystem.mjs
-var GlUniformGroupSystem;
-var init_GlUniformGroupSystem = __esm({
-  "node_modules/pixi.js/lib/rendering/renderers/gl/shader/GlUniformGroupSystem.mjs"() {
-    init_Extensions();
-    init_generateUniformsSync();
-    GlUniformGroupSystem = class {
-      /** @param renderer - The renderer this System works for. */
-      constructor(renderer) {
-        this._cache = {};
-        this._uniformGroupSyncHash = {};
-        this._renderer = renderer;
-        this.gl = null;
-        this._cache = {};
-      }
-      contextChange(gl) {
-        this.gl = gl;
-      }
-      /**
-       * Uploads the uniforms values to the currently bound shader.
-       * @param group - the uniforms values that be applied to the current shader
-       * @param program
-       * @param syncData
-       * @param syncData.textureCount
-       */
-      updateUniformGroup(group, program, syncData) {
-        const programData = this._renderer.shader._getProgramData(program);
-        if (!group.isStatic || group._dirtyId !== programData.uniformDirtyGroups[group.uid]) {
-          programData.uniformDirtyGroups[group.uid] = group._dirtyId;
-          const syncFunc = this._getUniformSyncFunction(group, program);
-          syncFunc(programData.uniformData, group.uniforms, this._renderer, syncData);
-        }
-      }
-      /**
-       * Overridable by the pixi.js/unsafe-eval package to use static syncUniforms instead.
-       * @param group
-       * @param program
-       */
-      _getUniformSyncFunction(group, program) {
-        return this._uniformGroupSyncHash[group._signature]?.[program._key] || this._createUniformSyncFunction(group, program);
-      }
-      _createUniformSyncFunction(group, program) {
-        const uniformGroupSyncHash = this._uniformGroupSyncHash[group._signature] || (this._uniformGroupSyncHash[group._signature] = {});
-        const id = this._getSignature(group, program._uniformData, "u");
-        if (!this._cache[id]) {
-          this._cache[id] = this._generateUniformsSync(group, program._uniformData);
-        }
-        uniformGroupSyncHash[program._key] = this._cache[id];
-        return uniformGroupSyncHash[program._key];
-      }
-      _generateUniformsSync(group, uniformData) {
-        return generateUniformsSync(group, uniformData);
-      }
-      /**
-       * Takes a uniform group and data and generates a unique signature for them.
-       * @param group - The uniform group to get signature of
-       * @param group.uniforms
-       * @param uniformData - Uniform information generated by the shader
-       * @param preFix
-       * @returns Unique signature of the uniform group
-       */
-      _getSignature(group, uniformData, preFix) {
-        const uniforms = group.uniforms;
-        const strings = [`${preFix}-`];
-        for (const i2 in uniforms) {
-          strings.push(i2);
-          if (uniformData[i2]) {
-            strings.push(uniformData[i2].type);
-          }
-        }
-        return strings.join("-");
-      }
-      /** Destroys this System and removes all its textures. */
-      destroy() {
-        this._renderer = null;
-        this._cache = null;
-      }
-    };
-    GlUniformGroupSystem.extension = {
-      type: [
-        ExtensionType.WebGLSystem
-      ],
-      name: "uniformGroup"
     };
   }
 });
@@ -30921,35 +30921,35 @@ var init_glUploadBufferImageResource = __esm({
     "use strict";
     glUploadBufferImageResource = {
       id: "buffer",
-      upload(source5, glTexture, gl, _webGLVersion, targetOverride, forceAllocation = false) {
+      upload(source3, glTexture, gl, _webGLVersion, targetOverride, forceAllocation = false) {
         const target = targetOverride || glTexture.target;
-        if (!forceAllocation && (glTexture.width === source5.width && glTexture.height === source5.height)) {
+        if (!forceAllocation && (glTexture.width === source3.width && glTexture.height === source3.height)) {
           gl.texSubImage2D(
             target,
             0,
             0,
             0,
-            source5.width,
-            source5.height,
+            source3.width,
+            source3.height,
             glTexture.format,
             glTexture.type,
-            source5.resource
+            source3.resource
           );
         } else {
           gl.texImage2D(
             target,
             0,
             glTexture.internalFormat,
-            source5.width,
-            source5.height,
+            source3.width,
+            source3.height,
             0,
             glTexture.format,
             glTexture.type,
-            source5.resource
+            source3.resource
           );
         }
-        glTexture.width = source5.width;
-        glTexture.height = source5.height;
+        glTexture.width = source3.width;
+        glTexture.height = source3.height;
       }
     };
   }
@@ -31020,14 +31020,14 @@ var init_glUploadCompressedTextureResource = __esm({
     };
     glUploadCompressedTextureResource = {
       id: "compressed",
-      upload(source5, glTexture, gl, _webGLVersion, targetOverride, _forceAllocation) {
+      upload(source3, glTexture, gl, _webGLVersion, targetOverride, _forceAllocation) {
         const target = targetOverride ?? glTexture.target;
         gl.pixelStorei(gl.UNPACK_ALIGNMENT, 4);
-        let mipWidth = source5.pixelWidth;
-        let mipHeight = source5.pixelHeight;
-        const compressed = !!compressedFormatMap[source5.format];
-        for (let i2 = 0; i2 < source5.resource.length; i2++) {
-          const levelBuffer = source5.resource[i2];
+        let mipWidth = source3.pixelWidth;
+        let mipHeight = source3.pixelHeight;
+        const compressed = !!compressedFormatMap[source3.format];
+        for (let i2 = 0; i2 < source3.resource.length; i2++) {
+          const levelBuffer = source3.resource[i2];
           if (compressed) {
             gl.compressedTexImage2D(
               target,
@@ -31063,8 +31063,8 @@ var init_glUploadCompressedTextureResource = __esm({
 function createGlUploadCubeTextureResource(uploaders) {
   return {
     id: "cube",
-    upload(source5, glTexture, gl, webGLVersion) {
-      const faces = source5.faces;
+    upload(source3, glTexture, gl, webGLVersion) {
+      const faces = source3.faces;
       for (let faceIndex = 0; faceIndex < FACE_ORDER2.length; faceIndex++) {
         const key = FACE_ORDER2[faceIndex];
         const face = faces[key];
@@ -31082,8 +31082,8 @@ function createGlUploadCubeTextureResource(uploaders) {
         );
         glTexture._layerInitMask |= 1 << faceIndex;
       }
-      glTexture.width = source5.pixelWidth;
-      glTexture.height = source5.pixelHeight;
+      glTexture.width = source3.pixelWidth;
+      glTexture.height = source3.pixelHeight;
     }
   };
 }
@@ -31201,16 +31201,16 @@ var init_glUploadImageResource = __esm({
     "use strict";
     glUploadImageResource = {
       id: "image",
-      upload(source5, glTexture, gl, webGLVersion, targetOverride, forceAllocation = false) {
+      upload(source3, glTexture, gl, webGLVersion, targetOverride, forceAllocation = false) {
         const target = targetOverride || glTexture.target;
-        const textureWidth = source5.pixelWidth;
-        const textureHeight = source5.pixelHeight;
-        const resourceWidth = source5.resourceWidth;
-        const resourceHeight = source5.resourceHeight;
+        const textureWidth = source3.pixelWidth;
+        const textureHeight = source3.pixelHeight;
+        const resourceWidth = source3.resourceWidth;
+        const resourceHeight = source3.resourceHeight;
         const isWebGL2 = webGLVersion === 2;
         const needsAllocation = forceAllocation || glTexture.width !== textureWidth || glTexture.height !== textureHeight;
         const resourceFitsTexture = resourceWidth >= textureWidth && resourceHeight >= textureHeight;
-        const resource = source5.resource;
+        const resource = source3.resource;
         const uploadFunction = isWebGL2 ? uploadImageWebGL2 : uploadImageWebGL1;
         uploadFunction(
           gl,
@@ -31251,8 +31251,8 @@ var init_glUploadVideoResource = __esm({
     defaultForceAllocation = isSafari();
     glUploadVideoResource = {
       id: "video",
-      upload(source5, glTexture, gl, webGLVersion, targetOverride, forceAllocation = defaultForceAllocation) {
-        if (!source5.isValid) {
+      upload(source3, glTexture, gl, webGLVersion, targetOverride, forceAllocation = defaultForceAllocation) {
+        if (!source3.isValid) {
           const target = targetOverride ?? glTexture.target;
           gl.texImage2D(
             target,
@@ -31267,7 +31267,7 @@ var init_glUploadVideoResource = __esm({
           );
           return;
         }
-        glUploadImageResource.upload(source5, glTexture, gl, webGLVersion, targetOverride, forceAllocation);
+        glUploadImageResource.upload(source3, glTexture, gl, webGLVersion, targetOverride, forceAllocation);
       }
     };
   }
@@ -31696,15 +31696,15 @@ var init_GlTextureSystem = __esm({
        * @param source - The texture source to initialize.
        * @returns The initialized texture source.
        */
-      initSource(source5) {
-        this.bind(source5);
+      initSource(source3) {
+        this.bind(source3);
       }
       bind(texture, location = 0) {
-        const source5 = texture.source;
+        const source3 = texture.source;
         if (texture) {
-          this.bindSource(source5, location);
+          this.bindSource(source3, location);
           if (this._useSeparateSamplers) {
-            this._bindSampler(source5.style, location);
+            this._bindSampler(source3.style, location);
           }
         } else {
           this.bindSource(null, location);
@@ -31713,14 +31713,14 @@ var init_GlTextureSystem = __esm({
           }
         }
       }
-      bindSource(source5, location = 0) {
+      bindSource(source3, location = 0) {
         const gl = this._gl;
-        source5._gcLastUsed = this._renderer.gc.now;
-        if (this._boundTextures[location] !== source5) {
-          this._boundTextures[location] = source5;
+        source3._gcLastUsed = this._renderer.gc.now;
+        if (this._boundTextures[location] !== source3) {
+          this._boundTextures[location] = source3;
           this._activateLocation(location);
-          source5 || (source5 = Texture.EMPTY.source);
-          const glTexture = this.getGlSource(source5);
+          source3 || (source3 = Texture.EMPTY.source);
+          const glTexture = this.getGlSource(source3);
           gl.bindTexture(glTexture.target, glTexture.texture);
         }
       }
@@ -31738,13 +31738,13 @@ var init_GlTextureSystem = __esm({
         }
       }
       unbind(texture) {
-        const source5 = texture.source;
+        const source3 = texture.source;
         const boundTextures = this._boundTextures;
         const gl = this._gl;
         for (let i2 = 0; i2 < boundTextures.length; i2++) {
-          if (boundTextures[i2] === source5) {
+          if (boundTextures[i2] === source3) {
             this._activateLocation(i2);
-            const glTexture = this.getGlSource(source5);
+            const glTexture = this.getGlSource(source3);
             gl.bindTexture(glTexture.target, null);
             boundTextures[i2] = null;
           }
@@ -31756,114 +31756,114 @@ var init_GlTextureSystem = __esm({
           this._gl.activeTexture(this._gl.TEXTURE0 + location);
         }
       }
-      _initSource(source5) {
+      _initSource(source3) {
         const gl = this._gl;
         const glTexture = new GlTexture(gl.createTexture());
-        glTexture.type = this._mapFormatToType[source5.format];
-        glTexture.internalFormat = this._mapFormatToInternalFormat[source5.format];
-        glTexture.format = this._mapFormatToFormat[source5.format];
-        glTexture.target = this._mapViewDimensionToGlTarget[source5.viewDimension];
+        glTexture.type = this._mapFormatToType[source3.format];
+        glTexture.internalFormat = this._mapFormatToInternalFormat[source3.format];
+        glTexture.format = this._mapFormatToFormat[source3.format];
+        glTexture.target = this._mapViewDimensionToGlTarget[source3.viewDimension];
         if (glTexture.target === null) {
-          throw new Error(`Unsupported view dimension: ${source5.viewDimension} with this webgl version: ${this._renderer.context.webGLVersion}`);
+          throw new Error(`Unsupported view dimension: ${source3.viewDimension} with this webgl version: ${this._renderer.context.webGLVersion}`);
         }
-        if (source5.uploadMethodId === "cube") {
+        if (source3.uploadMethodId === "cube") {
           glTexture.target = gl.TEXTURE_CUBE_MAP;
         }
-        if (source5.autoGenerateMipmaps && (this._renderer.context.supports.nonPowOf2mipmaps || source5.isPowerOfTwo)) {
-          const biggestDimension = Math.max(source5.width, source5.height);
-          source5.mipLevelCount = Math.floor(Math.log2(biggestDimension)) + 1;
+        if (source3.autoGenerateMipmaps && (this._renderer.context.supports.nonPowOf2mipmaps || source3.isPowerOfTwo)) {
+          const biggestDimension = Math.max(source3.width, source3.height);
+          source3.mipLevelCount = Math.floor(Math.log2(biggestDimension)) + 1;
         }
-        source5._gpuData[this._renderer.uid] = glTexture;
-        const added = this._managedTextures.add(source5);
+        source3._gpuData[this._renderer.uid] = glTexture;
+        const added = this._managedTextures.add(source3);
         if (added) {
-          source5.on("update", this.onSourceUpdate, this);
-          source5.on("resize", this.onSourceUpdate, this);
-          source5.on("styleChange", this.onStyleChange, this);
-          source5.on("updateMipmaps", this.onUpdateMipmaps, this);
+          source3.on("update", this.onSourceUpdate, this);
+          source3.on("resize", this.onSourceUpdate, this);
+          source3.on("styleChange", this.onStyleChange, this);
+          source3.on("updateMipmaps", this.onUpdateMipmaps, this);
         }
-        this.onSourceUpdate(source5);
-        this.updateStyle(source5, false);
+        this.onSourceUpdate(source3);
+        this.updateStyle(source3, false);
         return glTexture;
       }
-      onStyleChange(source5) {
-        this.updateStyle(source5, false);
+      onStyleChange(source3) {
+        this.updateStyle(source3, false);
       }
-      updateStyle(source5, firstCreation) {
+      updateStyle(source3, firstCreation) {
         const gl = this._gl;
-        const glTexture = this.getGlSource(source5);
+        const glTexture = this.getGlSource(source3);
         gl.bindTexture(glTexture.target, glTexture.texture);
-        this._boundTextures[this._activeTextureLocation] = source5;
+        this._boundTextures[this._activeTextureLocation] = source3;
         applyStyleParams(
-          source5.style,
+          source3.style,
           gl,
-          source5.mipLevelCount > 1,
+          source3.mipLevelCount > 1,
           this._renderer.context.extensions.anisotropicFiltering,
           "texParameteri",
           glTexture.target,
           // will force a clamp to edge if the texture is not a power of two
-          !this._renderer.context.supports.nonPowOf2wrapping && !source5.isPowerOfTwo,
+          !this._renderer.context.supports.nonPowOf2wrapping && !source3.isPowerOfTwo,
           firstCreation
         );
       }
-      onSourceUnload(source5, contextLost = false) {
-        const glTexture = source5._gpuData[this._renderer.uid];
+      onSourceUnload(source3, contextLost = false) {
+        const glTexture = source3._gpuData[this._renderer.uid];
         if (!glTexture) return;
         if (!contextLost) {
-          this.unbind(source5);
+          this.unbind(source3);
           this._gl.deleteTexture(glTexture.texture);
         }
-        source5.off("update", this.onSourceUpdate, this);
-        source5.off("resize", this.onSourceUpdate, this);
-        source5.off("styleChange", this.onStyleChange, this);
-        source5.off("updateMipmaps", this.onUpdateMipmaps, this);
+        source3.off("update", this.onSourceUpdate, this);
+        source3.off("resize", this.onSourceUpdate, this);
+        source3.off("styleChange", this.onStyleChange, this);
+        source3.off("updateMipmaps", this.onUpdateMipmaps, this);
       }
-      onSourceUpdate(source5) {
+      onSourceUpdate(source3) {
         const gl = this._gl;
-        const glTexture = this.getGlSource(source5);
+        const glTexture = this.getGlSource(source3);
         gl.bindTexture(glTexture.target, glTexture.texture);
-        this._boundTextures[this._activeTextureLocation] = source5;
-        const premultipliedAlpha = source5.alphaMode === "premultiply-alpha-on-upload";
+        this._boundTextures[this._activeTextureLocation] = source3;
+        const premultipliedAlpha = source3.alphaMode === "premultiply-alpha-on-upload";
         if (this._premultiplyAlpha !== premultipliedAlpha) {
           this._premultiplyAlpha = premultipliedAlpha;
           gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, premultipliedAlpha);
         }
-        if (this._uploads[source5.uploadMethodId]) {
-          this._uploads[source5.uploadMethodId].upload(source5, glTexture, gl, this._renderer.context.webGLVersion);
+        if (this._uploads[source3.uploadMethodId]) {
+          this._uploads[source3.uploadMethodId].upload(source3, glTexture, gl, this._renderer.context.webGLVersion);
         } else if (glTexture.target === gl.TEXTURE_2D) {
-          this._initEmptyTexture2D(glTexture, source5);
+          this._initEmptyTexture2D(glTexture, source3);
         } else if (glTexture.target === gl.TEXTURE_2D_ARRAY) {
-          this._initEmptyTexture2DArray(glTexture, source5);
+          this._initEmptyTexture2DArray(glTexture, source3);
         } else if (glTexture.target === gl.TEXTURE_CUBE_MAP) {
-          this._initEmptyTextureCube(glTexture, source5);
+          this._initEmptyTextureCube(glTexture, source3);
         } else {
           throw new Error("[GlTextureSystem] Unsupported texture target for empty allocation.");
         }
-        this._applyMipRange(glTexture, source5);
-        if (source5.autoGenerateMipmaps && source5.mipLevelCount > 1) {
-          this.onUpdateMipmaps(source5, false);
+        this._applyMipRange(glTexture, source3);
+        if (source3.autoGenerateMipmaps && source3.mipLevelCount > 1) {
+          this.onUpdateMipmaps(source3, false);
         }
       }
-      onUpdateMipmaps(source5, bind = true) {
-        if (bind) this.bindSource(source5, 0);
-        const glTexture = this.getGlSource(source5);
+      onUpdateMipmaps(source3, bind = true) {
+        if (bind) this.bindSource(source3, 0);
+        const glTexture = this.getGlSource(source3);
         this._gl.generateMipmap(glTexture.target);
       }
-      _initEmptyTexture2D(glTexture, source5) {
+      _initEmptyTexture2D(glTexture, source3) {
         const gl = this._gl;
         gl.texImage2D(
           gl.TEXTURE_2D,
           0,
           glTexture.internalFormat,
-          source5.pixelWidth,
-          source5.pixelHeight,
+          source3.pixelWidth,
+          source3.pixelHeight,
           0,
           glTexture.format,
           glTexture.type,
           null
         );
-        let w2 = Math.max(source5.pixelWidth >> 1, 1);
-        let h2 = Math.max(source5.pixelHeight >> 1, 1);
-        for (let level = 1; level < source5.mipLevelCount; level++) {
+        let w2 = Math.max(source3.pixelWidth >> 1, 1);
+        let h2 = Math.max(source3.pixelHeight >> 1, 1);
+        for (let level = 1; level < source3.mipLevelCount; level++) {
           gl.texImage2D(
             gl.TEXTURE_2D,
             level,
@@ -31879,27 +31879,27 @@ var init_GlTextureSystem = __esm({
           h2 = Math.max(h2 >> 1, 1);
         }
       }
-      _initEmptyTexture2DArray(glTexture, source5) {
+      _initEmptyTexture2DArray(glTexture, source3) {
         if (this._renderer.context.webGLVersion !== 2) {
           throw new Error("[GlTextureSystem] TEXTURE_2D_ARRAY requires WebGL2.");
         }
         const gl2 = this._gl;
-        const depth = Math.max(source5.arrayLayerCount | 0, 1);
+        const depth = Math.max(source3.arrayLayerCount | 0, 1);
         gl2.texImage3D(
           gl2.TEXTURE_2D_ARRAY,
           0,
           glTexture.internalFormat,
-          source5.pixelWidth,
-          source5.pixelHeight,
+          source3.pixelWidth,
+          source3.pixelHeight,
           depth,
           0,
           glTexture.format,
           glTexture.type,
           null
         );
-        let w2 = Math.max(source5.pixelWidth >> 1, 1);
-        let h2 = Math.max(source5.pixelHeight >> 1, 1);
-        for (let level = 1; level < source5.mipLevelCount; level++) {
+        let w2 = Math.max(source3.pixelWidth >> 1, 1);
+        let h2 = Math.max(source3.pixelHeight >> 1, 1);
+        for (let level = 1; level < source3.mipLevelCount; level++) {
           gl2.texImage3D(
             gl2.TEXTURE_2D_ARRAY,
             level,
@@ -31916,7 +31916,7 @@ var init_GlTextureSystem = __esm({
           h2 = Math.max(h2 >> 1, 1);
         }
       }
-      _initEmptyTextureCube(glTexture, source5) {
+      _initEmptyTextureCube(glTexture, source3) {
         const gl = this._gl;
         const totalCubeFaces = 6;
         for (let face = 0; face < totalCubeFaces; face++) {
@@ -31924,17 +31924,17 @@ var init_GlTextureSystem = __esm({
             gl.TEXTURE_CUBE_MAP_POSITIVE_X + face,
             0,
             glTexture.internalFormat,
-            source5.pixelWidth,
-            source5.pixelHeight,
+            source3.pixelWidth,
+            source3.pixelHeight,
             0,
             glTexture.format,
             glTexture.type,
             null
           );
         }
-        let w2 = Math.max(source5.pixelWidth >> 1, 1);
-        let h2 = Math.max(source5.pixelHeight >> 1, 1);
-        for (let level = 1; level < source5.mipLevelCount; level++) {
+        let w2 = Math.max(source3.pixelWidth >> 1, 1);
+        let h2 = Math.max(source3.pixelHeight >> 1, 1);
+        for (let level = 1; level < source3.mipLevelCount; level++) {
           for (let face = 0; face < totalCubeFaces; face++) {
             gl.texImage2D(
               gl.TEXTURE_CUBE_MAP_POSITIVE_X + face,
@@ -31958,11 +31958,11 @@ var init_GlTextureSystem = __esm({
        * @param glTexture - The GL texture wrapper.
        * @param source - The texture source describing mipLevelCount.
        */
-      _applyMipRange(glTexture, source5) {
+      _applyMipRange(glTexture, source3) {
         if (this._renderer.context.webGLVersion !== 2) return;
-        if (source5.mipLevelCount <= 1) return;
+        if (source3.mipLevelCount <= 1) return;
         const gl = this._gl;
-        const maxLevel = Math.max((source5.mipLevelCount | 0) - 1, 0);
+        const maxLevel = Math.max((source3.mipLevelCount | 0) - 1, 0);
         gl.texParameteri(glTexture.target, gl.TEXTURE_BASE_LEVEL, 0);
         gl.texParameteri(glTexture.target, gl.TEXTURE_MAX_LEVEL, maxLevel);
       }
@@ -31985,9 +31985,9 @@ var init_GlTextureSystem = __esm({
       _getGlSampler(sampler) {
         return this._glSamplers[sampler._resourceId] || this._initSampler(sampler);
       }
-      getGlSource(source5) {
-        source5._gcLastUsed = this._renderer.gc.now;
-        return source5._gpuData[this._renderer.uid] || this._initSource(source5);
+      getGlSource(source3) {
+        source3._gcLastUsed = this._renderer.gc.now;
+        return source3._gpuData[this._renderer.uid] || this._initSource(source3);
       }
       generateCanvas(texture) {
         const { pixels, width, height } = this.getPixels(texture);
@@ -32073,7 +32073,7 @@ var init_WebGLRenderer = __esm({
     init_GlBatchAdaptor();
     init_AbstractRenderer();
     init_SharedSystems();
-    init_types();
+    init_types2();
     init_GlBufferSystem();
     init_GlContextSystem();
     init_GlGeometrySystem();
@@ -33379,15 +33379,15 @@ function buildContextBatches(context2, gpuContext) {
     }
   }
 }
-function addTextureToGeometryData(data2, batches, geometryData) {
+function addTextureToGeometryData(data, batches, geometryData) {
   const points = [];
   const build = shapeBuilders.rectangle;
   const rect = tempRect5;
-  rect.x = data2.dx;
-  rect.y = data2.dy;
-  rect.width = data2.dw;
-  rect.height = data2.dh;
-  const matrix = data2.transform;
+  rect.x = data.dx;
+  rect.y = data.dy;
+  rect.width = data.dw;
+  rect.height = data.dh;
+  const matrix = data.transform;
   if (!build.build(rect, points)) {
     return;
   }
@@ -33398,7 +33398,7 @@ function addTextureToGeometryData(data2, batches, geometryData) {
     transformVertices(points, matrix);
   }
   build.triangulate(points, vertices, 2, vertOffset, indices, indexOffset);
-  const texture = data2.image;
+  const texture = data.image;
   const textureUvs = texture.uvs;
   uvs.push(
     textureUvs.x0,
@@ -33415,8 +33415,8 @@ function addTextureToGeometryData(data2, batches, geometryData) {
   graphicsBatch.indexSize = indices.length - indexOffset;
   graphicsBatch.attributeOffset = vertOffset;
   graphicsBatch.attributeSize = vertices.length / 2 - vertOffset;
-  graphicsBatch.baseColor = data2.style;
-  graphicsBatch.alpha = data2.alpha;
+  graphicsBatch.baseColor = data.style;
+  graphicsBatch.alpha = data.alpha;
   graphicsBatch.texture = texture;
   graphicsBatch.geometryData = geometryData;
   batches.push(graphicsBatch);
@@ -33701,15 +33701,15 @@ var init_CanvasGraphicsAdaptor = __esm({
         for (let i2 = 0; i2 < instructions.length; i2++) {
           const instruction = instructions[i2];
           if (instruction.action === "texture") {
-            const data22 = instruction.data;
-            const texture = data22.image;
-            const source5 = texture ? canvasUtils.getCanvasSource(texture) : null;
-            if (!source5) continue;
-            const alpha2 = data22.alpha * groupAlpha;
+            const data2 = instruction.data;
+            const texture = data2.image;
+            const source3 = texture ? canvasUtils.getCanvasSource(texture) : null;
+            if (!source3) continue;
+            const alpha2 = data2.alpha * groupAlpha;
             if (alpha2 <= 0) continue;
-            const tint2 = multiplyHexColors(data22.style, groupTint);
+            const tint2 = multiplyHexColors(data2.style, groupTint);
             context2.globalAlpha = alpha2;
-            let drawSource = source5;
+            let drawSource = source3;
             if (tint2 !== 16777215) {
               drawSource = canvasUtils.getTintedCanvas({ texture }, tint2);
             }
@@ -33719,11 +33719,11 @@ var init_CanvasGraphicsAdaptor = __esm({
             let sy = frame.y * resolution;
             const sw = frame.width * resolution;
             const sh = frame.height * resolution;
-            if (drawSource !== source5) {
+            if (drawSource !== source3) {
               sx = 0;
               sy = 0;
             }
-            const transform = data22.transform;
+            const transform = data2.transform;
             const hasTransform = transform && !transform.isIdentity();
             const rotate = texture.rotate;
             if (hasTransform || rotate) {
@@ -33732,7 +33732,7 @@ var init_CanvasGraphicsAdaptor = __esm({
                 tempMatrix5.append(transform);
               }
               if (rotate) {
-                groupD8.matrixAppendRotationInv(tempMatrix5, rotate, data22.dx, data22.dy, data22.dw, data22.dh);
+                groupD8.matrixAppendRotationInv(tempMatrix5, rotate, data2.dx, data2.dy, data2.dw, data2.dh);
               }
               contextSystem.setContextTransform(tempMatrix5, roundPixels === 1);
             } else {
@@ -33742,22 +33742,22 @@ var init_CanvasGraphicsAdaptor = __esm({
               drawSource,
               sx,
               sy,
-              drawSource === source5 ? sw : drawSource.width,
-              drawSource === source5 ? sh : drawSource.height,
-              rotate ? 0 : data22.dx,
-              rotate ? 0 : data22.dy,
-              data22.dw,
-              data22.dh
+              drawSource === source3 ? sw : drawSource.width,
+              drawSource === source3 ? sh : drawSource.height,
+              rotate ? 0 : data2.dx,
+              rotate ? 0 : data2.dy,
+              data2.dw,
+              data2.dh
             );
             if (hasTransform || rotate) {
               contextSystem.setContextTransform(baseTransform, roundPixels === 1);
             }
             continue;
           }
-          const data2 = instruction.data;
-          const shapePath = data2?.path?.shapePath;
+          const data = instruction.data;
+          const shapePath = data?.path?.shapePath;
           if (!shapePath?.shapePrimitives?.length) continue;
-          const style = data2.style;
+          const style = data.style;
           const tint = multiplyHexColors(style.color, groupTint);
           const alpha = style.alpha * groupAlpha;
           if (alpha <= 0) continue;
@@ -33771,9 +33771,9 @@ var init_CanvasGraphicsAdaptor = __esm({
             context2.miterLimit = strokeStyle.miterLimit;
           }
           const shapePrimitives = shapePath.shapePrimitives;
-          if (!isStroke && data2.hole?.shapePath?.shapePrimitives?.length) {
+          if (!isStroke && data.hole?.shapePath?.shapePrimitives?.length) {
             const lastShape = shapePrimitives[shapePrimitives.length - 1];
-            lastShape.holes = data2.hole.shapePath.shapePrimitives;
+            lastShape.holes = data.hole.shapePath.shapePrimitives;
           }
           for (let j2 = 0; j2 < shapePrimitives.length; j2++) {
             const primitive = shapePrimitives[j2];
@@ -33882,8 +33882,8 @@ var init_CanvasBatchAdaptor = __esm({
           if (!element.packAsQuad) continue;
           const quad = element;
           const texture = quad.texture;
-          const source5 = texture ? canvasUtils.getCanvasSource(texture) : null;
-          if (!source5) continue;
+          const source3 = texture ? canvasUtils.getCanvasSource(texture) : null;
+          if (!source3) continue;
           const textureStyle = texture.source.style;
           const smoothProperty = contextSystem.smoothProperty;
           const shouldSmooth = textureStyle.scaleMode !== "nearest";
@@ -33958,7 +33958,7 @@ var init_CanvasBatchAdaptor = __esm({
             drawY |= 0;
           }
           if (needsRepeat) {
-            let patternSource = source5;
+            let patternSource = source3;
             const canTint = tint !== 16777215 && !rotate;
             const fitsFrame = frame.width <= texture.source.width && frame.height <= texture.source.height;
             if (canTint && fitsFrame) {
@@ -33992,8 +33992,8 @@ var init_CanvasBatchAdaptor = __esm({
             context2.fillRect(drawX, drawY, drawW, drawH);
           } else {
             const needsProcessing = tint !== 16777215 || rotate;
-            const processedSource = needsProcessing ? canvasUtils.getTintedCanvas({ texture }, tint) : source5;
-            const isProcessed = processedSource !== source5;
+            const processedSource = needsProcessing ? canvasUtils.getTintedCanvas({ texture }, tint) : source3;
+            const isProcessed = processedSource !== source3;
             context2.drawImage(
               processedSource,
               isProcessed ? 0 : sx,
@@ -34084,26 +34084,26 @@ var init_CanvasColorMaskPipe = __esm({
 
 // node_modules/parse-svg-path/dist/index.mjs
 function parse(path2) {
-  const data2 = [];
+  const data = [];
   path2.replace(segment, (_, cmd, args) => {
     let type = cmd.toLowerCase();
     let command = cmd;
     const values = parseValues(args);
     if (type === "m" && values.length > 2) {
-      data2.push([command, ...values.splice(0, 2)]);
+      data.push([command, ...values.splice(0, 2)]);
       type = "l";
       command = command === "m" ? "l" : "L";
     }
     while (true) {
       if (values.length === length[type]) {
-        data2.push([command, ...values]);
+        data.push([command, ...values]);
         return "";
       }
       if (values.length < length[type]) throw new Error("malformed path data");
-      data2.push([command, ...values.splice(0, length[type])]);
+      data.push([command, ...values.splice(0, length[type])]);
     }
   });
-  return data2;
+  return data;
 }
 function parseValues(args) {
   const numbers = args.match(number);
@@ -34139,53 +34139,53 @@ function parseSVGPath(svgPath, path2) {
   for (let i2 = 0; i2 < commands.length; i2++) {
     const command = commands[i2];
     const type = command[0];
-    const data2 = command;
+    const data = command;
     switch (type) {
       case "M":
-        lastX = data2[1];
-        lastY = data2[2];
+        lastX = data[1];
+        lastY = data[2];
         path2.moveTo(lastX, lastY);
         break;
       case "m":
-        lastX += data2[1];
-        lastY += data2[2];
+        lastX += data[1];
+        lastY += data[2];
         path2.moveTo(lastX, lastY);
         break;
       case "H":
-        lastX = data2[1];
+        lastX = data[1];
         path2.lineTo(lastX, lastY);
         break;
       case "h":
-        lastX += data2[1];
+        lastX += data[1];
         path2.lineTo(lastX, lastY);
         break;
       case "V":
-        lastY = data2[1];
+        lastY = data[1];
         path2.lineTo(lastX, lastY);
         break;
       case "v":
-        lastY += data2[1];
+        lastY += data[1];
         path2.lineTo(lastX, lastY);
         break;
       case "L":
-        lastX = data2[1];
-        lastY = data2[2];
+        lastX = data[1];
+        lastY = data[2];
         path2.lineTo(lastX, lastY);
         break;
       case "l":
-        lastX += data2[1];
-        lastY += data2[2];
+        lastX += data[1];
+        lastY += data[2];
         path2.lineTo(lastX, lastY);
         break;
       case "C":
-        lastX = data2[5];
-        lastY = data2[6];
+        lastX = data[5];
+        lastY = data[6];
         path2.bezierCurveTo(
-          data2[1],
-          data2[2],
+          data[1],
+          data[2],
           // First control point
-          data2[3],
-          data2[4],
+          data[3],
+          data[4],
           // Second control point
           lastX,
           lastY
@@ -34194,25 +34194,25 @@ function parseSVGPath(svgPath, path2) {
         break;
       case "c":
         path2.bezierCurveTo(
-          lastX + data2[1],
-          lastY + data2[2],
+          lastX + data[1],
+          lastY + data[2],
           // First control point
-          lastX + data2[3],
-          lastY + data2[4],
+          lastX + data[3],
+          lastY + data[4],
           // Second control point
-          lastX + data2[5],
-          lastY + data2[6]
+          lastX + data[5],
+          lastY + data[6]
           // End point
         );
-        lastX += data2[5];
-        lastY += data2[6];
+        lastX += data[5];
+        lastY += data[6];
         break;
       case "S":
-        lastX = data2[3];
-        lastY = data2[4];
+        lastX = data[3];
+        lastY = data[4];
         path2.bezierCurveToShort(
-          data2[1],
-          data2[2],
+          data[1],
+          data[2],
           // Control point
           lastX,
           lastY
@@ -34221,22 +34221,22 @@ function parseSVGPath(svgPath, path2) {
         break;
       case "s":
         path2.bezierCurveToShort(
-          lastX + data2[1],
-          lastY + data2[2],
+          lastX + data[1],
+          lastY + data[2],
           // Control point
-          lastX + data2[3],
-          lastY + data2[4]
+          lastX + data[3],
+          lastY + data[4]
           // End point
         );
-        lastX += data2[3];
-        lastY += data2[4];
+        lastX += data[3];
+        lastY += data[4];
         break;
       case "Q":
-        lastX = data2[3];
-        lastY = data2[4];
+        lastX = data[3];
+        lastY = data[4];
         path2.quadraticCurveTo(
-          data2[1],
-          data2[2],
+          data[1],
+          data[2],
           // Control point
           lastX,
           lastY
@@ -34245,19 +34245,19 @@ function parseSVGPath(svgPath, path2) {
         break;
       case "q":
         path2.quadraticCurveTo(
-          lastX + data2[1],
-          lastY + data2[2],
+          lastX + data[1],
+          lastY + data[2],
           // Control point
-          lastX + data2[3],
-          lastY + data2[4]
+          lastX + data[3],
+          lastY + data[4]
           // End point
         );
-        lastX += data2[3];
-        lastY += data2[4];
+        lastX += data[3];
+        lastY += data[4];
         break;
       case "T":
-        lastX = data2[1];
-        lastY = data2[2];
+        lastX = data[1];
+        lastY = data[2];
         path2.quadraticCurveToShort(
           lastX,
           lastY
@@ -34265,8 +34265,8 @@ function parseSVGPath(svgPath, path2) {
         );
         break;
       case "t":
-        lastX += data2[1];
-        lastY += data2[2];
+        lastX += data[1];
+        lastY += data[2];
         path2.quadraticCurveToShort(
           lastX,
           lastY
@@ -34274,18 +34274,18 @@ function parseSVGPath(svgPath, path2) {
         );
         break;
       case "A":
-        lastX = data2[6];
-        lastY = data2[7];
+        lastX = data[6];
+        lastY = data[7];
         path2.arcToSvg(
-          data2[1],
+          data[1],
           // rx
-          data2[2],
+          data[2],
           // ry
-          data2[3],
+          data[3],
           // x-axis-rotation
-          data2[4],
+          data[4],
           // large-arc-flag
-          data2[5],
+          data[5],
           // sweep-flag
           lastX,
           lastY
@@ -34293,18 +34293,18 @@ function parseSVGPath(svgPath, path2) {
         );
         break;
       case "a":
-        lastX += data2[6];
-        lastY += data2[7];
+        lastX += data[6];
+        lastY += data[7];
         path2.arcToSvg(
-          data2[1],
+          data[1],
           // rx
-          data2[2],
+          data[2],
           // ry
-          data2[3],
+          data[3],
           // x-axis-rotation
-          data2[4],
+          data[4],
           // large-arc-flag
-          data2[5],
+          data[5],
           // sweep-flag
           lastX,
           lastY
@@ -35958,70 +35958,70 @@ var init_GraphicsPath = __esm({
         let ry = 0;
         for (let i2 = 0; i2 < this.instructions.length; i2++) {
           const instruction = this.instructions[i2];
-          const data2 = instruction.data;
+          const data = instruction.data;
           switch (instruction.action) {
             case "moveTo":
             case "lineTo":
-              x2 = data2[0];
-              y2 = data2[1];
-              data2[0] = a2 * x2 + c2 * y2 + tx;
-              data2[1] = b2 * x2 + d2 * y2 + ty;
+              x2 = data[0];
+              y2 = data[1];
+              data[0] = a2 * x2 + c2 * y2 + tx;
+              data[1] = b2 * x2 + d2 * y2 + ty;
               break;
             case "bezierCurveTo":
-              cpx1 = data2[0];
-              cpy1 = data2[1];
-              cpx2 = data2[2];
-              cpy2 = data2[3];
-              x2 = data2[4];
-              y2 = data2[5];
-              data2[0] = a2 * cpx1 + c2 * cpy1 + tx;
-              data2[1] = b2 * cpx1 + d2 * cpy1 + ty;
-              data2[2] = a2 * cpx2 + c2 * cpy2 + tx;
-              data2[3] = b2 * cpx2 + d2 * cpy2 + ty;
-              data2[4] = a2 * x2 + c2 * y2 + tx;
-              data2[5] = b2 * x2 + d2 * y2 + ty;
+              cpx1 = data[0];
+              cpy1 = data[1];
+              cpx2 = data[2];
+              cpy2 = data[3];
+              x2 = data[4];
+              y2 = data[5];
+              data[0] = a2 * cpx1 + c2 * cpy1 + tx;
+              data[1] = b2 * cpx1 + d2 * cpy1 + ty;
+              data[2] = a2 * cpx2 + c2 * cpy2 + tx;
+              data[3] = b2 * cpx2 + d2 * cpy2 + ty;
+              data[4] = a2 * x2 + c2 * y2 + tx;
+              data[5] = b2 * x2 + d2 * y2 + ty;
               break;
             case "quadraticCurveTo":
-              cpx1 = data2[0];
-              cpy1 = data2[1];
-              x2 = data2[2];
-              y2 = data2[3];
-              data2[0] = a2 * cpx1 + c2 * cpy1 + tx;
-              data2[1] = b2 * cpx1 + d2 * cpy1 + ty;
-              data2[2] = a2 * x2 + c2 * y2 + tx;
-              data2[3] = b2 * x2 + d2 * y2 + ty;
+              cpx1 = data[0];
+              cpy1 = data[1];
+              x2 = data[2];
+              y2 = data[3];
+              data[0] = a2 * cpx1 + c2 * cpy1 + tx;
+              data[1] = b2 * cpx1 + d2 * cpy1 + ty;
+              data[2] = a2 * x2 + c2 * y2 + tx;
+              data[3] = b2 * x2 + d2 * y2 + ty;
               break;
             case "arcToSvg":
-              x2 = data2[5];
-              y2 = data2[6];
-              rx = data2[0];
-              ry = data2[1];
-              data2[0] = a2 * rx + c2 * ry;
-              data2[1] = b2 * rx + d2 * ry;
-              data2[5] = a2 * x2 + c2 * y2 + tx;
-              data2[6] = b2 * x2 + d2 * y2 + ty;
+              x2 = data[5];
+              y2 = data[6];
+              rx = data[0];
+              ry = data[1];
+              data[0] = a2 * rx + c2 * ry;
+              data[1] = b2 * rx + d2 * ry;
+              data[5] = a2 * x2 + c2 * y2 + tx;
+              data[6] = b2 * x2 + d2 * y2 + ty;
               break;
             case "circle":
-              data2[4] = adjustTransform(data2[3], matrix);
+              data[4] = adjustTransform(data[3], matrix);
               break;
             case "rect":
-              data2[4] = adjustTransform(data2[4], matrix);
+              data[4] = adjustTransform(data[4], matrix);
               break;
             case "ellipse":
-              data2[8] = adjustTransform(data2[8], matrix);
+              data[8] = adjustTransform(data[8], matrix);
               break;
             case "roundRect":
-              data2[5] = adjustTransform(data2[5], matrix);
+              data[5] = adjustTransform(data[5], matrix);
               break;
             case "addPath":
-              data2[0].transform(matrix);
+              data[0].transform(matrix);
               break;
             case "poly":
-              data2[2] = adjustTransform(data2[2], matrix);
+              data[2] = adjustTransform(data[2], matrix);
               break;
             case "regularPoly":
             case "chamferRect":
-              data2[5] = adjustTransform(data2[5], matrix);
+              data[5] = adjustTransform(data[5], matrix);
               break;
             case "closePath":
               break;
@@ -37345,20 +37345,20 @@ var init_GraphicsContext = __esm({
           const instruction = this.instructions[i2];
           const action = instruction.action;
           if (action === "fill") {
-            const data2 = instruction.data;
-            bounds.addBounds(data2.path.bounds);
+            const data = instruction.data;
+            bounds.addBounds(data.path.bounds);
           } else if (action === "texture") {
-            const data2 = instruction.data;
-            bounds.addFrame(data2.dx, data2.dy, data2.dx + data2.dw, data2.dy + data2.dh, data2.transform);
+            const data = instruction.data;
+            bounds.addFrame(data.dx, data.dy, data.dx + data.dw, data.dy + data.dh, data.transform);
           }
           if (action === "stroke") {
-            const data2 = instruction.data;
-            const alignment = data2.style.alignment;
-            let outerPadding = data2.style.width * (1 - alignment);
-            if (data2.style.join === "miter") {
-              outerPadding *= getMaxMiterRatio(data2.path, data2.style.miterLimit);
+            const data = instruction.data;
+            const alignment = data.style.alignment;
+            let outerPadding = data.style.width * (1 - alignment);
+            if (data.style.join === "miter") {
+              outerPadding *= getMaxMiterRatio(data.path, data.style.miterLimit);
             }
-            const _bounds = data2.path.bounds;
+            const _bounds = data.path.bounds;
             bounds.addFrame(
               _bounds.minX - outerPadding,
               _bounds.minY - outerPadding,
@@ -37383,10 +37383,10 @@ var init_GraphicsContext = __esm({
         let hasHit = false;
         for (let k2 = 0; k2 < instructions.length; k2++) {
           const instruction = instructions[k2];
-          const data2 = instruction.data;
-          const path2 = data2.path;
+          const data = instruction.data;
+          const path2 = data.path;
           if (!instruction.action || !path2) continue;
-          const style = data2.style;
+          const style = data.style;
           const shapes = path2.shapePath.shapePrimitives;
           for (let i2 = 0; i2 < shapes.length; i2++) {
             const shape = shapes[i2].shape;
@@ -37399,7 +37399,7 @@ var init_GraphicsContext = __esm({
               const strokeStyle = style;
               hasHit = shape.strokeContains(transformedPoint.x, transformedPoint.y, strokeStyle.width, strokeStyle.alignment);
             }
-            const holes = data2.hole;
+            const holes = data.hole;
             if (holes) {
               const holeShapes = holes.shapePath?.shapePrimitives;
               if (holeShapes) {
@@ -38869,8 +38869,8 @@ var init_CanvasStencilMaskPipe = __esm({
           const instructionData = instructions[i2];
           const action = instructionData.action;
           if (action !== "fill" && action !== "stroke") continue;
-          const data2 = instructionData.data;
-          const shapePath = data2?.path?.shapePath;
+          const data = instructionData.data;
+          const shapePath = data?.path?.shapePath;
           if (!shapePath?.shapePrimitives?.length) continue;
           const isStroke = action === "stroke";
           const shapePrimitives = shapePath.shapePrimitives;
@@ -38883,11 +38883,11 @@ var init_CanvasStencilMaskPipe = __esm({
               context2.save();
               context2.transform(transform.a, transform.b, transform.c, transform.d, transform.tx, transform.ty);
             }
-            if (isStroke && data2.style) {
+            if (isStroke && data.style) {
               drewPath = buildStrokeMaskPath(
                 context2,
                 primitive.shape,
-                data2.style
+                data.style
               ) || drewPath;
             } else {
               buildShapePath2(context2, primitive.shape);
@@ -39277,15 +39277,15 @@ var init_CanvasRenderTargetAdaptor = __esm({
        */
       destroyGpuRenderTarget(_gpuRenderTarget) {
       }
-      _ensureCanvas(source5) {
-        let canvas = source5.resource;
+      _ensureCanvas(source3) {
+        let canvas = source3.resource;
         if (!canvas || !CanvasSource.test(canvas)) {
-          canvas = DOMAdapter.get().createCanvas(source5.pixelWidth, source5.pixelHeight);
-          source5.resource = canvas;
+          canvas = DOMAdapter.get().createCanvas(source3.pixelWidth, source3.pixelHeight);
+          source3.resource = canvas;
         }
-        if (canvas.width !== source5.pixelWidth || canvas.height !== source5.pixelHeight) {
-          canvas.width = source5.pixelWidth;
-          canvas.height = source5.pixelHeight;
+        if (canvas.width !== source3.pixelWidth || canvas.height !== source3.pixelHeight) {
+          canvas.width = source3.pixelWidth;
+          canvas.height = source3.pixelHeight;
         }
         const context2 = canvas.getContext("2d");
         return { canvas, context: context2 };
@@ -39344,8 +39344,8 @@ var init_CanvasTextureSystem = __esm({
       generateCanvas(texture) {
         const canvas = DOMAdapter.get().createCanvas();
         const context2 = canvas.getContext("2d");
-        const source5 = canvasUtils.getCanvasSource(texture);
-        if (!source5) {
+        const source3 = canvasUtils.getCanvasSource(texture);
+        if (!source3) {
           return canvas;
         }
         const frame = texture.frame;
@@ -39357,7 +39357,7 @@ var init_CanvasTextureSystem = __esm({
         canvas.width = Math.ceil(sw);
         canvas.height = Math.ceil(sh);
         context2.drawImage(
-          source5,
+          source3,
           sx,
           sy,
           sw,
@@ -39417,7 +39417,7 @@ var init_CanvasRenderer = __esm({
     init_BlendModePipe();
     init_AbstractRenderer();
     init_SharedSystems();
-    init_types();
+    init_types2();
     init_CanvasContextSystem();
     init_CanvasLimitsSystem();
     init_CanvasRenderTargetSystem();
@@ -39460,82 +39460,6 @@ var init_CanvasRenderer = __esm({
           renderPipeAdaptors: renderPipeAdaptors3
         };
         super(systemConfig);
-      }
-    };
-  }
-});
-
-// node_modules/pixi.js/lib/scene/text-bitmap/AbstractBitmapFont.mjs
-var AbstractBitmapFont;
-var init_AbstractBitmapFont = __esm({
-  "node_modules/pixi.js/lib/scene/text-bitmap/AbstractBitmapFont.mjs"() {
-    init_eventemitter3();
-    init_deprecation();
-    AbstractBitmapFont = class extends eventemitter3_default {
-      constructor() {
-        super(...arguments);
-        this.chars = /* @__PURE__ */ Object.create(null);
-        this.lineHeight = 0;
-        this.fontFamily = "";
-        this.fontMetrics = { fontSize: 0, ascent: 0, descent: 0 };
-        this.baseLineOffset = 0;
-        this.distanceField = { type: "none", range: 0 };
-        this.pages = [];
-        this.applyFillAsTint = true;
-        this.baseMeasurementFontSize = 100;
-        this.baseRenderedFontSize = 100;
-      }
-      /**
-       * The name of the font face.
-       * @deprecated since 8.0.0 Use `fontFamily` instead.
-       */
-      get font() {
-        deprecation(v8_0_0, "BitmapFont.font is deprecated, please use BitmapFont.fontFamily instead.");
-        return this.fontFamily;
-      }
-      /**
-       * The map of base page textures (i.e., sheets of glyphs).
-       * @deprecated since 8.0.0 Use `pages` instead.
-       */
-      get pageTextures() {
-        deprecation(v8_0_0, "BitmapFont.pageTextures is deprecated, please use BitmapFont.pages instead.");
-        return this.pages;
-      }
-      /**
-       * The size of the font face in pixels.
-       * @deprecated since 8.0.0 Use `fontMetrics.fontSize` instead.
-       */
-      get size() {
-        deprecation(v8_0_0, "BitmapFont.size is deprecated, please use BitmapFont.fontMetrics.fontSize instead.");
-        return this.fontMetrics.fontSize;
-      }
-      /**
-       * The kind of distance field for this font or "none".
-       * @deprecated since 8.0.0 Use `distanceField.type` instead.
-       */
-      get distanceFieldRange() {
-        deprecation(v8_0_0, "BitmapFont.distanceFieldRange is deprecated, please use BitmapFont.distanceField.range instead.");
-        return this.distanceField.range;
-      }
-      /**
-       * The range of the distance field in pixels.
-       * @deprecated since 8.0.0 Use `distanceField.range` instead.
-       */
-      get distanceFieldType() {
-        deprecation(v8_0_0, "BitmapFont.distanceFieldType is deprecated, please use BitmapFont.distanceField.type instead.");
-        return this.distanceField.type;
-      }
-      destroy(destroyTextures = false) {
-        this.emit("destroy", this);
-        this.removeAllListeners();
-        for (const i2 in this.chars) {
-          this.chars[i2].texture?.destroy();
-        }
-        this.chars = null;
-        if (destroyTextures) {
-          this.pages.forEach((page) => page.texture.destroy(true));
-          this.pages = null;
-        }
       }
     };
   }
@@ -40035,12 +39959,6 @@ function isBreakingSpace(char, _nextChar) {
     return false;
   }
   return BREAKING_SPACES_SET.has(char.charCodeAt(0));
-}
-function isCollapsibleSpace(char) {
-  if (typeof char !== "string") {
-    return false;
-  }
-  return COLLAPSIBLE_SPACES_SET.has(char.charCodeAt(0));
 }
 function isBreakAfterChar(char) {
   if (typeof char !== "string") {
@@ -41024,6 +40942,91 @@ var init_fontStringFromTextStyle = __esm({
   }
 });
 
+// node_modules/pixi.js/lib/scene/text/canvas/utils/getCanvasFillStyle.mjs
+function getCanvasFillStyle(fillStyle, context2, textMetrics, padding = 0, offsetX = 0, offsetY = 0) {
+  if (fillStyle.texture === Texture.WHITE && !fillStyle.fill) {
+    return Color.shared.setValue(fillStyle.color).setAlpha(fillStyle.alpha ?? 1).toHexa();
+  } else if (!fillStyle.fill) {
+    const pattern = context2.createPattern(fillStyle.texture.source.resource, "repeat");
+    const tempMatrix8 = fillStyle.matrix.copyTo(Matrix.shared);
+    tempMatrix8.scale(fillStyle.texture.source.pixelWidth, fillStyle.texture.source.pixelHeight);
+    pattern.setTransform(tempMatrix8);
+    return pattern;
+  } else if (fillStyle.fill instanceof FillPattern) {
+    const fillPattern = fillStyle.fill;
+    const pattern = context2.createPattern(fillPattern.texture.source.resource, "repeat");
+    canvasUtils.applyPatternTransform(pattern, fillPattern.transform, false);
+    return pattern;
+  } else if (fillStyle.fill instanceof FillGradient) {
+    const fillGradient = fillStyle.fill;
+    const isLinear = fillGradient.type === "linear";
+    const isLocal = fillGradient.textureSpace === "local";
+    let width = 1;
+    let height = 1;
+    if (isLocal && textMetrics) {
+      width = textMetrics.width + padding;
+      height = textMetrics.height + padding;
+    }
+    let gradient;
+    let isNearlyVertical = false;
+    if (isLinear) {
+      const { start, end } = fillGradient;
+      gradient = context2.createLinearGradient(
+        start.x * width + offsetX,
+        start.y * height + offsetY,
+        end.x * width + offsetX,
+        end.y * height + offsetY
+      );
+      isNearlyVertical = Math.abs(end.x - start.x) < Math.abs((end.y - start.y) * 0.1);
+    } else {
+      const { center, innerRadius, outerCenter, outerRadius } = fillGradient;
+      gradient = context2.createRadialGradient(
+        center.x * width + offsetX,
+        center.y * height + offsetY,
+        innerRadius * width,
+        outerCenter.x * width + offsetX,
+        outerCenter.y * height + offsetY,
+        outerRadius * width
+      );
+    }
+    if (isNearlyVertical && isLocal && textMetrics) {
+      const ratio = textMetrics.lineHeight / height;
+      for (let i2 = 0; i2 < textMetrics.lines.length; i2++) {
+        const start = (i2 * textMetrics.lineHeight + padding / 2) / height;
+        fillGradient.colorStops.forEach((stop) => {
+          let globalStop = start + stop.offset * ratio;
+          globalStop = Math.max(0, Math.min(1, globalStop));
+          gradient.addColorStop(
+            // fix to 5 decimal places to avoid floating point precision issues
+            Math.floor(globalStop * PRECISION) / PRECISION,
+            Color.shared.setValue(stop.color).toHex()
+          );
+        });
+      }
+    } else {
+      fillGradient.colorStops.forEach((stop) => {
+        gradient.addColorStop(stop.offset, Color.shared.setValue(stop.color).toHex());
+      });
+    }
+    return gradient;
+  }
+  warn("FillStyle not recognised", fillStyle);
+  return "red";
+}
+var PRECISION;
+var init_getCanvasFillStyle = __esm({
+  "node_modules/pixi.js/lib/scene/text/canvas/utils/getCanvasFillStyle.mjs"() {
+    init_Color();
+    init_Matrix();
+    init_canvasUtils();
+    init_Texture();
+    init_warn();
+    init_FillGradient();
+    init_FillPattern();
+    PRECISION = 1e5;
+  }
+});
+
 // node_modules/pixi.js/lib/scene/text/TextStyle.mjs
 function convertV7Tov8Style(style) {
   const oldStyle = style;
@@ -41598,942 +41601,951 @@ var init_TextStyle = __esm({
   }
 });
 
-// node_modules/pixi.js/lib/scene/text/canvas/utils/getCanvasFillStyle.mjs
-function getCanvasFillStyle(fillStyle, context2, textMetrics, padding = 0, offsetX = 0, offsetY = 0) {
-  if (fillStyle.texture === Texture.WHITE && !fillStyle.fill) {
-    return Color.shared.setValue(fillStyle.color).setAlpha(fillStyle.alpha ?? 1).toHexa();
-  } else if (!fillStyle.fill) {
-    const pattern = context2.createPattern(fillStyle.texture.source.resource, "repeat");
-    const tempMatrix8 = fillStyle.matrix.copyTo(Matrix.shared);
-    tempMatrix8.scale(fillStyle.texture.source.pixelWidth, fillStyle.texture.source.pixelHeight);
-    pattern.setTransform(tempMatrix8);
-    return pattern;
-  } else if (fillStyle.fill instanceof FillPattern) {
-    const fillPattern = fillStyle.fill;
-    const pattern = context2.createPattern(fillPattern.texture.source.resource, "repeat");
-    canvasUtils.applyPatternTransform(pattern, fillPattern.transform, false);
-    return pattern;
-  } else if (fillStyle.fill instanceof FillGradient) {
-    const fillGradient = fillStyle.fill;
-    const isLinear = fillGradient.type === "linear";
-    const isLocal = fillGradient.textureSpace === "local";
-    let width = 1;
-    let height = 1;
-    if (isLocal && textMetrics) {
-      width = textMetrics.width + padding;
-      height = textMetrics.height + padding;
-    }
-    let gradient;
-    let isNearlyVertical = false;
-    if (isLinear) {
-      const { start, end } = fillGradient;
-      gradient = context2.createLinearGradient(
-        start.x * width + offsetX,
-        start.y * height + offsetY,
-        end.x * width + offsetX,
-        end.y * height + offsetY
-      );
-      isNearlyVertical = Math.abs(end.x - start.x) < Math.abs((end.y - start.y) * 0.1);
-    } else {
-      const { center, innerRadius, outerCenter, outerRadius } = fillGradient;
-      gradient = context2.createRadialGradient(
-        center.x * width + offsetX,
-        center.y * height + offsetY,
-        innerRadius * width,
-        outerCenter.x * width + offsetX,
-        outerCenter.y * height + offsetY,
-        outerRadius * width
-      );
-    }
-    if (isNearlyVertical && isLocal && textMetrics) {
-      const ratio = textMetrics.lineHeight / height;
-      for (let i2 = 0; i2 < textMetrics.lines.length; i2++) {
-        const start = (i2 * textMetrics.lineHeight + padding / 2) / height;
-        fillGradient.colorStops.forEach((stop) => {
-          let globalStop = start + stop.offset * ratio;
-          globalStop = Math.max(0, Math.min(1, globalStop));
-          gradient.addColorStop(
-            // fix to 5 decimal places to avoid floating point precision issues
-            Math.floor(globalStop * PRECISION) / PRECISION,
-            Color.shared.setValue(stop.color).toHex()
-          );
-        });
-      }
-    } else {
-      fillGradient.colorStops.forEach((stop) => {
-        gradient.addColorStop(stop.offset, Color.shared.setValue(stop.color).toHex());
-      });
-    }
-    return gradient;
-  }
-  warn("FillStyle not recognised", fillStyle);
-  return "red";
-}
-var PRECISION;
-var init_getCanvasFillStyle = __esm({
-  "node_modules/pixi.js/lib/scene/text/canvas/utils/getCanvasFillStyle.mjs"() {
-    init_Color();
-    init_Matrix();
-    init_canvasUtils();
-    init_Texture();
-    init_warn();
-    init_FillGradient();
-    init_FillPattern();
-    PRECISION = 1e5;
-  }
-});
+// node_modules/pixi.js/lib/unsafe-eval/init.mjs
+init_GlUboSystem();
+init_GlShaderSystem();
+init_GlUniformGroupSystem();
+init_GpuUboSystem();
+init_UboSystem();
+init_AbstractRenderer();
 
-// node_modules/pixi.js/lib/scene/text-bitmap/DynamicBitmapFont.mjs
-var _DynamicBitmapFont, DynamicBitmapFont;
-var init_DynamicBitmapFont = __esm({
-  "node_modules/pixi.js/lib/scene/text-bitmap/DynamicBitmapFont.mjs"() {
-    init_Color();
-    init_Rectangle();
-    init_CanvasPool();
-    init_ImageSource();
-    init_Texture();
-    init_TextureStyle();
-    init_deprecation();
-    init_CanvasTextMetrics();
-    init_fontStringFromTextStyle();
-    init_getCanvasFillStyle();
-    init_TextStyle();
-    init_AbstractBitmapFont();
-    _DynamicBitmapFont = class _DynamicBitmapFont2 extends AbstractBitmapFont {
-      /**
-       * @param options - The options for the dynamic bitmap font.
-       */
-      constructor(options) {
-        super();
-        this.resolution = 1;
-        this.pages = [];
-        this._padding = 0;
-        this._measureCache = /* @__PURE__ */ Object.create(null);
-        this._currentChars = [];
-        this._currentX = 0;
-        this._currentY = 0;
-        this._currentMaxCharHeight = 0;
-        this._currentPageIndex = -1;
-        this._skipKerning = false;
-        const dynamicOptions = { ..._DynamicBitmapFont2.defaultOptions, ...options };
-        this._textureSize = dynamicOptions.textureSize;
-        this._mipmap = dynamicOptions.mipmap;
-        const style = dynamicOptions.style.clone();
-        if (dynamicOptions.overrideFill) {
-          style._fill.color = 16777215;
-          style._fill.alpha = 1;
-          style._fill.texture = Texture.WHITE;
-          style._fill.fill = null;
-        }
-        this.applyFillAsTint = dynamicOptions.overrideFill;
-        const requestedFontSize = style.fontSize;
-        style.fontSize = this.baseMeasurementFontSize;
-        const font = fontStringFromTextStyle(style);
-        if (dynamicOptions.overrideSize) {
-          if (style._stroke) {
-            style._stroke.width *= this.baseRenderedFontSize / requestedFontSize;
-          }
-          if (style.dropShadow) {
-            style.dropShadow.blur *= this.baseRenderedFontSize / requestedFontSize;
-            style.dropShadow.distance *= this.baseRenderedFontSize / requestedFontSize;
-          }
-        } else {
-          style.fontSize = this.baseRenderedFontSize = requestedFontSize;
-        }
-        this._style = style;
-        this._skipKerning = dynamicOptions.skipKerning ?? false;
-        this.resolution = dynamicOptions.resolution ?? 1;
-        this._padding = dynamicOptions.padding ?? 4;
-        if (dynamicOptions.textureStyle) {
-          this._textureStyle = dynamicOptions.textureStyle instanceof TextureStyle ? dynamicOptions.textureStyle : new TextureStyle(dynamicOptions.textureStyle);
-        }
-        this.fontMetrics = CanvasTextMetrics.measureFont(font);
-        this.lineHeight = style.lineHeight || this.fontMetrics.fontSize || style.fontSize;
-      }
-      ensureCharacters(chars) {
-        const charList = CanvasTextMetrics.graphemeSegmenter(chars).filter((char) => !this._currentChars.includes(char)).filter((char, index, self2) => self2.indexOf(char) === index);
-        if (!charList.length) return;
-        this._currentChars = [...this._currentChars, ...charList];
-        let pageData;
-        if (this._currentPageIndex === -1) {
-          pageData = this._nextPage();
-        } else {
-          pageData = this.pages[this._currentPageIndex];
-        }
-        let { canvas, context: context2 } = pageData.canvasAndContext;
-        let textureSource = pageData.texture.source;
-        const style = this._style;
-        let currentX = this._currentX;
-        let currentY = this._currentY;
-        let currentMaxCharHeight = this._currentMaxCharHeight;
-        const fontScale = this.baseRenderedFontSize / this.baseMeasurementFontSize;
-        const extraPadding = (style.dropShadow?.distance ?? 0) + (style._stroke?.width ?? 0);
-        const padding = this._padding + extraPadding;
-        let skipTexture = false;
-        const maxTextureWidth = canvas.width / this.resolution;
-        const maxTextureHeight = canvas.height / this.resolution;
-        for (let i2 = 0; i2 < charList.length; i2++) {
-          const char = charList[i2];
-          const metrics = CanvasTextMetrics.measureText(char, style, canvas, false);
-          metrics.lineHeight = metrics.height;
-          const width = metrics.width * fontScale;
-          const textureGlyphWidth = Math.ceil((style.fontStyle === "italic" ? 2 : 1) * width);
-          const height = metrics.height * fontScale;
-          const paddedWidth = textureGlyphWidth + padding * 2;
-          const paddedHeight = height + padding * 2;
-          skipTexture = false;
-          if (char !== "\n" && char !== "\r" && char !== "	" && char !== " ") {
-            skipTexture = true;
-            currentMaxCharHeight = Math.ceil(Math.max(paddedHeight, currentMaxCharHeight));
-          }
-          if (currentX + paddedWidth > maxTextureWidth) {
-            currentY += currentMaxCharHeight;
-            currentMaxCharHeight = paddedHeight;
-            currentX = 0;
-            if (currentY + currentMaxCharHeight > maxTextureHeight) {
-              textureSource.update();
-              const pageData2 = this._nextPage();
-              canvas = pageData2.canvasAndContext.canvas;
-              context2 = pageData2.canvasAndContext.context;
-              textureSource = pageData2.texture.source;
-              currentX = 0;
-              currentY = 0;
-              currentMaxCharHeight = 0;
-            }
-          }
-          const xAdvance = context2.measureText(char).width / fontScale;
-          this.chars[char] = {
-            id: char.codePointAt(0),
-            xOffset: -(padding / fontScale),
-            yOffset: -(padding / fontScale),
-            xAdvance,
-            kerning: {}
-          };
-          if (skipTexture) {
-            this._drawGlyph(
-              context2,
-              metrics,
-              currentX + padding,
-              currentY + padding,
-              fontScale,
-              style
-            );
-            const px = textureSource.width * fontScale;
-            const py = textureSource.height * fontScale;
-            const frame = new Rectangle(
-              currentX / px * textureSource.width,
-              currentY / py * textureSource.height,
-              paddedWidth / px * textureSource.width,
-              paddedHeight / py * textureSource.height
-            );
-            this.chars[char].texture = new Texture({
-              source: textureSource,
-              frame
-            });
-            currentX += Math.ceil(paddedWidth);
-          }
-        }
-        textureSource.update();
-        this._currentX = currentX;
-        this._currentY = currentY;
-        this._currentMaxCharHeight = currentMaxCharHeight;
-        if (!this._skipKerning) this._applyKerning(charList, context2, fontScale);
-      }
-      /**
-       * @deprecated since 8.0.0
-       * The map of base page textures (i.e., sheets of glyphs).
-       */
-      get pageTextures() {
-        deprecation(v8_0_0, "BitmapFont.pageTextures is deprecated, please use BitmapFont.pages instead.");
-        return this.pages;
-      }
-      _applyKerning(newChars, context2, fontScale) {
-        const measureCache = this._measureCache;
-        for (let i2 = 0; i2 < newChars.length; i2++) {
-          const first = newChars[i2];
-          for (let j2 = 0; j2 < this._currentChars.length; j2++) {
-            const second = this._currentChars[j2];
-            let c1 = measureCache[first];
-            if (!c1) c1 = measureCache[first] = context2.measureText(first).width;
-            let c2 = measureCache[second];
-            if (!c2) c2 = measureCache[second] = context2.measureText(second).width;
-            let total = context2.measureText(first + second).width;
-            let amount = total - (c1 + c2);
-            if (amount && this.chars[first]) {
-              this.chars[first].kerning[second] = amount / fontScale;
-            }
-            total = context2.measureText(first + second).width;
-            amount = total - (c1 + c2);
-            if (amount && this.chars[second]) {
-              this.chars[second].kerning[first] = amount / fontScale;
-            }
-          }
-        }
-      }
-      _nextPage() {
-        this._currentPageIndex++;
-        const textureResolution = this.resolution;
-        const canvasAndContext = CanvasPool.getOptimalCanvasAndContext(
-          this._textureSize,
-          this._textureSize,
-          textureResolution
-        );
-        this._setupContext(canvasAndContext.context, this._style, textureResolution);
-        const resolution = textureResolution * (this.baseRenderedFontSize / this.baseMeasurementFontSize);
-        const texture = new Texture({
-          source: new ImageSource({
-            resource: canvasAndContext.canvas,
-            resolution,
-            alphaMode: "premultiply-alpha-on-upload",
-            autoGenerateMipmaps: this._mipmap
-          })
-        });
-        if (this._textureStyle) {
-          texture.source.style = this._textureStyle;
-        }
-        const pageData = {
-          canvasAndContext,
-          texture
-        };
-        this.pages[this._currentPageIndex] = pageData;
-        return pageData;
-      }
-      // canvas style!
-      _setupContext(context2, style, resolution) {
-        style.fontSize = this.baseRenderedFontSize;
-        context2.scale(resolution, resolution);
-        context2.font = fontStringFromTextStyle(style);
-        style.fontSize = this.baseMeasurementFontSize;
-        context2.textBaseline = style.textBaseline;
-        const stroke = style._stroke;
-        const strokeThickness = stroke?.width ?? 0;
-        if (stroke) {
-          context2.lineWidth = strokeThickness;
-          context2.lineJoin = stroke.join;
-          context2.miterLimit = stroke.miterLimit;
-          context2.strokeStyle = getCanvasFillStyle(stroke, context2);
-        }
-        if (style._fill) {
-          context2.fillStyle = getCanvasFillStyle(style._fill, context2);
-        }
-        if (style.dropShadow) {
-          const shadowOptions = style.dropShadow;
-          const rgb = Color.shared.setValue(shadowOptions.color).toArray();
-          const dropShadowBlur = shadowOptions.blur * resolution;
-          const dropShadowDistance = shadowOptions.distance * resolution;
-          context2.shadowColor = `rgba(${rgb[0] * 255},${rgb[1] * 255},${rgb[2] * 255},${shadowOptions.alpha})`;
-          context2.shadowBlur = dropShadowBlur;
-          context2.shadowOffsetX = Math.cos(shadowOptions.angle) * dropShadowDistance;
-          context2.shadowOffsetY = Math.sin(shadowOptions.angle) * dropShadowDistance;
-        } else {
-          context2.shadowColor = "black";
-          context2.shadowBlur = 0;
-          context2.shadowOffsetX = 0;
-          context2.shadowOffsetY = 0;
-        }
-      }
-      _drawGlyph(context2, metrics, x2, y2, fontScale, style) {
-        const char = metrics.text;
-        const fontProperties = metrics.fontProperties;
-        const stroke = style._stroke;
-        const strokeThickness = (stroke?.width ?? 0) * fontScale;
-        const tx = x2 + strokeThickness / 2;
-        const ty = y2 - strokeThickness / 2;
-        const descent = fontProperties.descent * fontScale;
-        const lineHeight = metrics.lineHeight * fontScale;
-        let removeShadow = false;
-        if (style.stroke && strokeThickness) {
-          removeShadow = true;
-          context2.strokeText(char, tx, ty + lineHeight - descent);
-        }
-        const { shadowBlur, shadowOffsetX, shadowOffsetY } = context2;
-        if (style._fill) {
-          if (removeShadow) {
-            context2.shadowBlur = 0;
-            context2.shadowOffsetX = 0;
-            context2.shadowOffsetY = 0;
-          }
-          context2.fillText(char, tx, ty + lineHeight - descent);
-        }
-        if (removeShadow) {
-          context2.shadowBlur = shadowBlur;
-          context2.shadowOffsetX = shadowOffsetX;
-          context2.shadowOffsetY = shadowOffsetY;
-        }
-      }
-      destroy() {
-        super.destroy();
-        for (let i2 = 0; i2 < this.pages.length; i2++) {
-          const { canvasAndContext, texture } = this.pages[i2];
-          CanvasPool.returnCanvasAndContext(canvasAndContext);
-          texture.destroy(true);
-        }
-        this.pages = null;
-      }
-    };
-    _DynamicBitmapFont.defaultOptions = {
-      textureSize: 512,
-      style: new TextStyle(),
-      mipmap: true
-    };
-    DynamicBitmapFont = _DynamicBitmapFont;
-  }
-});
+// node_modules/pixi.js/lib/scene/particle-container/shared/ParticleBuffer.mjs
+init_Buffer();
+init_const();
+init_Geometry();
+init_getAttributeInfoFromFormat();
+init_ViewableBuffer();
 
-// node_modules/pixi.js/lib/scene/text-bitmap/utils/getBitmapTextLayout.mjs
-function getBitmapTextLayout(chars, style, font, trimEnd) {
-  const layoutData = {
-    width: 0,
-    height: 0,
-    offsetY: 0,
-    scale: style.fontSize / font.baseMeasurementFontSize,
-    lines: [{
-      width: 0,
-      charPositions: [],
-      spaceWidth: 0,
-      spacesIndex: [],
-      chars: []
-    }]
+// node_modules/pixi.js/lib/scene/particle-container/shared/utils/createIndicesForQuads.mjs
+function createIndicesForQuads(size, outBuffer = null) {
+  const totalIndices = size * 6;
+  if (totalIndices > 65535) {
+    outBuffer || (outBuffer = new Uint32Array(totalIndices));
+  } else {
+    outBuffer || (outBuffer = new Uint16Array(totalIndices));
+  }
+  if (outBuffer.length !== totalIndices) {
+    throw new Error(`Out buffer length is incorrect, got ${outBuffer.length} and expected ${totalIndices}`);
+  }
+  for (let i2 = 0, j2 = 0; i2 < totalIndices; i2 += 6, j2 += 4) {
+    outBuffer[i2 + 0] = j2 + 0;
+    outBuffer[i2 + 1] = j2 + 1;
+    outBuffer[i2 + 2] = j2 + 2;
+    outBuffer[i2 + 3] = j2 + 0;
+    outBuffer[i2 + 4] = j2 + 2;
+    outBuffer[i2 + 5] = j2 + 3;
+  }
+  return outBuffer;
+}
+
+// node_modules/pixi.js/lib/scene/particle-container/shared/utils/generateParticleUpdateFunction.mjs
+init_getAttributeInfoFromFormat();
+function generateParticleUpdateFunction(properties) {
+  return {
+    dynamicUpdate: generateUpdateFunction(properties, true),
+    staticUpdate: generateUpdateFunction(properties, false)
   };
-  layoutData.offsetY = font.baseLineOffset;
-  let currentLine = layoutData.lines[0];
-  let previousChar = null;
-  let firstWord = true;
-  const currentWord = {
-    spaceWord: false,
-    width: 0,
-    start: 0,
-    index: 0,
-    // use index to not modify the array as we use it a lot!
-    positions: [],
-    chars: []
-  };
-  const scale = font.baseMeasurementFontSize / style.fontSize;
-  const adjustedLetterSpacing = style.letterSpacing * scale;
-  const adjustedWordWrapWidth = style.wordWrapWidth * scale;
-  const adjustedLineHeight = style.lineHeight ? style.lineHeight * scale : font.lineHeight;
-  const breakWords = style.wordWrap && style.breakWords;
-  const shouldCollapseSpaces = collapseSpaces(style.whiteSpace);
-  const shouldCollapseNewlines = collapseNewlines(style.whiteSpace);
-  if (shouldCollapseSpaces || shouldCollapseNewlines) {
-    const processed = [];
-    let prevWasBreakingSpace = shouldCollapseSpaces;
-    for (let c2 = 0; c2 < chars.length; c2++) {
-      let char = chars[c2];
-      if (char === "\r" || char === "\n") {
-        if (shouldCollapseNewlines) {
-          if (char === "\r" && chars[c2 + 1] === "\n") c2++;
-          char = " ";
-        } else {
-          if (shouldCollapseSpaces) prevWasBreakingSpace = true;
-          processed.push(char);
-          continue;
+}
+function generateUpdateFunction(properties, dynamic) {
+  const funcFragments = [];
+  funcFragments.push(`
+
+        var index = 0;
+
+        for (let i = 0; i < ps.length; ++i)
+        {
+            const p = ps[i];
+
+            `);
+  let offset = 0;
+  for (const i2 in properties) {
+    const property = properties[i2];
+    if (dynamic !== property.dynamic) continue;
+    funcFragments.push(`offset = index + ${offset}`);
+    funcFragments.push(property.code);
+    const attributeInfo = getAttributeInfoFromFormat(property.format);
+    offset += attributeInfo.stride / 4;
+  }
+  funcFragments.push(`
+            index += stride * 4;
         }
-      }
-      if (isBreakingSpace(char)) {
-        if (shouldCollapseSpaces && isCollapsibleSpace(char)) {
-          if (prevWasBreakingSpace) continue;
-          prevWasBreakingSpace = true;
-          processed.push(" ");
-        } else {
-          prevWasBreakingSpace = false;
-          processed.push(char);
-        }
+    `);
+  funcFragments.unshift(`
+        var stride = ${offset};
+    `);
+  const functionSource = funcFragments.join("\n");
+  return new Function("ps", "f32v", "u32v", functionSource);
+}
+
+// node_modules/pixi.js/lib/scene/particle-container/shared/ParticleBuffer.mjs
+var ParticleBuffer = class {
+  constructor(options) {
+    this._size = 0;
+    this._generateParticleUpdateCache = {};
+    const size = this._size = options.size ?? 1e3;
+    const properties = options.properties;
+    let staticVertexSize = 0;
+    let dynamicVertexSize = 0;
+    for (const i2 in properties) {
+      const property = properties[i2];
+      const attributeInfo = getAttributeInfoFromFormat(property.format);
+      if (property.dynamic) {
+        dynamicVertexSize += attributeInfo.stride;
       } else {
-        prevWasBreakingSpace = false;
-        processed.push(char);
+        staticVertexSize += attributeInfo.stride;
       }
     }
-    chars = processed;
-  }
-  const nextWord = (word) => {
-    const start = currentLine.width;
-    for (let j2 = 0; j2 < currentWord.index; j2++) {
-      const position = word.positions[j2];
-      currentLine.chars.push(word.chars[j2]);
-      currentLine.charPositions.push(position + start);
-    }
-    currentLine.width += word.width;
-    if (currentWord.index > 0 || !shouldCollapseSpaces) {
-      firstWord = false;
-    }
-    currentWord.width = 0;
-    currentWord.index = 0;
-    currentWord.chars.length = 0;
-  };
-  const nextLine = () => {
-    let index = currentLine.chars.length - 1;
-    if (trimEnd) {
-      let lastChar = currentLine.chars[index];
-      while (isCollapsibleSpace(lastChar)) {
-        currentLine.width -= font.chars[lastChar].xAdvance;
-        currentLine.spacesIndex.pop();
-        lastChar = currentLine.chars[--index];
-      }
-    }
-    layoutData.width = Math.max(layoutData.width, currentLine.width);
-    currentLine = {
-      width: 0,
-      charPositions: [],
-      chars: [],
-      spaceWidth: 0,
-      spacesIndex: []
-    };
-    firstWord = true;
-    layoutData.lines.push(currentLine);
-    layoutData.height += adjustedLineHeight;
-  };
-  const checkIsOverflow = (lineWidth) => lineWidth - adjustedLetterSpacing > adjustedWordWrapWidth;
-  for (let i2 = 0; i2 < chars.length + 1; i2++) {
-    let char;
-    const isEnd = i2 === chars.length;
-    if (!isEnd) {
-      char = chars[i2];
-    }
-    const charData = font.chars[char];
-    const isSpace = /(?:\s)/.test(char);
-    const isWordBreak = isSpace || char === "\r" || char === "\n" || isEnd;
-    if (isWordBreak) {
-      const addWordToNextLine = !firstWord && style.wordWrap && checkIsOverflow(currentLine.width + currentWord.width);
-      if (addWordToNextLine) {
-        nextLine();
-        nextWord(currentWord);
-        if (!isEnd && charData) {
-          currentLine.charPositions.push(0);
-        }
+    this._dynamicStride = dynamicVertexSize / 4;
+    this._staticStride = staticVertexSize / 4;
+    this.staticAttributeBuffer = new ViewableBuffer(size * 4 * staticVertexSize);
+    this.dynamicAttributeBuffer = new ViewableBuffer(size * 4 * dynamicVertexSize);
+    this.indexBuffer = createIndicesForQuads(size);
+    const geometry = new Geometry();
+    let dynamicOffset = 0;
+    let staticOffset = 0;
+    this._staticBuffer = new Buffer2({
+      data: new Float32Array(1),
+      label: "static-particle-buffer",
+      shrinkToFit: false,
+      usage: BufferUsage.VERTEX | BufferUsage.COPY_DST
+    });
+    this._dynamicBuffer = new Buffer2({
+      data: new Float32Array(1),
+      label: "dynamic-particle-buffer",
+      shrinkToFit: false,
+      usage: BufferUsage.VERTEX | BufferUsage.COPY_DST
+    });
+    for (const i2 in properties) {
+      const property = properties[i2];
+      const attributeInfo = getAttributeInfoFromFormat(property.format);
+      if (property.dynamic) {
+        geometry.addAttribute(property.attributeName, {
+          buffer: this._dynamicBuffer,
+          stride: this._dynamicStride * 4,
+          offset: dynamicOffset * 4,
+          format: property.format
+        });
+        dynamicOffset += attributeInfo.size;
       } else {
-        currentWord.start = currentLine.width;
-        nextWord(currentWord);
-        if (!isEnd && charData) {
-          currentLine.charPositions.push(0);
-        }
-      }
-      if (char === "\r" || char === "\n") {
-        nextLine();
-      } else if (!isEnd && charData) {
-        const spaceWidth = charData.xAdvance + (charData.kerning?.[previousChar] || 0) + adjustedLetterSpacing;
-        currentLine.width += spaceWidth;
-        currentLine.spaceWidth = spaceWidth;
-        currentLine.spacesIndex.push(currentLine.charPositions.length);
-        currentLine.chars.push(char);
-      }
-    } else if (charData) {
-      const kerning = charData.kerning?.[previousChar] || 0;
-      const nextCharWidth = charData.xAdvance + kerning + adjustedLetterSpacing;
-      const wordExceedsWrapWidth = breakWords && checkIsOverflow(currentWord.width + nextCharWidth);
-      if (wordExceedsWrapWidth) {
-        if (!firstWord) {
-          nextLine();
-        }
-        nextWord(currentWord);
-        nextLine();
-      }
-      currentWord.positions[currentWord.index++] = currentWord.width + kerning;
-      currentWord.chars.push(char);
-      currentWord.width += nextCharWidth;
-      if (isBreakAfterChar(char)) {
-        const addWordToNextLine = !firstWord && style.wordWrap && checkIsOverflow(currentLine.width + currentWord.width);
-        if (addWordToNextLine) {
-          nextLine();
-        }
-        nextWord(currentWord);
+        geometry.addAttribute(property.attributeName, {
+          buffer: this._staticBuffer,
+          stride: this._staticStride * 4,
+          offset: staticOffset * 4,
+          format: property.format
+        });
+        staticOffset += attributeInfo.size;
       }
     }
-    previousChar = char;
+    geometry.addIndex(this.indexBuffer);
+    const uploadFunction = this.getParticleUpdate(properties);
+    this._dynamicUpload = uploadFunction.dynamicUpdate;
+    this._staticUpload = uploadFunction.staticUpdate;
+    this.geometry = geometry;
   }
-  nextLine();
-  if (style.align === "center") {
-    alignCenter(layoutData);
-  } else if (style.align === "right") {
-    alignRight(layoutData);
-  } else if (style.align === "justify") {
-    alignJustify(layoutData);
+  getParticleUpdate(properties) {
+    const key = getParticleSyncKey(properties);
+    if (this._generateParticleUpdateCache[key]) {
+      return this._generateParticleUpdateCache[key];
+    }
+    this._generateParticleUpdateCache[key] = this.generateParticleUpdate(properties);
+    return this._generateParticleUpdateCache[key];
   }
-  return layoutData;
-}
-function alignCenter(measurementData) {
-  for (let i2 = 0; i2 < measurementData.lines.length; i2++) {
-    const line = measurementData.lines[i2];
-    const offset = measurementData.width / 2 - line.width / 2;
-    for (let j2 = 0; j2 < line.charPositions.length; j2++) {
-      line.charPositions[j2] += offset;
+  generateParticleUpdate(properties) {
+    return generateParticleUpdateFunction(properties);
+  }
+  update(particles, uploadStatic) {
+    if (particles.length > this._size) {
+      uploadStatic = true;
+      this._size = Math.max(particles.length, this._size * 1.5 | 0);
+      this.staticAttributeBuffer = new ViewableBuffer(this._size * this._staticStride * 4 * 4);
+      this.dynamicAttributeBuffer = new ViewableBuffer(this._size * this._dynamicStride * 4 * 4);
+      this.indexBuffer = createIndicesForQuads(this._size);
+      this.geometry.indexBuffer.setDataWithSize(
+        this.indexBuffer,
+        this.indexBuffer.byteLength,
+        true
+      );
+    }
+    const dynamicAttributeBuffer = this.dynamicAttributeBuffer;
+    this._dynamicUpload(particles, dynamicAttributeBuffer.float32View, dynamicAttributeBuffer.uint32View);
+    this._dynamicBuffer.setDataWithSize(
+      this.dynamicAttributeBuffer.float32View,
+      particles.length * this._dynamicStride * 4,
+      true
+    );
+    if (uploadStatic) {
+      const staticAttributeBuffer = this.staticAttributeBuffer;
+      this._staticUpload(particles, staticAttributeBuffer.float32View, staticAttributeBuffer.uint32View);
+      this._staticBuffer.setDataWithSize(
+        staticAttributeBuffer.float32View,
+        particles.length * this._staticStride * 4,
+        true
+      );
     }
   }
+  destroy() {
+    this._staticBuffer.destroy();
+    this._dynamicBuffer.destroy();
+    this.geometry.destroy();
+  }
+};
+function getParticleSyncKey(properties) {
+  const keyGen = [];
+  for (const key in properties) {
+    const property = properties[key];
+    keyGen.push(key, property.code, property.dynamic ? "d" : "s");
+  }
+  return keyGen.join("_");
 }
-function alignRight(measurementData) {
-  for (let i2 = 0; i2 < measurementData.lines.length; i2++) {
-    const line = measurementData.lines[i2];
-    const offset = measurementData.width - line.width;
-    for (let j2 = 0; j2 < line.charPositions.length; j2++) {
-      line.charPositions[j2] += offset;
+
+// node_modules/pixi.js/lib/unsafe-eval/particle/generateParticleUpdatePolyfill.mjs
+init_getAttributeInfoFromFormat();
+
+// node_modules/pixi.js/lib/unsafe-eval/particle/particleUpdateFunctions.mjs
+var particleUpdateFunctions = {
+  aVertex: (ps, f32v, _u32v, offset, stride) => {
+    let w0 = 0;
+    let w1 = 0;
+    let h0 = 0;
+    let h1 = 0;
+    for (let i2 = 0; i2 < ps.length; ++i2) {
+      const p2 = ps[i2];
+      const texture = p2.texture;
+      const sx = p2.scaleX;
+      const sy = p2.scaleY;
+      const ax = p2.anchorX;
+      const ay = p2.anchorY;
+      const trim = texture.trim;
+      const orig = texture.orig;
+      if (trim) {
+        w1 = trim.x - ax * orig.width;
+        w0 = w1 + trim.width;
+        h1 = trim.y - ay * orig.height;
+        h0 = h1 + trim.height;
+      } else {
+        w0 = orig.width * (1 - ax);
+        w1 = orig.width * -ax;
+        h0 = orig.height * (1 - ay);
+        h1 = orig.height * -ay;
+      }
+      f32v[offset] = w1 * sx;
+      f32v[offset + 1] = h1 * sy;
+      f32v[offset + stride] = w0 * sx;
+      f32v[offset + stride + 1] = h1 * sy;
+      f32v[offset + stride * 2] = w0 * sx;
+      f32v[offset + stride * 2 + 1] = h0 * sy;
+      f32v[offset + stride * 3] = w1 * sx;
+      f32v[offset + stride * 3 + 1] = h0 * sy;
+      offset += stride * 4;
+    }
+  },
+  aPosition: (ps, f32v, _u32v, offset, stride) => {
+    for (let i2 = 0; i2 < ps.length; ++i2) {
+      const p2 = ps[i2];
+      const x2 = p2.x;
+      const y2 = p2.y;
+      f32v[offset] = x2;
+      f32v[offset + 1] = y2;
+      f32v[offset + stride] = x2;
+      f32v[offset + stride + 1] = y2;
+      f32v[offset + stride * 2] = x2;
+      f32v[offset + stride * 2 + 1] = y2;
+      f32v[offset + stride * 3] = x2;
+      f32v[offset + stride * 3 + 1] = y2;
+      offset += stride * 4;
+    }
+  },
+  aRotation: (ps, f32v, _u32v, offset, stride) => {
+    for (let i2 = 0; i2 < ps.length; ++i2) {
+      const rotation = ps[i2].rotation;
+      f32v[offset] = rotation;
+      f32v[offset + stride] = rotation;
+      f32v[offset + stride * 2] = rotation;
+      f32v[offset + stride * 3] = rotation;
+      offset += stride * 4;
+    }
+  },
+  aUV: (ps, f32v, _u32v, offset, stride) => {
+    for (let i2 = 0; i2 < ps.length; ++i2) {
+      const uvs = ps[i2].texture.uvs;
+      f32v[offset] = uvs.x0;
+      f32v[offset + 1] = uvs.y0;
+      f32v[offset + stride] = uvs.x1;
+      f32v[offset + stride + 1] = uvs.y1;
+      f32v[offset + stride * 2] = uvs.x2;
+      f32v[offset + stride * 2 + 1] = uvs.y2;
+      f32v[offset + stride * 3] = uvs.x3;
+      f32v[offset + stride * 3 + 1] = uvs.y3;
+      offset += stride * 4;
+    }
+  },
+  aColor: (ps, _f32v, u32v, offset, stride) => {
+    for (let i2 = 0; i2 < ps.length; ++i2) {
+      const c2 = ps[i2].color;
+      u32v[offset] = c2;
+      u32v[offset + stride] = c2;
+      u32v[offset + stride * 2] = c2;
+      u32v[offset + stride * 3] = c2;
+      offset += stride * 4;
     }
   }
+};
+
+// node_modules/pixi.js/lib/unsafe-eval/particle/generateParticleUpdatePolyfill.mjs
+function generateParticleUpdatePolyfill(properties) {
+  const allProperties = Object.values(properties);
+  const dynamicProperties = allProperties.filter((p2) => p2.dynamic);
+  const staticProperties = allProperties.filter((p2) => !p2.dynamic);
+  return {
+    dynamicUpdate: generateUpdateFunction2(dynamicProperties),
+    staticUpdate: generateUpdateFunction2(staticProperties)
+  };
 }
-function alignJustify(measurementData) {
-  const width = measurementData.width;
-  for (let i2 = 0; i2 < measurementData.lines.length - 2; i2++) {
-    const line = measurementData.lines[i2];
-    let indy = 0;
-    let spaceIndex = line.spacesIndex[indy++];
+function generateUpdateFunction2(properties) {
+  let stride = 0;
+  const updateData = [];
+  for (let i2 = 0; i2 < properties.length; i2++) {
+    const property = properties[i2];
+    const attributeStride = getAttributeInfoFromFormat(property.format).stride / 4;
+    stride += attributeStride;
+    updateData.push({
+      stride: attributeStride,
+      updateFunction: property.updateFunction || particleUpdateFunctions[property.attributeName]
+    });
+  }
+  return (ps, f32v, u32v) => {
     let offset = 0;
-    const totalSpaces = line.spacesIndex.length;
-    const newSpaceWidth = (width - line.width) / totalSpaces;
-    const spaceWidth = newSpaceWidth;
-    for (let j2 = 0; j2 < line.charPositions.length; j2++) {
-      if (j2 === spaceIndex) {
-        spaceIndex = line.spacesIndex[indy++];
-        offset += spaceWidth;
-      }
-      line.charPositions[j2] += offset;
+    for (let i2 = 0; i2 < updateData.length; i2++) {
+      const obx = updateData[i2];
+      obx.updateFunction(ps, f32v, u32v, offset, stride);
+      offset += obx.stride;
     }
-  }
+  };
 }
-var init_getBitmapTextLayout = __esm({
-  "node_modules/pixi.js/lib/scene/text-bitmap/utils/getBitmapTextLayout.mjs"() {
-    init_textTokenization();
-  }
-});
 
-// node_modules/pixi.js/lib/scene/text-bitmap/utils/resolveCharacters.mjs
-function resolveCharacters(chars) {
-  if (chars === "") {
-    return [];
-  }
-  if (typeof chars === "string") {
-    chars = [chars];
-  }
-  const result = [];
-  for (let i2 = 0, j2 = chars.length; i2 < j2; i2++) {
-    const item = chars[i2];
-    if (Array.isArray(item)) {
-      if (item.length !== 2) {
-        throw new Error(`[BitmapFont]: Invalid character range length, expecting 2 got ${item.length}.`);
-      }
-      if (item[0].length === 0 || item[1].length === 0) {
-        throw new Error("[BitmapFont]: Invalid character delimiter.");
-      }
-      const startCode = item[0].charCodeAt(0);
-      const endCode = item[1].charCodeAt(0);
-      if (endCode < startCode) {
-        throw new Error("[BitmapFont]: Invalid character range.");
-      }
-      for (let i22 = startCode, j22 = endCode; i22 <= j22; i22++) {
-        result.push(String.fromCharCode(i22));
-      }
-    } else {
-      result.push(...Array.from(item));
-    }
-  }
-  if (result.length === 0) {
-    throw new Error("[BitmapFont]: Empty set when resolving characters.");
-  }
-  return result;
+// node_modules/pixi.js/lib/unsafe-eval/shader/generateShaderSyncPolyfill.mjs
+init_BufferResource();
+init_UniformGroup();
+init_TextureSource();
+init_TextureStyle();
+function generateShaderSyncPolyfill() {
+  return syncShader;
 }
-var init_resolveCharacters = __esm({
-  "node_modules/pixi.js/lib/scene/text-bitmap/utils/resolveCharacters.mjs"() {
-    "use strict";
-  }
-});
-
-// node_modules/pixi.js/lib/scene/text-bitmap/BitmapFontManager.mjs
-var fontCount, BitmapFontManagerClass, BitmapFontManager;
-var init_BitmapFontManager = __esm({
-  "node_modules/pixi.js/lib/scene/text-bitmap/BitmapFontManager.mjs"() {
-    init_tiny_lru();
-    init_Cache();
-    init_deprecation();
-    init_warn();
-    init_CanvasTextMetrics();
-    init_TextStyle();
-    init_DynamicBitmapFont();
-    init_getBitmapTextLayout();
-    init_resolveCharacters();
-    fontCount = 0;
-    BitmapFontManagerClass = class {
-      constructor() {
-        this.ALPHA = [["a", "z"], ["A", "Z"], " "];
-        this.NUMERIC = [["0", "9"]];
-        this.ALPHANUMERIC = [["a", "z"], ["A", "Z"], ["0", "9"], " "];
-        this.ASCII = [[" ", "~"]];
-        this.defaultOptions = {
-          chars: this.ALPHANUMERIC,
-          resolution: 1,
-          padding: 4,
-          skipKerning: false,
-          textureStyle: null
-        };
-        this.measureCache = lru(1e3);
-      }
-      /**
-       * Get a font for the specified text and style.
-       * @param text - The text to get the font for
-       * @param style - The style to use
-       */
-      getFont(text, style) {
-        let fontFamilyKey = `${style.fontFamily}-bitmap`;
-        let overrideFill = true;
-        if (Cache.has(fontFamilyKey)) {
-          const dynamicFont2 = Cache.get(fontFamilyKey);
-          dynamicFont2.ensureCharacters?.(text);
-          return dynamicFont2;
+function syncShader(renderer, shader, syncData) {
+  const gl = renderer.gl;
+  const shaderSystem = renderer.shader;
+  const programData = shaderSystem._getProgramData(shader.glProgram);
+  for (const i2 in shader.groups) {
+    const bindGroup = shader.groups[i2];
+    for (const j2 in bindGroup.resources) {
+      const resource = bindGroup.resources[j2];
+      if (resource instanceof UniformGroup) {
+        if (resource.ubo) {
+          shaderSystem.bindUniformBlock(
+            resource,
+            shader._uniformBindMap[i2][j2],
+            syncData.blockIndex++
+          );
+        } else {
+          shaderSystem.updateUniformGroup(resource);
         }
-        if (style._fill.fill && !style._stroke) {
-          fontFamilyKey += style._fill.fill.styleKey;
-          overrideFill = false;
-        } else if (style._stroke || style.dropShadow) {
-          fontFamilyKey = `${style.styleKey}-bitmap`;
-          overrideFill = false;
-        }
-        fontFamilyKey += `-${style.fontStyle}`;
-        fontFamilyKey += `-${style.fontVariant}`;
-        fontFamilyKey += `-${style.fontWeight}`;
-        if (!Cache.has(fontFamilyKey)) {
-          const styleCopy = Object.create(style);
-          styleCopy["_lineHeight"] = 0;
-          const fnt = new DynamicBitmapFont({
-            style: styleCopy,
-            overrideFill,
-            overrideSize: true,
-            ...this.defaultOptions
-          });
-          fontCount++;
-          if (fontCount > 50) {
-            warn("BitmapText", `You have dynamically created ${fontCount} bitmap fonts, this can be inefficient. Try pre installing your font styles using \`BitmapFont.install({name:"style1", style})\``);
+      } else if (resource instanceof BufferResource) {
+        shaderSystem.bindUniformBlock(
+          resource,
+          shader._uniformBindMap[i2][j2],
+          syncData.blockIndex++
+        );
+      } else if (resource instanceof TextureSource) {
+        renderer.texture.bind(resource, syncData.textureCount);
+        const uniformName = shader._uniformBindMap[i2][j2];
+        const uniformData = programData.uniformData[uniformName];
+        if (uniformData) {
+          if (uniformData.value !== syncData.textureCount) {
+            gl.uniform1i(uniformData.location, syncData.textureCount);
           }
-          fnt.once("destroy", () => {
-            fontCount--;
-            Cache.remove(fontFamilyKey);
-          });
-          Cache.set(
-            fontFamilyKey,
-            fnt
-          );
+          syncData.textureCount++;
         }
-        const dynamicFont = Cache.get(fontFamilyKey);
-        dynamicFont.ensureCharacters?.(text);
-        return dynamicFont;
+      } else if (resource instanceof TextureStyle) {
       }
-      /**
-       * Get the layout of a text for the specified style.
-       * @param text - The text to get the layout for
-       * @param style - The style to use
-       * @param trimEnd - Whether to ignore whitespaces at the end of each line
-       */
-      getLayout(text, style, trimEnd = true) {
-        const bitmapFont = this.getFont(text, style);
-        const id = `${text}-${style.styleKey}-${trimEnd}`;
-        if (this.measureCache.has(id)) {
-          return this.measureCache.get(id);
-        }
-        const segments = CanvasTextMetrics.graphemeSegmenter(text);
-        const layoutData = getBitmapTextLayout(segments, style, bitmapFont, trimEnd);
-        this.measureCache.set(id, layoutData);
-        return layoutData;
-      }
-      /**
-       * Measure the text using the specified style.
-       * @param text - The text to measure
-       * @param style - The style to use
-       * @param trimEnd - Whether to ignore whitespaces at the end of each line
-       */
-      measureText(text, style, trimEnd = true) {
-        return this.getLayout(text, style, trimEnd);
-      }
-      // eslint-disable-next-line max-len
-      install(...args) {
-        let options = args[0];
-        if (typeof options === "string") {
-          options = {
-            name: options,
-            style: args[1],
-            chars: args[2]?.chars,
-            resolution: args[2]?.resolution,
-            padding: args[2]?.padding,
-            skipKerning: args[2]?.skipKerning
-          };
-          deprecation(v8_0_0, "BitmapFontManager.install(name, style, options) is deprecated, use BitmapFontManager.install({name, style, ...options})");
-        }
-        const name = options?.name;
-        if (!name) {
-          throw new Error("[BitmapFontManager] Property `name` is required.");
-        }
-        options = { ...this.defaultOptions, ...options };
-        const textStyle = options.style;
-        const style = textStyle instanceof TextStyle ? textStyle : new TextStyle(textStyle);
-        const overrideFill = options.dynamicFill ?? this._canUseTintForStyle(style);
-        const font = new DynamicBitmapFont({
-          style,
-          overrideFill,
-          skipKerning: options.skipKerning,
-          padding: options.padding,
-          resolution: options.resolution,
-          overrideSize: false,
-          textureStyle: options.textureStyle
-        });
-        const flatChars = resolveCharacters(options.chars);
-        font.ensureCharacters(flatChars.join(""));
-        Cache.set(`${name}-bitmap`, font);
-        font.once("destroy", () => Cache.remove(`${name}-bitmap`));
-        return font;
-      }
-      /**
-       * Uninstalls a bitmap font from the cache.
-       * @param {string} name - The name of the bitmap font to uninstall.
-       */
-      uninstall(name) {
-        const cacheKey = `${name}-bitmap`;
-        const font = Cache.get(cacheKey);
-        if (font) {
-          font.destroy();
-        }
-      }
-      /**
-       * Determines if a style can use tinting instead of baking colors into the bitmap.
-       * Tinting is more efficient as it allows reusing the same bitmap with different colors.
-       * @param style - The text style to evaluate
-       * @returns true if the style can use tinting, false if colors must be baked in
-       * @private
-       */
-      _canUseTintForStyle(style) {
-        return !style._stroke && (!style.dropShadow || style.dropShadow.color === 0) && !style._fill.fill && style._fill.color === 16777215;
-      }
-    };
-    BitmapFontManager = new BitmapFontManagerClass();
+    }
   }
-});
+}
 
-// node_modules/pixi.js/lib/scene/text-bitmap/BitmapFont.mjs
-var BitmapFont_exports = {};
-__export(BitmapFont_exports, {
-  BitmapFont: () => BitmapFont
-});
-var BitmapFont;
-var init_BitmapFont = __esm({
-  "node_modules/pixi.js/lib/scene/text-bitmap/BitmapFont.mjs"() {
-    init_groupD8();
-    init_Rectangle();
-    init_Texture();
-    init_AbstractBitmapFont();
-    init_BitmapFontManager();
-    BitmapFont = class extends AbstractBitmapFont {
-      constructor(options, url) {
-        super();
-        const { textures, data: data2 } = options;
-        Object.keys(data2.pages).forEach((key) => {
-          const pageData = data2.pages[parseInt(key, 10)];
-          const texture = textures[pageData.id];
-          this.pages.push({ texture });
-        });
-        Object.keys(data2.chars).forEach((key) => {
-          const charData = data2.chars[key];
-          const {
-            frame: textureFrame,
-            source: textureSource,
-            rotate: textureRotate
-          } = textures[charData.page];
-          const frame = groupD8.transformRectCoords(
-            charData,
-            textureFrame,
-            textureRotate,
-            new Rectangle()
-          );
-          const texture = new Texture({
-            frame,
-            orig: new Rectangle(0, 0, charData.width, charData.height),
-            source: textureSource,
-            rotate: textureRotate
-          });
-          this.chars[key] = {
-            id: key.codePointAt(0),
-            xOffset: charData.xOffset,
-            yOffset: charData.yOffset,
-            xAdvance: charData.xAdvance,
-            kerning: charData.kerning ?? {},
-            texture
-          };
-        });
-        this.baseRenderedFontSize = data2.fontSize;
-        this.baseMeasurementFontSize = data2.fontSize;
-        this.fontMetrics = {
-          ascent: 0,
-          descent: 0,
-          fontSize: data2.fontSize
-        };
-        this.baseLineOffset = data2.baseLineOffset;
-        this.lineHeight = data2.lineHeight;
-        this.fontFamily = data2.fontFamily;
-        this.distanceField = data2.distanceField ?? {
-          type: "none",
-          range: 0
-        };
-        this.url = url;
-      }
-      /** Destroys the BitmapFont object. */
-      destroy() {
-        super.destroy();
-        for (let i2 = 0; i2 < this.pages.length; i2++) {
-          const { texture } = this.pages[i2];
-          texture.destroy(true);
-        }
-        this.pages = null;
-      }
-      /**
-       * Generates and installs a bitmap font with the specified options.
-       * The font will be cached and available for use in BitmapText objects.
-       * @param options - Setup options for font generation
-       * @returns Installed font instance
-       * @example
-       * ```ts
-       * // Install a basic font
-       * BitmapFont.install({
-       *     name: 'Title',
-       *     style: {
-       *         fontFamily: 'Arial',
-       *         fontSize: 32,
-       *         fill: '#ffffff'
-       *     }
-       * });
-       *
-       * // Install with advanced options
-       * BitmapFont.install({
-       *     name: 'Custom',
-       *     style: {
-       *         fontFamily: 'Arial',
-       *         fontSize: 24,
-       *         fill: '#00ff00',
-       *         stroke: { color: '#000000', width: 2 }
-       *     },
-       *     chars: [['a', 'z'], ['A', 'Z'], ['0', '9']],
-       *     resolution: 2,
-       *     padding: 4,
-       *     textureStyle: {
-       *         scaleMode: 'nearest'
-       *     }
-       * });
-       * ```
-       */
-      static install(options) {
-        BitmapFontManager.install(options);
-      }
-      /**
-       * Uninstalls a bitmap font from the cache.
-       * This frees up memory and resources associated with the font.
-       * @param name - The name of the bitmap font to uninstall
-       * @example
-       * ```ts
-       * // Remove a font when it's no longer needed
-       * BitmapFont.uninstall('MyCustomFont');
-       *
-       * // Clear multiple fonts
-       * ['Title', 'Heading', 'Body'].forEach(BitmapFont.uninstall);
-       * ```
-       */
-      static uninstall(name) {
-        BitmapFontManager.uninstall(name);
-      }
-    };
+// node_modules/pixi.js/lib/unsafe-eval/ubo/generateUboSyncPolyfill.mjs
+init_createUboElementsSTD40();
+init_createUboElementsWGSL();
+init_uniformParsers();
+
+// node_modules/pixi.js/lib/unsafe-eval/ubo/uboSyncFunctions.mjs
+var uboParserFunctions = [
+  (name, data, offset, uv, _v) => {
+    const matrix = uv[name].toArray(true);
+    data[offset] = matrix[0];
+    data[offset + 1] = matrix[1];
+    data[offset + 2] = matrix[2];
+    data[offset + 4] = matrix[3];
+    data[offset + 5] = matrix[4];
+    data[offset + 6] = matrix[5];
+    data[offset + 8] = matrix[6];
+    data[offset + 9] = matrix[7];
+    data[offset + 10] = matrix[8];
+  },
+  (name, data, offset, uv, v2) => {
+    v2 = uv[name];
+    data[offset] = v2.x;
+    data[offset + 1] = v2.y;
+    data[offset + 2] = v2.width;
+    data[offset + 3] = v2.height;
+  },
+  (name, data, offset, uv, v2) => {
+    v2 = uv[name];
+    data[offset] = v2.x;
+    data[offset + 1] = v2.y;
+  },
+  (name, data, offset, uv, v2) => {
+    v2 = uv[name];
+    data[offset] = v2.red;
+    data[offset + 1] = v2.green;
+    data[offset + 2] = v2.blue;
+    data[offset + 3] = v2.alpha;
+  },
+  (name, data, offset, uv, v2) => {
+    v2 = uv[name];
+    data[offset] = v2.red;
+    data[offset + 1] = v2.green;
+    data[offset + 2] = v2.blue;
   }
-});
+];
+var uboSingleFunctionsWGSL = {
+  f32: (_name, data, offset, _uv, v2) => {
+    data[offset] = v2;
+  },
+  i32: (_name, data, offset, _uv, v2) => {
+    data[offset] = v2;
+  },
+  "vec2<f32>": (_name, data, offset, _uv, v2) => {
+    data[offset] = v2[0];
+    data[offset + 1] = v2[1];
+  },
+  "vec3<f32>": (_name, data, offset, _uv, v2) => {
+    data[offset] = v2[0];
+    data[offset + 1] = v2[1];
+    data[offset + 2] = v2[2];
+  },
+  "vec4<f32>": (_name, data, offset, _uv, v2) => {
+    data[offset] = v2[0];
+    data[offset + 1] = v2[1];
+    data[offset + 2] = v2[2];
+    data[offset + 3] = v2[3];
+  },
+  "mat2x2<f32>": (_name, data, offset, _uv, v2) => {
+    data[offset] = v2[0];
+    data[offset + 1] = v2[1];
+    data[offset + 2] = v2[2];
+    data[offset + 3] = v2[3];
+  },
+  "mat3x3<f32>": (_name, data, offset, _uv, v2) => {
+    data[offset] = v2[0];
+    data[offset + 1] = v2[1];
+    data[offset + 2] = v2[2];
+    data[offset + 4] = v2[3];
+    data[offset + 5] = v2[4];
+    data[offset + 6] = v2[5];
+    data[offset + 8] = v2[6];
+    data[offset + 9] = v2[7];
+    data[offset + 10] = v2[8];
+  },
+  "mat4x4<f32>": (_name, data, offset, _uv, v2) => {
+    for (let i2 = 0; i2 < 16; i2++) {
+      data[offset + i2] = v2[i2];
+    }
+  },
+  "mat3x2<f32>": (_name, data, offset, _uv, v2) => {
+    for (let i2 = 0; i2 < 6; i2++) {
+      data[offset + (i2 / 3 | 0) * 4 + i2 % 3] = v2[i2];
+    }
+  },
+  "mat4x2<f32>": (_name, data, offset, _uv, v2) => {
+    for (let i2 = 0; i2 < 8; i2++) {
+      data[offset + (i2 / 4 | 0) * 4 + i2 % 4] = v2[i2];
+    }
+  },
+  "mat2x3<f32>": (_name, data, offset, _uv, v2) => {
+    for (let i2 = 0; i2 < 6; i2++) {
+      data[offset + (i2 / 2 | 0) * 4 + i2 % 2] = v2[i2];
+    }
+  },
+  "mat4x3<f32>": (_name, data, offset, _uv, v2) => {
+    for (let i2 = 0; i2 < 12; i2++) {
+      data[offset + (i2 / 4 | 0) * 4 + i2 % 4] = v2[i2];
+    }
+  },
+  "mat2x4<f32>": (_name, data, offset, _uv, v2) => {
+    for (let i2 = 0; i2 < 8; i2++) {
+      data[offset + (i2 / 2 | 0) * 4 + i2 % 2] = v2[i2];
+    }
+  },
+  "mat3x4<f32>": (_name, data, offset, _uv, v2) => {
+    for (let i2 = 0; i2 < 12; i2++) {
+      data[offset + (i2 / 3 | 0) * 4 + i2 % 3] = v2[i2];
+    }
+  }
+};
+var uboSingleFunctionsSTD40 = {
+  f32: (_name, data, offset, _uv, v2) => {
+    data[offset] = v2;
+  },
+  i32: (_name, data, offset, _uv, v2) => {
+    data[offset] = v2;
+  },
+  "vec2<f32>": (_name, data, offset, _uv, v2) => {
+    data[offset] = v2[0];
+    data[offset + 1] = v2[1];
+  },
+  "vec3<f32>": (_name, data, offset, _uv, v2) => {
+    data[offset] = v2[0];
+    data[offset + 1] = v2[1];
+    data[offset + 2] = v2[2];
+  },
+  "vec4<f32>": (_name, data, offset, _uv, v2) => {
+    data[offset] = v2[0];
+    data[offset + 1] = v2[1];
+    data[offset + 2] = v2[2];
+    data[offset + 3] = v2[3];
+  },
+  "mat2x2<f32>": (_name, data, offset, _uv, v2) => {
+    data[offset] = v2[0];
+    data[offset + 1] = v2[1];
+    data[offset + 4] = v2[2];
+    data[offset + 5] = v2[3];
+  },
+  "mat3x3<f32>": (_name, data, offset, _uv, v2) => {
+    data[offset] = v2[0];
+    data[offset + 1] = v2[1];
+    data[offset + 2] = v2[2];
+    data[offset + 4] = v2[3];
+    data[offset + 5] = v2[4];
+    data[offset + 6] = v2[5];
+    data[offset + 8] = v2[6];
+    data[offset + 9] = v2[7];
+    data[offset + 10] = v2[8];
+  },
+  "mat4x4<f32>": (_name, data, offset, _uv, v2) => {
+    for (let i2 = 0; i2 < 16; i2++) {
+      data[offset + i2] = v2[i2];
+    }
+  },
+  "mat3x2<f32>": (_name, data, offset, _uv, v2) => {
+    for (let i2 = 0; i2 < 6; i2++) {
+      data[offset + (i2 / 3 | 0) * 4 + i2 % 3] = v2[i2];
+    }
+  },
+  "mat4x2<f32>": (_name, data, offset, _uv, v2) => {
+    for (let i2 = 0; i2 < 8; i2++) {
+      data[offset + (i2 / 4 | 0) * 4 + i2 % 4] = v2[i2];
+    }
+  },
+  "mat2x3<f32>": (_name, data, offset, _uv, v2) => {
+    for (let i2 = 0; i2 < 6; i2++) {
+      data[offset + (i2 / 2 | 0) * 4 + i2 % 2] = v2[i2];
+    }
+  },
+  "mat4x3<f32>": (_name, data, offset, _uv, v2) => {
+    for (let i2 = 0; i2 < 12; i2++) {
+      data[offset + (i2 / 4 | 0) * 4 + i2 % 4] = v2[i2];
+    }
+  },
+  "mat2x4<f32>": (_name, data, offset, _uv, v2) => {
+    for (let i2 = 0; i2 < 8; i2++) {
+      data[offset + (i2 / 2 | 0) * 4 + i2 % 2] = v2[i2];
+    }
+  },
+  "mat3x4<f32>": (_name, data, offset, _uv, v2) => {
+    for (let i2 = 0; i2 < 12; i2++) {
+      data[offset + (i2 / 3 | 0) * 4 + i2 % 3] = v2[i2];
+    }
+  }
+};
+
+// node_modules/pixi.js/lib/unsafe-eval/ubo/generateUboSyncPolyfill.mjs
+function generateUboSyncPolyfillSTD40(uboElements) {
+  return generateUboSyncPolyfill(
+    uboElements,
+    uboSingleFunctionsSTD40,
+    (uboElement) => {
+      const rowSize = Math.max(WGSL_TO_STD40_SIZE[uboElement.data.type] / 16, 1);
+      const elementSize = uboElement.data.value.length / uboElement.data.size;
+      const remainder = (4 - elementSize % 4) % 4;
+      return (_name, data, offset, _uv, v2) => {
+        let t2 = 0;
+        for (let i2 = 0; i2 < uboElement.data.size * rowSize; i2++) {
+          for (let j2 = 0; j2 < elementSize; j2++) {
+            data[offset++] = v2[t2++];
+          }
+          offset += remainder;
+        }
+      };
+    }
+  );
+}
+function generateUboSyncPolyfillWGSL(uboElements) {
+  return generateUboSyncPolyfill(
+    uboElements,
+    uboSingleFunctionsWGSL,
+    (uboElement) => {
+      const { size, align } = WGSL_ALIGN_SIZE_DATA[uboElement.data.type];
+      const remainder = (size - align) / 4;
+      return (_name, data, offset, _uv, v2) => {
+        let t2 = 0;
+        for (let i2 = 0; i2 < uboElement.data.size * (size / 4); i2++) {
+          for (let j2 = 0; j2 < size / 4; j2++) {
+            data[offset++] = v2[t2++];
+          }
+          offset += remainder;
+        }
+      };
+    }
+  );
+}
+function generateUboSyncPolyfill(uboElements, uboFunctions, arrayUploadFunction) {
+  const functionMap = {};
+  for (const i2 in uboElements) {
+    const uboElement = uboElements[i2];
+    const uniform = uboElement.data;
+    let parsed = false;
+    functionMap[uniform.name] = {
+      offset: uboElement.offset / 4,
+      func: null
+    };
+    for (let j2 = 0; j2 < uniformParsers.length; j2++) {
+      const parser = uniformParsers[j2];
+      if (uniform.type === parser.type && parser.test(uniform)) {
+        functionMap[uniform.name].func = uboParserFunctions[j2];
+        parsed = true;
+        break;
+      }
+    }
+    if (!parsed) {
+      if (uniform.size === 1) {
+        functionMap[uniform.name].func = uboFunctions[uniform.type];
+      } else {
+        functionMap[uniform.name].func = arrayUploadFunction(uboElement);
+      }
+    }
+  }
+  return (uniforms, data, offset) => {
+    for (const i2 in functionMap) {
+      functionMap[i2].func(i2, data, offset + functionMap[i2].offset, uniforms, uniforms[i2]);
+    }
+  };
+}
+
+// node_modules/pixi.js/lib/unsafe-eval/uniforms/generateUniformsSyncPolyfill.mjs
+init_uniformParsers();
+
+// node_modules/pixi.js/lib/unsafe-eval/uniforms/uniformSyncFunctions.mjs
+var uniformSingleParserFunctions = {
+  f32(name, cu, cv, v2, ud, _uv, gl) {
+    if (cv !== v2) {
+      cu.value = v2;
+      gl.uniform1f(ud[name].location, v2);
+    }
+  },
+  "vec2<f32>"(name, _cu, cv, v2, ud, _uv, gl) {
+    if (cv[0] !== v2[0] || cv[1] !== v2[1]) {
+      cv[0] = v2[0];
+      cv[1] = v2[1];
+      gl.uniform2f(ud[name].location, v2[0], v2[1]);
+    }
+  },
+  "vec3<f32>"(name, _cu, cv, v2, ud, _uv, gl) {
+    if (cv[0] !== v2[0] || cv[1] !== v2[1] || cv[2] !== v2[2]) {
+      cv[0] = v2[0];
+      cv[1] = v2[1];
+      cv[2] = v2[2];
+      gl.uniform3f(ud[name].location, v2[0], v2[1], v2[2]);
+    }
+  },
+  "vec4<f32>"(name, _cu, cv, v2, ud, _uv, gl) {
+    if (cv[0] !== v2[0] || cv[1] !== v2[1] || cv[2] !== v2[2] || cv[3] !== v2[3]) {
+      cv[0] = v2[0];
+      cv[1] = v2[1];
+      cv[2] = v2[2];
+      cv[3] = v2[3];
+      gl.uniform4f(ud[name].location, v2[0], v2[1], v2[2], v2[3]);
+    }
+  },
+  i32(name, cu, cv, v2, ud, _uv, gl) {
+    if (cv !== v2) {
+      cu.value = v2;
+      gl.uniform1i(ud[name].location, v2);
+    }
+  },
+  "vec2<i32>"(name, _cu, cv, v2, ud, _uv, gl) {
+    if (cv[0] !== v2[0] || cv[1] !== v2[1]) {
+      cv[0] = v2[0];
+      cv[1] = v2[1];
+      gl.uniform2i(ud[name].location, v2[0], v2[1]);
+    }
+  },
+  "vec3<i32>"(name, _cu, cv, v2, ud, _uv, gl) {
+    if (cv[0] !== v2[0] || cv[1] !== v2[1] || cv[2] !== v2[2]) {
+      cv[0] = v2[0];
+      cv[1] = v2[1];
+      cv[2] = v2[2];
+      gl.uniform3i(ud[name].location, v2[0], v2[1], v2[2]);
+    }
+  },
+  "vec4<i32>"(name, _cu, cv, v2, ud, _uv, gl) {
+    if (cv[0] !== v2[0] || cv[1] !== v2[1] || cv[2] !== v2[2] || cv[3] !== v2[3]) {
+      cv[0] = v2[0];
+      cv[1] = v2[1];
+      cv[2] = v2[2];
+      cv[3] = v2[3];
+      gl.uniform4i(ud[name].location, v2[0], v2[1], v2[2], v2[3]);
+    }
+  },
+  u32(name, cu, cv, v2, ud, _uv, gl) {
+    if (cv !== v2) {
+      cu.value = v2;
+      gl.uniform1ui(ud[name].location, v2);
+    }
+  },
+  "vec2<u32>"(name, _cu, cv, v2, ud, _uv, gl) {
+    if (cv[0] !== v2[0] || cv[1] !== v2[1]) {
+      cv[0] = v2[0];
+      cv[1] = v2[1];
+      gl.uniform2ui(ud[name].location, v2[0], v2[1]);
+    }
+  },
+  "vec3<u32>"(name, _cu, cv, v2, ud, _uv, gl) {
+    if (cv[0] !== v2[0] || cv[1] !== v2[1] || cv[2] !== v2[2]) {
+      cv[0] = v2[0];
+      cv[1] = v2[1];
+      cv[2] = v2[2];
+      gl.uniform3ui(ud[name].location, v2[0], v2[1], v2[2]);
+    }
+  },
+  "vec4<u32>"(name, _cu, cv, v2, ud, _uv, gl) {
+    if (cv[0] !== v2[0] || cv[1] !== v2[1] || cv[2] !== v2[2] || cv[3] !== v2[3]) {
+      cv[0] = v2[0];
+      cv[1] = v2[1];
+      cv[2] = v2[2];
+      cv[3] = v2[3];
+      gl.uniform4ui(ud[name].location, v2[0], v2[1], v2[2], v2[3]);
+    }
+  },
+  bool(name, cu, cv, v2, ud, _uv, gl) {
+    if (cv !== v2) {
+      cu.value = v2;
+      gl.uniform1i(ud[name].location, v2);
+    }
+  },
+  "vec2<bool>"(name, _cu, cv, v2, ud, _uv, gl) {
+    if (cv[0] !== v2[0] || cv[1] !== v2[1]) {
+      cv[0] = v2[0];
+      cv[1] = v2[1];
+      gl.uniform2i(ud[name].location, v2[0], v2[1]);
+    }
+  },
+  "vec3<bool>"(name, _cu, cv, v2, ud, _uv, gl) {
+    if (cv[0] !== v2[0] || cv[1] !== v2[1] || cv[2] !== v2[2]) {
+      cv[0] = v2[0];
+      cv[1] = v2[1];
+      cv[2] = v2[2];
+      gl.uniform3i(ud[name].location, v2[0], v2[1], v2[2]);
+    }
+  },
+  "vec4<bool>"(name, _cu, cv, v2, ud, _uv, gl) {
+    if (cv[0] !== v2[0] || cv[1] !== v2[1] || cv[2] !== v2[2] || cv[3] !== v2[3]) {
+      cv[0] = v2[0];
+      cv[1] = v2[1];
+      cv[2] = v2[2];
+      cv[3] = v2[3];
+      gl.uniform4i(ud[name].location, v2[0], v2[1], v2[2], v2[3]);
+    }
+  },
+  "mat2x2<f32>"(name, _cu, _cv, v2, ud, _uv, gl) {
+    gl.uniformMatrix2fv(ud[name].location, false, v2);
+  },
+  "mat3x3<f32>"(name, _cu, _cv, v2, ud, _uv, gl) {
+    gl.uniformMatrix3fv(ud[name].location, false, v2);
+  },
+  "mat4x4<f32>"(name, _cu, _cv, v2, ud, _uv, gl) {
+    gl.uniformMatrix4fv(ud[name].location, false, v2);
+  }
+};
+var uniformArrayParserFunctions = {
+  f32(name, _cu, _cv, v2, ud, _uv, gl) {
+    gl.uniform1fv(ud[name].location, v2);
+  },
+  "vec2<f32>"(name, _cu, _cv, v2, ud, _uv, gl) {
+    gl.uniform2fv(ud[name].location, v2);
+  },
+  "vec3<f32>"(name, _cu, _cv, v2, ud, _uv, gl) {
+    gl.uniform3fv(ud[name].location, v2);
+  },
+  "vec4<f32>"(name, _cu, _cv, v2, ud, _uv, gl) {
+    gl.uniform4fv(ud[name].location, v2);
+  },
+  "mat2x2<f32>"(name, _cu, _cv, v2, ud, _uv, gl) {
+    gl.uniformMatrix2fv(ud[name].location, false, v2);
+  },
+  "mat3x3<f32>"(name, _cu, _cv, v2, ud, _uv, gl) {
+    gl.uniformMatrix3fv(ud[name].location, false, v2);
+  },
+  "mat4x4<f32>"(name, _cu, _cv, v2, ud, _uv, gl) {
+    gl.uniformMatrix4fv(ud[name].location, false, v2);
+  },
+  i32(name, _cu, _cv, v2, ud, _uv, gl) {
+    gl.uniform1iv(ud[name].location, v2);
+  },
+  "vec2<i32>"(name, _cu, _cv, v2, ud, _uv, gl) {
+    gl.uniform2iv(ud[name].location, v2);
+  },
+  "vec3<i32>"(name, _cu, _cv, v2, ud, _uv, gl) {
+    gl.uniform3iv(ud[name].location, v2);
+  },
+  "vec4<i32>"(name, _cu, _cv, v2, ud, _uv, gl) {
+    gl.uniform4iv(ud[name].location, v2);
+  },
+  u32(name, _cu, _cv, v2, ud, _uv, gl) {
+    gl.uniform1iv(ud[name].location, v2);
+  },
+  "vec2<u32>"(name, _cu, _cv, v2, ud, _uv, gl) {
+    gl.uniform2iv(ud[name].location, v2);
+  },
+  "vec3<u32>"(name, _cu, _cv, v2, ud, _uv, gl) {
+    gl.uniform3iv(ud[name].location, v2);
+  },
+  "vec4<u32>"(name, _cu, _cv, v2, ud, _uv, gl) {
+    gl.uniform4iv(ud[name].location, v2);
+  },
+  bool(name, _cu, _cv, v2, ud, _uv, gl) {
+    gl.uniform1iv(ud[name].location, v2);
+  },
+  "vec2<bool>"(name, _cu, _cv, v2, ud, _uv, gl) {
+    gl.uniform2iv(ud[name].location, v2);
+  },
+  "vec3<bool>"(name, _cu, _cv, v2, ud, _uv, gl) {
+    gl.uniform3iv(ud[name].location, v2);
+  },
+  "vec4<bool>"(name, _cu, _cv, v2, ud, _uv, gl) {
+    gl.uniform4iv(ud[name].location, v2);
+  }
+};
+var uniformParserFunctions = [
+  (name, _cu, _cv, _v, ud, uv, gl) => {
+    gl.uniformMatrix3fv(ud[name].location, false, uv[name].toArray(true));
+  },
+  (name, _cu, cv, v2, ud, uv, gl) => {
+    cv = ud[name].value;
+    v2 = uv[name];
+    if (cv[0] !== v2.x || cv[1] !== v2.y || cv[2] !== v2.width || cv[3] !== v2.height) {
+      cv[0] = v2.x;
+      cv[1] = v2.y;
+      cv[2] = v2.width;
+      cv[3] = v2.height;
+      gl.uniform4f(ud[name].location, v2.x, v2.y, v2.width, v2.height);
+    }
+  },
+  (name, _cu, cv, v2, ud, uv, gl) => {
+    cv = ud[name].value;
+    v2 = uv[name];
+    if (cv[0] !== v2.x || cv[1] !== v2.y) {
+      cv[0] = v2.x;
+      cv[1] = v2.y;
+      gl.uniform2f(ud[name].location, v2.x, v2.y);
+    }
+  },
+  (name, _cu, cv, v2, ud, uv, gl) => {
+    cv = ud[name].value;
+    v2 = uv[name];
+    if (cv[0] !== v2.red || cv[1] !== v2.green || cv[2] !== v2.blue || cv[3] !== v2.alpha) {
+      cv[0] = v2.red;
+      cv[1] = v2.green;
+      cv[2] = v2.blue;
+      cv[3] = v2.alpha;
+      gl.uniform4f(ud[name].location, v2.red, v2.green, v2.blue, v2.alpha);
+    }
+  },
+  (name, _cu, cv, v2, ud, uv, gl) => {
+    cv = ud[name].value;
+    v2 = uv[name];
+    if (cv[0] !== v2.red || cv[1] !== v2.green || cv[2] !== v2.blue) {
+      cv[0] = v2.red;
+      cv[1] = v2.green;
+      cv[2] = v2.blue;
+      gl.uniform3f(ud[name].location, v2.red, v2.green, v2.blue);
+    }
+  }
+];
+
+// node_modules/pixi.js/lib/unsafe-eval/uniforms/generateUniformsSyncPolyfill.mjs
+function generateUniformsSyncPolyfill(group, uniformData) {
+  const functionMap = {};
+  for (const i2 in group.uniformStructures) {
+    if (!uniformData[i2]) continue;
+    const uniform = group.uniformStructures[i2];
+    let parsed = false;
+    for (let j2 = 0; j2 < uniformParsers.length; j2++) {
+      const parser = uniformParsers[j2];
+      if (uniform.type === parser.type && parser.test(uniform)) {
+        functionMap[i2] = uniformParserFunctions[j2];
+        parsed = true;
+        break;
+      }
+    }
+    if (!parsed) {
+      const templateType = uniform.size === 1 ? uniformSingleParserFunctions : uniformArrayParserFunctions;
+      functionMap[i2] = templateType[uniform.type];
+    }
+  }
+  return (ud, uv, renderer) => {
+    const gl = renderer.gl;
+    for (const i2 in functionMap) {
+      const v2 = uv[i2];
+      const cu = ud[i2];
+      const cv = ud[i2].value;
+      functionMap[i2](i2, cu, cv, v2, ud, uv, gl);
+    }
+  };
+}
+
+// node_modules/pixi.js/lib/unsafe-eval/init.mjs
+function selfInstall() {
+  Object.assign(AbstractRenderer.prototype, {
+    // override unsafeEval check, as we don't need to use it
+    _unsafeEvalCheck() {
+    }
+  });
+  Object.assign(UboSystem.prototype, {
+    // override unsafeEval check, as we don't need to use it
+    _systemCheck() {
+    }
+  });
+  Object.assign(GlUniformGroupSystem.prototype, {
+    // use polyfill which avoids eval method
+    _generateUniformsSync: generateUniformsSyncPolyfill
+  });
+  Object.assign(GlUboSystem.prototype, {
+    // use polyfill which avoids eval method
+    _generateUboSync: generateUboSyncPolyfillSTD40
+  });
+  Object.assign(GpuUboSystem.prototype, {
+    // use polyfill which avoids eval method
+    _generateUboSync: generateUboSyncPolyfillWGSL
+  });
+  Object.assign(GlShaderSystem.prototype, {
+    // use polyfill which avoids eval method
+    _generateShaderSync: generateShaderSyncPolyfill
+  });
+  Object.assign(ParticleBuffer.prototype, {
+    // use polyfill which avoids eval method
+    generateParticleUpdate: generateParticleUpdatePolyfill
+  });
+}
+selfInstall();
 
 // node_modules/pixi.js/lib/environment-browser/browserExt.mjs
 init_Extensions();
@@ -42765,7 +42777,7 @@ ResizePlugin.extension = ExtensionType.Application;
 
 // node_modules/pixi.js/lib/app/TickerPlugin.mjs
 init_Extensions();
-init_const2();
+init_const4();
 init_Ticker();
 var TickerPlugin = class {
   /**
@@ -43014,2822 +43026,6 @@ _Application._plugins = [];
 var Application = _Application;
 extensions.handleByList(ExtensionType.Application, Application._plugins);
 extensions.add(ApplicationInitHook);
-
-// node_modules/pixi.js/lib/assets/Assets.mjs
-init_Extensions();
-
-// node_modules/pixi.js/lib/scene/text-bitmap/asset/loadBitmapFont.mjs
-init_LoaderParser();
-init_copySearchParams();
-init_adapter();
-init_Extensions();
-init_path();
-
-// node_modules/pixi.js/lib/scene/text-bitmap/asset/bitmapFontTextParser.mjs
-var bitmapFontTextParser = {
-  test(data2) {
-    return typeof data2 === "string" && data2.startsWith("info face=");
-  },
-  parse(txt) {
-    const items = txt.match(/^[a-z]+\s+.+$/gm);
-    const rawData = {
-      info: [],
-      common: [],
-      page: [],
-      char: [],
-      chars: [],
-      kerning: [],
-      kernings: [],
-      distanceField: []
-    };
-    for (const i2 in items) {
-      const name = items[i2].match(/^[a-z]+/gm)[0];
-      const attributeList = items[i2].match(/[a-zA-Z]+=([^\s"']+|"([^"]*)")/gm);
-      const itemData = {};
-      for (const i22 in attributeList) {
-        const split = attributeList[i22].split("=");
-        const key = split[0];
-        const strValue = split[1].replace(/"/gm, "");
-        const floatValue = parseFloat(strValue);
-        const value = isNaN(floatValue) ? strValue : floatValue;
-        itemData[key] = value;
-      }
-      rawData[name].push(itemData);
-    }
-    const font = {
-      chars: {},
-      pages: [],
-      lineHeight: 0,
-      fontSize: 0,
-      fontFamily: "",
-      distanceField: null,
-      baseLineOffset: 0
-    };
-    const [info] = rawData.info;
-    const [common] = rawData.common;
-    const [distanceField] = rawData.distanceField ?? [];
-    if (distanceField) {
-      font.distanceField = {
-        range: parseInt(distanceField.distanceRange, 10),
-        type: distanceField.fieldType
-      };
-    }
-    font.fontSize = parseInt(info.size, 10);
-    font.fontFamily = info.face;
-    font.lineHeight = parseInt(common.lineHeight, 10);
-    const page = rawData.page;
-    for (let i2 = 0; i2 < page.length; i2++) {
-      font.pages.push({
-        id: parseInt(page[i2].id, 10) || 0,
-        file: page[i2].file
-      });
-    }
-    const map = {};
-    font.baseLineOffset = font.lineHeight - parseInt(common.base, 10);
-    const char = rawData.char;
-    for (let i2 = 0; i2 < char.length; i2++) {
-      const charNode = char[i2];
-      const id = parseInt(charNode.id, 10);
-      let letter = charNode.letter ?? charNode.char ?? String.fromCharCode(id);
-      if (letter === "space") letter = " ";
-      map[id] = letter;
-      font.chars[letter] = {
-        id,
-        // texture deets..
-        page: parseInt(charNode.page, 10) || 0,
-        x: parseInt(charNode.x, 10),
-        y: parseInt(charNode.y, 10),
-        width: parseInt(charNode.width, 10),
-        height: parseInt(charNode.height, 10),
-        xOffset: parseInt(charNode.xoffset, 10),
-        yOffset: parseInt(charNode.yoffset, 10),
-        xAdvance: parseInt(charNode.xadvance, 10),
-        kerning: {}
-      };
-    }
-    const kerning = rawData.kerning || [];
-    for (let i2 = 0; i2 < kerning.length; i2++) {
-      const first = parseInt(kerning[i2].first, 10);
-      const second = parseInt(kerning[i2].second, 10);
-      const amount = parseInt(kerning[i2].amount, 10);
-      if (font.chars[map[second]]) font.chars[map[second]].kerning[map[first]] = amount;
-    }
-    return font;
-  }
-};
-
-// node_modules/pixi.js/lib/scene/text-bitmap/asset/bitmapFontXMLStringParser.mjs
-init_adapter();
-
-// node_modules/pixi.js/lib/scene/text-bitmap/asset/bitmapFontXMLParser.mjs
-var bitmapFontXMLParser = {
-  test(data2) {
-    const xml = data2;
-    return typeof xml !== "string" && "getElementsByTagName" in xml && xml.getElementsByTagName("page").length && xml.getElementsByTagName("info")[0].getAttribute("face") !== null;
-  },
-  parse(xml) {
-    const data2 = {
-      chars: {},
-      pages: [],
-      lineHeight: 0,
-      fontSize: 0,
-      fontFamily: "",
-      distanceField: null,
-      baseLineOffset: 0
-    };
-    const info = xml.getElementsByTagName("info")[0];
-    const common = xml.getElementsByTagName("common")[0];
-    const distanceField = xml.getElementsByTagName("distanceField")[0];
-    if (distanceField) {
-      data2.distanceField = {
-        type: distanceField.getAttribute("fieldType"),
-        range: parseInt(distanceField.getAttribute("distanceRange"), 10)
-      };
-    }
-    const page = xml.getElementsByTagName("page");
-    const char = xml.getElementsByTagName("char");
-    const kerning = xml.getElementsByTagName("kerning");
-    data2.fontSize = parseInt(info.getAttribute("size"), 10);
-    data2.fontFamily = info.getAttribute("face");
-    data2.lineHeight = parseInt(common.getAttribute("lineHeight"), 10);
-    for (let i2 = 0; i2 < page.length; i2++) {
-      data2.pages.push({
-        id: parseInt(page[i2].getAttribute("id"), 10) || 0,
-        file: page[i2].getAttribute("file")
-      });
-    }
-    const map = {};
-    data2.baseLineOffset = data2.lineHeight - parseInt(common.getAttribute("base"), 10);
-    for (let i2 = 0; i2 < char.length; i2++) {
-      const charNode = char[i2];
-      const id = parseInt(charNode.getAttribute("id"), 10);
-      let letter = charNode.getAttribute("letter") ?? charNode.getAttribute("char") ?? String.fromCharCode(id);
-      if (letter === "space") letter = " ";
-      map[id] = letter;
-      data2.chars[letter] = {
-        id,
-        // texture deets..
-        page: parseInt(charNode.getAttribute("page"), 10) || 0,
-        x: parseInt(charNode.getAttribute("x"), 10),
-        y: parseInt(charNode.getAttribute("y"), 10),
-        width: parseInt(charNode.getAttribute("width"), 10),
-        height: parseInt(charNode.getAttribute("height"), 10),
-        // render deets..
-        xOffset: parseInt(charNode.getAttribute("xoffset"), 10),
-        yOffset: parseInt(charNode.getAttribute("yoffset"), 10),
-        // + baseLineOffset,
-        xAdvance: parseInt(charNode.getAttribute("xadvance"), 10),
-        kerning: {}
-      };
-    }
-    for (let i2 = 0; i2 < kerning.length; i2++) {
-      const first = parseInt(kerning[i2].getAttribute("first"), 10);
-      const second = parseInt(kerning[i2].getAttribute("second"), 10);
-      const amount = parseInt(kerning[i2].getAttribute("amount"), 10);
-      if (data2.chars[map[second]]) data2.chars[map[second]].kerning[map[first]] = amount;
-    }
-    return data2;
-  }
-};
-
-// node_modules/pixi.js/lib/scene/text-bitmap/asset/bitmapFontXMLStringParser.mjs
-var bitmapFontXMLStringParser = {
-  test(data2) {
-    if (typeof data2 === "string" && data2.match(/<font(\s|>)/)) {
-      return bitmapFontXMLParser.test(DOMAdapter.get().parseXML(data2));
-    }
-    return false;
-  },
-  parse(data2) {
-    return bitmapFontXMLParser.parse(DOMAdapter.get().parseXML(data2));
-  }
-};
-
-// node_modules/pixi.js/lib/scene/text-bitmap/asset/loadBitmapFont.mjs
-var validExtensions = [".xml", ".fnt"];
-var bitmapFontCachePlugin = {
-  extension: {
-    type: ExtensionType.CacheParser,
-    name: "cacheBitmapFont"
-  },
-  test: (asset) => !!asset?.pages && !!asset?.chars && typeof asset?.fontFamily === "string" && asset.fontFamily !== "",
-  getCacheableAssets(keys, asset) {
-    const out2 = {};
-    keys.forEach((key) => {
-      out2[key] = asset;
-      out2[`${key}-bitmap`] = asset;
-    });
-    out2[`${asset.fontFamily}-bitmap`] = asset;
-    return out2;
-  }
-};
-var loadBitmapFont = {
-  extension: {
-    type: ExtensionType.LoadParser,
-    priority: LoaderParserPriority.Normal
-  },
-  /** used for deprecation purposes */
-  name: "loadBitmapFont",
-  id: "bitmap-font",
-  test(url) {
-    return validExtensions.includes(path.extname(url).toLowerCase());
-  },
-  async testParse(data2) {
-    return bitmapFontTextParser.test(data2) || bitmapFontXMLStringParser.test(data2);
-  },
-  async parse(asset, data2, loader) {
-    const bitmapFontData = bitmapFontTextParser.test(asset) ? bitmapFontTextParser.parse(asset) : bitmapFontXMLStringParser.parse(asset);
-    const { src } = data2;
-    const { pages } = bitmapFontData;
-    const textureUrls = [];
-    const textureOptions = bitmapFontData.distanceField ? {
-      scaleMode: "linear",
-      alphaMode: "premultiply-alpha-on-upload",
-      autoGenerateMipmaps: false,
-      resolution: 1
-    } : {};
-    for (let i2 = 0; i2 < pages.length; ++i2) {
-      const pageFile = pages[i2].file;
-      let imagePath = path.join(path.dirname(src), pageFile);
-      imagePath = copySearchParams(imagePath, src);
-      textureUrls.push({
-        src: imagePath,
-        data: textureOptions
-      });
-    }
-    const [loadedTextures, { BitmapFont: BitmapFont2 }] = await Promise.all([
-      loader.load(textureUrls),
-      Promise.resolve().then(() => (init_BitmapFont(), BitmapFont_exports))
-    ]);
-    const textures = textureUrls.map((url) => loadedTextures[url.src]);
-    const bitmapFont = new BitmapFont2({
-      data: bitmapFontData,
-      textures
-    }, src);
-    return bitmapFont;
-  },
-  async load(url, _options) {
-    const response = await DOMAdapter.get().fetch(url);
-    return await response.text();
-  },
-  async unload(bitmapFont, _resolvedAsset, loader) {
-    await Promise.all(bitmapFont.pages.map((page) => loader.unload(page.texture.source._sourceOrigin)));
-    bitmapFont.destroy();
-  }
-};
-
-// node_modules/pixi.js/lib/assets/Assets.mjs
-init_warn();
-
-// node_modules/pixi.js/lib/assets/BackgroundLoader.mjs
-var BackgroundLoader = class {
-  /**
-   * @param loader
-   * @param verbose - should the loader log to the console
-   */
-  constructor(loader, verbose = false) {
-    this._loader = loader;
-    this._assetList = [];
-    this._isLoading = false;
-    this._maxConcurrent = 1;
-    this.verbose = verbose;
-  }
-  /**
-   * Adds assets to the background loading queue. Assets are loaded one at a time to minimize
-   * performance impact.
-   * @param assetUrls - Array of resolved assets to load in the background
-   * @example
-   * ```ts
-   * // Add assets to background load queue
-   * backgroundLoader.add([
-   *     { src: 'images/level1/bg.png' },
-   *     { src: 'images/level1/characters.json' }
-   * ]);
-   *
-   * // Assets will load sequentially in the background
-   * // The loader automatically pauses when high-priority loads occur
-   * // e.g. Assets.load() is called
-   * ```
-   * @remarks
-   * - Assets are loaded one at a time to minimize performance impact
-   * - Loading automatically pauses when Assets.load() is called
-   * - No progress tracking is available for background loading
-   * - Assets are cached as they complete loading
-   * @internal
-   */
-  add(assetUrls) {
-    assetUrls.forEach((a2) => {
-      this._assetList.push(a2);
-    });
-    if (this.verbose) {
-      console.log("[BackgroundLoader] assets: ", this._assetList);
-    }
-    if (this._isActive && !this._isLoading) {
-      void this._next();
-    }
-  }
-  /**
-   * Loads the next set of assets. Will try to load as many assets as it can at the same time.
-   *
-   * The max assets it will try to load at one time will be 4.
-   */
-  async _next() {
-    if (this._assetList.length && this._isActive) {
-      this._isLoading = true;
-      const toLoad = [];
-      const toLoadAmount = Math.min(this._assetList.length, this._maxConcurrent);
-      for (let i2 = 0; i2 < toLoadAmount; i2++) {
-        toLoad.push(this._assetList.pop());
-      }
-      await this._loader.load(toLoad);
-      this._isLoading = false;
-      void this._next();
-    }
-  }
-  /**
-   * Controls the active state of the background loader. When active, the loader will
-   * continue processing its queue. When inactive, loading is paused.
-   * @returns Whether the background loader is currently active
-   * @example
-   * ```ts
-   * // Pause background loading
-   * backgroundLoader.active = false;
-   *
-   * // Resume background loading
-   * backgroundLoader.active = true;
-   *
-   * // Check current state
-   * console.log(backgroundLoader.active); // true/false
-   *
-   * // Common use case: Pause during intensive operations
-   * backgroundLoader.active = false;  // Pause background loading
-   * ... // Perform high-priority tasks
-   * backgroundLoader.active = true;   // Resume background loading
-   * ```
-   * @remarks
-   * - Setting to true resumes loading immediately
-   * - Setting to false pauses after current asset completes
-   * - Background loading is automatically paused during `Assets.load()`
-   * - Assets already being loaded will complete even when set to false
-   */
-  get active() {
-    return this._isActive;
-  }
-  set active(value) {
-    if (this._isActive === value) return;
-    this._isActive = value;
-    if (value && !this._isLoading) {
-      void this._next();
-    }
-  }
-};
-
-// node_modules/pixi.js/lib/assets/Assets.mjs
-init_Cache();
-
-// node_modules/pixi.js/lib/assets/cache/parsers/cacheTextureArray.mjs
-init_Extensions();
-init_Texture();
-var cacheTextureArray = {
-  extension: {
-    type: ExtensionType.CacheParser,
-    name: "cacheTextureArray"
-  },
-  test: (asset) => Array.isArray(asset) && asset.every((t2) => t2 instanceof Texture),
-  getCacheableAssets: (keys, asset) => {
-    const out2 = {};
-    keys.forEach((key) => {
-      asset.forEach((item, i2) => {
-        out2[key + (i2 === 0 ? "" : i2 + 1)] = item;
-      });
-    });
-    return out2;
-  }
-};
-
-// node_modules/pixi.js/lib/assets/detections/parsers/detectAvif.mjs
-init_Extensions();
-
-// node_modules/pixi.js/lib/assets/detections/utils/testImageFormat.mjs
-async function testImageFormat(imageData) {
-  if ("Image" in globalThis) {
-    return new Promise((resolve) => {
-      const image = new Image();
-      image.onload = () => {
-        resolve(true);
-      };
-      image.onerror = () => {
-        resolve(false);
-      };
-      image.src = imageData;
-    });
-  }
-  if ("createImageBitmap" in globalThis && "fetch" in globalThis) {
-    try {
-      const blob = await (await fetch(imageData)).blob();
-      await createImageBitmap(blob);
-    } catch (_e) {
-      return false;
-    }
-    return true;
-  }
-  return false;
-}
-
-// node_modules/pixi.js/lib/assets/detections/parsers/detectAvif.mjs
-var detectAvif = {
-  extension: {
-    type: ExtensionType.DetectionParser,
-    priority: 1
-  },
-  test: async () => testImageFormat(
-    // eslint-disable-next-line max-len
-    "data:image/avif;base64,AAAAIGZ0eXBhdmlmAAAAAGF2aWZtaWYxbWlhZk1BMUIAAADybWV0YQAAAAAAAAAoaGRscgAAAAAAAAAAcGljdAAAAAAAAAAAAAAAAGxpYmF2aWYAAAAADnBpdG0AAAAAAAEAAAAeaWxvYwAAAABEAAABAAEAAAABAAABGgAAAB0AAAAoaWluZgAAAAAAAQAAABppbmZlAgAAAAABAABhdjAxQ29sb3IAAAAAamlwcnAAAABLaXBjbwAAABRpc3BlAAAAAAAAAAIAAAACAAAAEHBpeGkAAAAAAwgICAAAAAxhdjFDgQ0MAAAAABNjb2xybmNseAACAAIAAYAAAAAXaXBtYQAAAAAAAAABAAEEAQKDBAAAACVtZGF0EgAKCBgANogQEAwgMg8f8D///8WfhwB8+ErK42A="
-  ),
-  add: async (formats) => [...formats, "avif"],
-  remove: async (formats) => formats.filter((f2) => f2 !== "avif")
-};
-
-// node_modules/pixi.js/lib/assets/detections/parsers/detectDefaults.mjs
-init_Extensions();
-var imageFormats = ["png", "jpg", "jpeg"];
-var detectDefaults = {
-  extension: {
-    type: ExtensionType.DetectionParser,
-    priority: -1
-  },
-  test: () => Promise.resolve(true),
-  add: async (formats) => [...formats, ...imageFormats],
-  remove: async (formats) => formats.filter((f2) => !imageFormats.includes(f2))
-};
-
-// node_modules/pixi.js/lib/assets/detections/parsers/detectMp4.mjs
-init_Extensions();
-
-// node_modules/pixi.js/lib/assets/detections/utils/testVideoFormat.mjs
-var inWorker = "WorkerGlobalScope" in globalThis && globalThis instanceof globalThis.WorkerGlobalScope;
-function testVideoFormat(mimeType) {
-  if (inWorker) {
-    return false;
-  }
-  const video = document.createElement("video");
-  return video.canPlayType(mimeType) !== "";
-}
-
-// node_modules/pixi.js/lib/assets/detections/parsers/detectMp4.mjs
-var detectMp4 = {
-  extension: {
-    type: ExtensionType.DetectionParser,
-    priority: 0
-  },
-  test: async () => testVideoFormat("video/mp4"),
-  add: async (formats) => [...formats, "mp4", "m4v"],
-  remove: async (formats) => formats.filter((f2) => f2 !== "mp4" && f2 !== "m4v")
-};
-
-// node_modules/pixi.js/lib/assets/detections/parsers/detectOgv.mjs
-init_Extensions();
-var detectOgv = {
-  extension: {
-    type: ExtensionType.DetectionParser,
-    priority: 0
-  },
-  test: async () => testVideoFormat("video/ogg"),
-  add: async (formats) => [...formats, "ogv"],
-  remove: async (formats) => formats.filter((f2) => f2 !== "ogv")
-};
-
-// node_modules/pixi.js/lib/assets/detections/parsers/detectWebm.mjs
-init_Extensions();
-var detectWebm = {
-  extension: {
-    type: ExtensionType.DetectionParser,
-    priority: 0
-  },
-  test: async () => testVideoFormat("video/webm"),
-  add: async (formats) => [...formats, "webm"],
-  remove: async (formats) => formats.filter((f2) => f2 !== "webm")
-};
-
-// node_modules/pixi.js/lib/assets/detections/parsers/detectWebp.mjs
-init_Extensions();
-var detectWebp = {
-  extension: {
-    type: ExtensionType.DetectionParser,
-    priority: 0
-  },
-  test: async () => testImageFormat(
-    "data:image/webp;base64,UklGRh4AAABXRUJQVlA4TBEAAAAvAAAAAAfQ//73v/+BiOh/AAA="
-  ),
-  add: async (formats) => [...formats, "webp"],
-  remove: async (formats) => formats.filter((f2) => f2 !== "webp")
-};
-
-// node_modules/pixi.js/lib/assets/loader/Loader.mjs
-init_warn();
-init_path();
-init_convertToList();
-init_isSingleItem();
-var _Loader = class _Loader2 {
-  constructor() {
-    this.loadOptions = { ..._Loader2.defaultOptions };
-    this._parsers = [];
-    this._parsersValidated = false;
-    this.parsers = new Proxy(this._parsers, {
-      set: (target, key, value) => {
-        this._parsersValidated = false;
-        target[key] = value;
-        return true;
-      }
-    });
-    this.promiseCache = {};
-  }
-  /** function used for testing */
-  reset() {
-    this._parsersValidated = false;
-    this.promiseCache = {};
-  }
-  /**
-   * Used internally to generate a promise for the asset to be loaded.
-   * @param url - The URL to be loaded
-   * @param data - any custom additional information relevant to the asset being loaded
-   * @returns - a promise that will resolve to an Asset for example a Texture of a JSON object
-   */
-  _getLoadPromiseAndParser(url, data2) {
-    const result = {
-      promise: null,
-      parser: null
-    };
-    result.promise = (async () => {
-      let asset = null;
-      let parser = null;
-      if (data2.parser || data2.loadParser) {
-        parser = this._parserHash[data2.parser || data2.loadParser];
-        if (data2.loadParser) {
-          warn(
-            `[Assets] "loadParser" is deprecated, use "parser" instead for ${url}`
-          );
-        }
-        if (!parser) {
-          warn(
-            `[Assets] specified load parser "${data2.parser || data2.loadParser}" not found while loading ${url}`
-          );
-        }
-      }
-      if (!parser) {
-        for (let i2 = 0; i2 < this.parsers.length; i2++) {
-          const parserX = this.parsers[i2];
-          if (parserX.load && parserX.test?.(url, data2, this)) {
-            parser = parserX;
-            break;
-          }
-        }
-        if (!parser) {
-          warn(`[Assets] ${url} could not be loaded as we don't know how to parse it, ensure the correct parser has been added`);
-          return null;
-        }
-      }
-      asset = await parser.load(url, data2, this);
-      result.parser = parser;
-      for (let i2 = 0; i2 < this.parsers.length; i2++) {
-        const parser2 = this.parsers[i2];
-        if (parser2.parse) {
-          if (parser2.parse && await parser2.testParse?.(asset, data2, this)) {
-            asset = await parser2.parse(asset, data2, this) || asset;
-            result.parser = parser2;
-          }
-        }
-      }
-      return asset;
-    })();
-    return result;
-  }
-  async load(assetsToLoadIn, onProgressOrOptions) {
-    if (!this._parsersValidated) {
-      this._validateParsers();
-    }
-    const options = typeof onProgressOrOptions === "function" ? { ..._Loader2.defaultOptions, ...this.loadOptions, onProgress: onProgressOrOptions } : { ..._Loader2.defaultOptions, ...this.loadOptions, ...onProgressOrOptions || {} };
-    const { onProgress, onError, strategy, retryCount, retryDelay } = options;
-    let count2 = 0;
-    const assets = {};
-    const singleAsset = isSingleItem(assetsToLoadIn);
-    const assetsToLoad = convertToList(assetsToLoadIn, (item) => ({
-      alias: [item],
-      src: item,
-      data: {}
-    }));
-    const total = assetsToLoad.reduce((sum, asset) => sum + (asset.progressSize || 1), 0);
-    const promises = assetsToLoad.map(async (asset) => {
-      const url = path.toAbsolute(asset.src);
-      if (assets[asset.src]) return;
-      await this._loadAssetWithRetry(url, asset, { onProgress, onError, strategy, retryCount, retryDelay }, assets);
-      count2 += asset.progressSize || 1;
-      if (onProgress) onProgress(count2 / total);
-    });
-    await Promise.all(promises);
-    return singleAsset ? assets[assetsToLoad[0].src] : assets;
-  }
-  /**
-   * Unloads one or more assets. Any unloaded assets will be destroyed, freeing up memory for your app.
-   * The parser that created the asset, will be the one that unloads it.
-   * @example
-   * // Single asset:
-   * const asset = await Loader.load('cool.png');
-   *
-   * await Loader.unload('cool.png');
-   *
-   * console.log(asset.destroyed); // true
-   * @param assetsToUnloadIn - urls that you want to unload, or a single one!
-   */
-  async unload(assetsToUnloadIn) {
-    const assetsToUnload = convertToList(assetsToUnloadIn, (item) => ({
-      alias: [item],
-      src: item
-    }));
-    const promises = assetsToUnload.map(async (asset) => {
-      const url = path.toAbsolute(asset.src);
-      const loadPromise = this.promiseCache[url];
-      if (loadPromise) {
-        const loadedAsset = await loadPromise.promise;
-        delete this.promiseCache[url];
-        await loadPromise.parser?.unload?.(loadedAsset, asset, this);
-      }
-    });
-    await Promise.all(promises);
-  }
-  /** validates our parsers, right now it only checks for name conflicts but we can add more here as required! */
-  _validateParsers() {
-    this._parsersValidated = true;
-    this._parserHash = this._parsers.filter((parser) => parser.name || parser.id).reduce((hash, parser) => {
-      if (!parser.name && !parser.id) {
-        warn(`[Assets] parser should have an id`);
-      } else if (hash[parser.name] || hash[parser.id]) {
-        warn(`[Assets] parser id conflict "${parser.id}"`);
-      }
-      hash[parser.name] = parser;
-      if (parser.id) hash[parser.id] = parser;
-      return hash;
-    }, {});
-  }
-  async _loadAssetWithRetry(url, asset, options, assets) {
-    let attempt = 0;
-    const { onError, strategy, retryCount, retryDelay } = options;
-    const wait = (ms) => new Promise((r2) => setTimeout(r2, ms));
-    while (true) {
-      try {
-        if (!this.promiseCache[url]) {
-          this.promiseCache[url] = this._getLoadPromiseAndParser(url, asset);
-        }
-        assets[asset.src] = await this.promiseCache[url].promise;
-        return;
-      } catch (e2) {
-        delete this.promiseCache[url];
-        delete assets[asset.src];
-        attempt++;
-        const isLast = strategy !== "retry" || attempt > retryCount;
-        if (strategy === "retry" && !isLast) {
-          if (onError) onError(e2, asset);
-          await wait(retryDelay);
-          continue;
-        }
-        if (strategy === "skip") {
-          if (onError) onError(e2, asset);
-          return;
-        }
-        if (onError) onError(e2, asset);
-        const error = new Error(`[Loader.load] Failed to load ${url}.
-${e2}`);
-        if (e2 instanceof Error && e2.stack) {
-          error.stack = e2.stack;
-        }
-        throw error;
-      }
-    }
-  }
-};
-_Loader.defaultOptions = {
-  onProgress: void 0,
-  onError: void 0,
-  strategy: "throw",
-  retryCount: 3,
-  retryDelay: 250
-};
-var Loader = _Loader;
-
-// node_modules/pixi.js/lib/assets/loader/parsers/loadJson.mjs
-init_adapter();
-init_Extensions();
-
-// node_modules/pixi.js/lib/assets/utils/checkDataUrl.mjs
-function checkDataUrl(url, mimes) {
-  if (Array.isArray(mimes)) {
-    for (const mime of mimes) {
-      if (url.startsWith(`data:${mime}`)) return true;
-    }
-    return false;
-  }
-  return url.startsWith(`data:${mimes}`);
-}
-
-// node_modules/pixi.js/lib/assets/utils/checkExtension.mjs
-init_path();
-function checkExtension(url, extension) {
-  const tempURL = url.split("?")[0];
-  const ext = path.extname(tempURL).toLowerCase();
-  if (Array.isArray(extension)) {
-    return extension.includes(ext);
-  }
-  return ext === extension;
-}
-
-// node_modules/pixi.js/lib/assets/loader/parsers/loadJson.mjs
-init_LoaderParser();
-var validJSONExtension = ".json";
-var validJSONMIME = "application/json";
-var loadJson = {
-  extension: {
-    type: ExtensionType.LoadParser,
-    priority: LoaderParserPriority.Low
-  },
-  /** used for deprecation purposes */
-  name: "loadJson",
-  id: "json",
-  test(url) {
-    return checkDataUrl(url, validJSONMIME) || checkExtension(url, validJSONExtension);
-  },
-  async load(url) {
-    const response = await DOMAdapter.get().fetch(url);
-    const json = await response.json();
-    return json;
-  }
-};
-
-// node_modules/pixi.js/lib/assets/loader/parsers/loadTxt.mjs
-init_adapter();
-init_Extensions();
-init_LoaderParser();
-var validTXTExtension = ".txt";
-var validTXTMIME = "text/plain";
-var loadTxt = {
-  /** used for deprecation purposes */
-  name: "loadTxt",
-  id: "text",
-  extension: {
-    type: ExtensionType.LoadParser,
-    priority: LoaderParserPriority.Low,
-    name: "loadTxt"
-  },
-  test(url) {
-    return checkDataUrl(url, validTXTMIME) || checkExtension(url, validTXTExtension);
-  },
-  async load(url) {
-    const response = await DOMAdapter.get().fetch(url);
-    const txt = await response.text();
-    return txt;
-  }
-};
-
-// node_modules/pixi.js/lib/assets/loader/parsers/loadWebFont.mjs
-init_adapter();
-init_Extensions();
-init_warn();
-init_path();
-init_Cache();
-init_LoaderParser();
-var validWeights = [
-  "normal",
-  "bold",
-  "100",
-  "200",
-  "300",
-  "400",
-  "500",
-  "600",
-  "700",
-  "800",
-  "900"
-];
-var validFontExtensions = [".ttf", ".otf", ".woff", ".woff2"];
-var validFontMIMEs = [
-  "font/ttf",
-  "font/otf",
-  "font/woff",
-  "font/woff2"
-];
-var CSS_IDENT_TOKEN_REGEX = /^(--|-?[A-Z_])[0-9A-Z_-]*$/i;
-function getFontFamilyName(url) {
-  const ext = path.extname(url);
-  const name = path.basename(url, ext);
-  const nameWithSpaces = name.replace(/(-|_)/g, " ");
-  const nameTokens = nameWithSpaces.toLowerCase().split(" ").map((word) => word.charAt(0).toUpperCase() + word.slice(1));
-  let valid = nameTokens.length > 0;
-  for (const token of nameTokens) {
-    if (!token.match(CSS_IDENT_TOKEN_REGEX)) {
-      valid = false;
-      break;
-    }
-  }
-  let fontFamilyName = nameTokens.join(" ");
-  if (!valid) {
-    fontFamilyName = `"${fontFamilyName.replace(/[\\"]/g, "\\$&")}"`;
-  }
-  return fontFamilyName;
-}
-var validURICharactersRegex = /^[0-9A-Za-z%:/?#\[\]@!\$&'()\*\+,;=\-._~]*$/;
-function encodeURIWhenNeeded(uri) {
-  if (validURICharactersRegex.test(uri)) {
-    return uri;
-  }
-  return encodeURI(uri);
-}
-var loadWebFont = {
-  extension: {
-    type: ExtensionType.LoadParser,
-    priority: LoaderParserPriority.Low
-  },
-  /** used for deprecation purposes */
-  name: "loadWebFont",
-  id: "web-font",
-  test(url) {
-    return checkDataUrl(url, validFontMIMEs) || checkExtension(url, validFontExtensions);
-  },
-  async load(url, options) {
-    const fonts = DOMAdapter.get().getFontFaceSet();
-    if (fonts) {
-      const fontFaces = [];
-      const name = options.data?.family ?? getFontFamilyName(url);
-      const weights = options.data?.weights?.filter((weight) => validWeights.includes(weight)) ?? ["normal"];
-      const data2 = options.data ?? {};
-      for (let i2 = 0; i2 < weights.length; i2++) {
-        const weight = weights[i2];
-        const font = new FontFace(name, `url('${encodeURIWhenNeeded(url)}')`, {
-          ...data2,
-          weight
-        });
-        await font.load();
-        fonts.add(font);
-        fontFaces.push(font);
-      }
-      if (Cache.has(`${name}-and-url`)) {
-        const cached = Cache.get(`${name}-and-url`);
-        cached.entries.push({ url, faces: fontFaces });
-      } else {
-        Cache.set(`${name}-and-url`, {
-          entries: [{ url, faces: fontFaces }]
-        });
-      }
-      return fontFaces.length === 1 ? fontFaces[0] : fontFaces;
-    }
-    warn("[loadWebFont] FontFace API is not supported. Skipping loading font");
-    return null;
-  },
-  unload(font) {
-    const fonts = Array.isArray(font) ? font : [font];
-    const fontFamily = fonts[0].family;
-    const cached = Cache.get(`${fontFamily}-and-url`);
-    const entry = cached.entries.find((f2) => f2.faces.some((t2) => fonts.indexOf(t2) !== -1));
-    entry.faces = entry.faces.filter((f2) => fonts.indexOf(f2) === -1);
-    if (entry.faces.length === 0) {
-      cached.entries = cached.entries.filter((f2) => f2 !== entry);
-    }
-    fonts.forEach((t2) => {
-      DOMAdapter.get().getFontFaceSet().delete(t2);
-    });
-    if (cached.entries.length === 0) {
-      Cache.remove(`${fontFamily}-and-url`);
-    }
-  }
-};
-
-// node_modules/pixi.js/lib/assets/loader/parsers/textures/loadSVG.mjs
-init_adapter();
-init_Extensions();
-init_ImageSource();
-init_GraphicsContext();
-
-// node_modules/pixi.js/lib/utils/network/getResolutionOfUrl.mjs
-init_Resolver();
-function getResolutionOfUrl(url, defaultValue2 = 1) {
-  const resolution = Resolver.RETINA_PREFIX?.exec(url);
-  if (resolution) {
-    return parseFloat(resolution[1]);
-  }
-  return defaultValue2;
-}
-
-// node_modules/pixi.js/lib/assets/loader/parsers/textures/loadSVG.mjs
-init_LoaderParser();
-
-// node_modules/pixi.js/lib/assets/loader/parsers/textures/utils/createTexture.mjs
-init_Texture();
-init_warn();
-init_Cache();
-function createTexture(source5, loader, url) {
-  source5.label = url;
-  source5._sourceOrigin = url;
-  const texture = new Texture({
-    source: source5,
-    label: url
-  });
-  const unload = () => {
-    delete loader.promiseCache[url];
-    if (Cache.has(url)) {
-      Cache.remove(url);
-    }
-  };
-  texture.source.once("destroy", () => {
-    if (loader.promiseCache[url]) {
-      warn("[Assets] A TextureSource managed by Assets was destroyed instead of unloaded! Use Assets.unload() instead of destroying the TextureSource.");
-      unload();
-    }
-  });
-  texture.once("destroy", () => {
-    if (!source5.destroyed) {
-      warn("[Assets] A Texture managed by Assets was destroyed instead of unloaded! Use Assets.unload() instead of destroying the Texture.");
-      unload();
-    }
-  });
-  return texture;
-}
-
-// node_modules/pixi.js/lib/assets/loader/parsers/textures/loadSVG.mjs
-var validSVGExtension = ".svg";
-var validSVGMIME = "image/svg+xml";
-var loadSvg = {
-  extension: {
-    type: ExtensionType.LoadParser,
-    priority: LoaderParserPriority.Low,
-    name: "loadSVG"
-  },
-  /** used for deprecation purposes */
-  name: "loadSVG",
-  id: "svg",
-  config: {
-    crossOrigin: "anonymous",
-    parseAsGraphicsContext: false
-  },
-  test(url) {
-    return checkDataUrl(url, validSVGMIME) || checkExtension(url, validSVGExtension);
-  },
-  async load(url, asset, loader) {
-    if (asset.data?.parseAsGraphicsContext ?? this.config.parseAsGraphicsContext) {
-      return loadAsGraphics(url);
-    }
-    return loadAsTexture(url, asset, loader, this.config.crossOrigin);
-  },
-  unload(asset) {
-    asset.destroy(true);
-  }
-};
-async function loadAsTexture(url, asset, loader, crossOrigin2) {
-  const response = await DOMAdapter.get().fetch(url);
-  const image = DOMAdapter.get().createImage();
-  image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(await response.text())}`;
-  image.crossOrigin = crossOrigin2;
-  await image.decode();
-  const width = asset.data?.width ?? image.width;
-  const height = asset.data?.height ?? image.height;
-  const resolution = asset.data?.resolution || getResolutionOfUrl(url);
-  const canvasWidth = Math.ceil(width * resolution);
-  const canvasHeight = Math.ceil(height * resolution);
-  const canvas = DOMAdapter.get().createCanvas(canvasWidth, canvasHeight);
-  const context2 = canvas.getContext("2d");
-  context2.imageSmoothingEnabled = true;
-  context2.imageSmoothingQuality = "high";
-  context2.drawImage(image, 0, 0, width * resolution, height * resolution);
-  const { parseAsGraphicsContext: _p, ...rest } = asset.data ?? {};
-  const base = new ImageSource({
-    resource: canvas,
-    alphaMode: "premultiply-alpha-on-upload",
-    resolution,
-    ...rest
-  });
-  return createTexture(base, loader, url);
-}
-async function loadAsGraphics(url) {
-  const response = await DOMAdapter.get().fetch(url);
-  const svgSource = await response.text();
-  const context2 = new GraphicsContext();
-  context2.svg(svgSource);
-  return context2;
-}
-
-// node_modules/pixi.js/lib/assets/loader/parsers/textures/loadTextures.mjs
-init_adapter();
-init_Extensions();
-init_ImageSource();
-
-// node_modules/pixi.js/lib/_virtual/checkImageBitmap.worker.mjs
-var WORKER_CODE = `(function () {
-    'use strict';
-
-    const WHITE_PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=";
-    async function checkImageBitmap() {
-      try {
-        if (typeof createImageBitmap !== "function") return false;
-        const response = await fetch(WHITE_PNG);
-        const imageBlob = await response.blob();
-        const imageBitmap = await createImageBitmap(imageBlob);
-        return imageBitmap.width === 1 && imageBitmap.height === 1;
-      } catch (_e) {
-        return false;
-      }
-    }
-    void checkImageBitmap().then((result) => {
-      self.postMessage(result);
-    });
-
-})();
-`;
-var WORKER_URL = null;
-var WorkerInstance = class {
-  constructor() {
-    if (!WORKER_URL) {
-      WORKER_URL = URL.createObjectURL(new Blob([WORKER_CODE], { type: "application/javascript" }));
-    }
-    this.worker = new Worker(WORKER_URL);
-  }
-};
-WorkerInstance.revokeObjectURL = function revokeObjectURL() {
-  if (WORKER_URL) {
-    URL.revokeObjectURL(WORKER_URL);
-    WORKER_URL = null;
-  }
-};
-
-// node_modules/pixi.js/lib/_virtual/loadImageBitmap.worker.mjs
-var WORKER_CODE2 = '(function () {\n    \'use strict\';\n\n    async function loadImageBitmap(url, alphaMode) {\n      const response = await fetch(url);\n      if (!response.ok) {\n        throw new Error(`[WorkerManager.loadImageBitmap] Failed to fetch ${url}: ${response.status} ${response.statusText}`);\n      }\n      const imageBlob = await response.blob();\n      return alphaMode === "premultiplied-alpha" ? createImageBitmap(imageBlob, { premultiplyAlpha: "none" }) : createImageBitmap(imageBlob);\n    }\n    self.onmessage = async (event) => {\n      try {\n        const imageBitmap = await loadImageBitmap(event.data.data[0], event.data.data[1]);\n        self.postMessage({\n          data: imageBitmap,\n          uuid: event.data.uuid,\n          id: event.data.id\n        }, [imageBitmap]);\n      } catch (e) {\n        self.postMessage({\n          error: e,\n          uuid: event.data.uuid,\n          id: event.data.id\n        });\n      }\n    };\n\n})();\n';
-var WORKER_URL2 = null;
-var WorkerInstance2 = class {
-  constructor() {
-    if (!WORKER_URL2) {
-      WORKER_URL2 = URL.createObjectURL(new Blob([WORKER_CODE2], { type: "application/javascript" }));
-    }
-    this.worker = new Worker(WORKER_URL2);
-  }
-};
-WorkerInstance2.revokeObjectURL = function revokeObjectURL2() {
-  if (WORKER_URL2) {
-    URL.revokeObjectURL(WORKER_URL2);
-    WORKER_URL2 = null;
-  }
-};
-
-// node_modules/pixi.js/lib/assets/loader/workers/WorkerManager.mjs
-var UUID = 0;
-var MAX_WORKERS;
-var WorkerManagerClass = class {
-  constructor() {
-    this._initialized = false;
-    this._createdWorkers = 0;
-    this._workerPool = [];
-    this._queue = [];
-    this._resolveHash = {};
-  }
-  /**
-   * Checks if ImageBitmap is supported in the current environment.
-   *
-   * This method uses a dedicated worker to test ImageBitmap support
-   * and caches the result for subsequent calls.
-   * @returns Promise that resolves to true if ImageBitmap is supported, false otherwise
-   */
-  isImageBitmapSupported() {
-    if (this._isImageBitmapSupported !== void 0) return this._isImageBitmapSupported;
-    this._isImageBitmapSupported = new Promise((resolve) => {
-      const { worker } = new WorkerInstance();
-      worker.addEventListener("message", (event) => {
-        worker.terminate();
-        WorkerInstance.revokeObjectURL();
-        resolve(event.data);
-      });
-    });
-    return this._isImageBitmapSupported;
-  }
-  /**
-   * Loads an image as an ImageBitmap using a web worker.
-   * @param src - The source URL or path of the image to load
-   * @param asset - Optional resolved asset containing additional texture source options
-   * @returns Promise that resolves to the loaded ImageBitmap
-   * @example
-   * ```typescript
-   * const bitmap = await WorkerManager.loadImageBitmap('image.png');
-   * const bitmapWithOptions = await WorkerManager.loadImageBitmap('image.png', asset);
-   * ```
-   */
-  loadImageBitmap(src, asset) {
-    return this._run("loadImageBitmap", [src, asset?.data?.alphaMode]);
-  }
-  /**
-   * Initializes the worker pool if not already initialized.
-   * Currently a no-op but reserved for future initialization logic.
-   */
-  async _initWorkers() {
-    if (this._initialized) return;
-    this._initialized = true;
-  }
-  /**
-   * Gets an available worker from the pool or creates a new one if needed.
-   *
-   * Workers are created up to the MAX_WORKERS limit (based on navigator.hardwareConcurrency).
-   * Each worker is configured with a message handler for processing results.
-   * @returns Available worker or undefined if pool is at capacity and no workers are free
-   */
-  _getWorker() {
-    if (MAX_WORKERS === void 0) {
-      MAX_WORKERS = navigator.hardwareConcurrency || 4;
-    }
-    let worker = this._workerPool.pop();
-    if (!worker && this._createdWorkers < MAX_WORKERS) {
-      this._createdWorkers++;
-      worker = new WorkerInstance2().worker;
-      worker.addEventListener("message", (event) => {
-        this._complete(event.data);
-        this._returnWorker(event.target);
-        this._next();
-      });
-    }
-    return worker;
-  }
-  /**
-   * Returns a worker to the pool after completing a task.
-   * @param worker - The worker to return to the pool
-   */
-  _returnWorker(worker) {
-    this._workerPool.push(worker);
-  }
-  /**
-   * Handles completion of a worker task by resolving or rejecting the corresponding promise.
-   * @param data - Result data from the worker containing uuid, data, and optional error
-   */
-  _complete(data2) {
-    if (!this._resolveHash[data2.uuid]) {
-      return;
-    }
-    if (data2.error !== void 0) {
-      this._resolveHash[data2.uuid].reject(data2.error);
-    } else {
-      this._resolveHash[data2.uuid].resolve(data2.data);
-    }
-    delete this._resolveHash[data2.uuid];
-  }
-  /**
-   * Executes a task using the worker pool system.
-   *
-   * Queues the task and processes it when a worker becomes available.
-   * @param id - Identifier for the type of task to run
-   * @param args - Arguments to pass to the worker
-   * @returns Promise that resolves with the worker's result
-   */
-  async _run(id, args) {
-    await this._initWorkers();
-    const promise2 = new Promise((resolve, reject) => {
-      this._queue.push({ id, arguments: args, resolve, reject });
-    });
-    this._next();
-    return promise2;
-  }
-  /**
-   * Processes the next item in the queue if workers are available.
-   *
-   * This method is called after worker initialization and when workers
-   * complete tasks to continue processing the queue.
-   */
-  _next() {
-    if (!this._queue.length) return;
-    const worker = this._getWorker();
-    if (!worker) {
-      return;
-    }
-    const toDo = this._queue.pop();
-    const id = toDo.id;
-    this._resolveHash[UUID] = { resolve: toDo.resolve, reject: toDo.reject };
-    worker.postMessage({
-      data: toDo.arguments,
-      uuid: UUID++,
-      id
-    });
-  }
-  /**
-   * Resets the worker manager, terminating all workers and clearing the queue.
-   *
-   * This method:
-   * - Terminates all active workers
-   * - Rejects all pending promises with an error
-   * - Clears all internal state
-   * - Resets initialization flags
-   *
-   * This should be called when the worker manager is no longer needed
-   * to prevent memory leaks and ensure proper cleanup.
-   * @example
-   * ```typescript
-   * // Clean up when shutting down
-   * WorkerManager.reset();
-   * ```
-   */
-  reset() {
-    this._workerPool.forEach((worker) => worker.terminate());
-    this._workerPool.length = 0;
-    Object.values(this._resolveHash).forEach(({ reject }) => {
-      reject?.(new Error("WorkerManager has been reset before completion"));
-    });
-    this._resolveHash = {};
-    this._queue.length = 0;
-    this._initialized = false;
-    this._createdWorkers = 0;
-  }
-};
-var WorkerManager = new WorkerManagerClass();
-
-// node_modules/pixi.js/lib/assets/loader/parsers/textures/loadTextures.mjs
-init_LoaderParser();
-var validImageExtensions = [".jpeg", ".jpg", ".png", ".webp", ".avif"];
-var validImageMIMEs = [
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "image/avif"
-];
-async function loadImageBitmap(url, asset) {
-  const response = await DOMAdapter.get().fetch(url);
-  if (!response.ok) {
-    throw new Error(`[loadImageBitmap] Failed to fetch ${url}: ${response.status} ${response.statusText}`);
-  }
-  const imageBlob = await response.blob();
-  return asset?.data?.alphaMode === "premultiplied-alpha" ? createImageBitmap(imageBlob, { premultiplyAlpha: "none" }) : createImageBitmap(imageBlob);
-}
-var loadTextures = {
-  /** used for deprecation purposes */
-  name: "loadTextures",
-  id: "texture",
-  extension: {
-    type: ExtensionType.LoadParser,
-    priority: LoaderParserPriority.High,
-    name: "loadTextures"
-  },
-  config: {
-    preferWorkers: true,
-    preferCreateImageBitmap: true,
-    crossOrigin: "anonymous"
-  },
-  test(url) {
-    return checkDataUrl(url, validImageMIMEs) || checkExtension(url, validImageExtensions);
-  },
-  async load(url, asset, loader) {
-    let src = null;
-    if (globalThis.createImageBitmap && this.config.preferCreateImageBitmap) {
-      if (this.config.preferWorkers && await WorkerManager.isImageBitmapSupported()) {
-        src = await WorkerManager.loadImageBitmap(url, asset);
-      } else {
-        src = await loadImageBitmap(url, asset);
-      }
-    } else {
-      src = await new Promise((resolve, reject) => {
-        src = DOMAdapter.get().createImage();
-        src.crossOrigin = this.config.crossOrigin;
-        src.src = url;
-        if (src.complete) {
-          resolve(src);
-        } else {
-          src.onload = () => {
-            resolve(src);
-          };
-          src.onerror = reject;
-        }
-      });
-    }
-    const base = new ImageSource({
-      resource: src,
-      alphaMode: "premultiply-alpha-on-upload",
-      resolution: asset.data?.resolution || getResolutionOfUrl(url),
-      ...asset.data
-    });
-    return createTexture(base, loader, url);
-  },
-  unload(texture) {
-    texture.destroy(true);
-  }
-};
-
-// node_modules/pixi.js/lib/assets/loader/parsers/textures/loadVideoTextures.mjs
-init_Extensions();
-init_VideoSource();
-init_detectVideoAlphaMode();
-var potentialVideoExtensions = [".mp4", ".m4v", ".webm", ".ogg", ".ogv", ".h264", ".avi", ".mov"];
-var validVideoExtensions;
-var validVideoMIMEs;
-function crossOrigin(element, url, crossorigin) {
-  if (crossorigin === void 0 && !url.startsWith("data:")) {
-    element.crossOrigin = determineCrossOrigin(url);
-  } else if (crossorigin !== false) {
-    element.crossOrigin = typeof crossorigin === "string" ? crossorigin : "anonymous";
-  }
-}
-function preloadVideo(element) {
-  return new Promise((resolve, reject) => {
-    element.addEventListener("canplaythrough", loaded);
-    element.addEventListener("error", error);
-    element.load();
-    function loaded() {
-      cleanup();
-      resolve();
-    }
-    function error(err) {
-      cleanup();
-      reject(err);
-    }
-    function cleanup() {
-      element.removeEventListener("canplaythrough", loaded);
-      element.removeEventListener("error", error);
-    }
-  });
-}
-function determineCrossOrigin(url, loc = globalThis.location) {
-  if (url.startsWith("data:")) {
-    return "";
-  }
-  loc || (loc = globalThis.location);
-  const parsedUrl = new URL(url, document.baseURI);
-  if (parsedUrl.hostname !== loc.hostname || parsedUrl.port !== loc.port || parsedUrl.protocol !== loc.protocol) {
-    return "anonymous";
-  }
-  return "";
-}
-function getBrowserSupportedVideoExtensions() {
-  const supportedExtensions = [];
-  const supportedMimes = [];
-  for (const ext of potentialVideoExtensions) {
-    const mimeType = VideoSource.MIME_TYPES[ext.substring(1)] || `video/${ext.substring(1)}`;
-    if (testVideoFormat(mimeType)) {
-      supportedExtensions.push(ext);
-      if (!supportedMimes.includes(mimeType)) {
-        supportedMimes.push(mimeType);
-      }
-    }
-  }
-  return {
-    validVideoExtensions: supportedExtensions,
-    validVideoMime: supportedMimes
-  };
-}
-var loadVideoTextures = {
-  /** used for deprecation purposes */
-  name: "loadVideo",
-  id: "video",
-  extension: {
-    type: ExtensionType.LoadParser,
-    name: "loadVideo"
-  },
-  test(url) {
-    if (!validVideoExtensions || !validVideoMIMEs) {
-      const { validVideoExtensions: ve, validVideoMime: vm } = getBrowserSupportedVideoExtensions();
-      validVideoExtensions = ve;
-      validVideoMIMEs = vm;
-    }
-    const isValidDataUrl = checkDataUrl(url, validVideoMIMEs);
-    const isValidExtension = checkExtension(url, validVideoExtensions);
-    return isValidDataUrl || isValidExtension;
-  },
-  async load(url, asset, loader) {
-    const options = {
-      ...VideoSource.defaultOptions,
-      resolution: asset.data?.resolution || getResolutionOfUrl(url),
-      alphaMode: asset.data?.alphaMode || await detectVideoAlphaMode(),
-      ...asset.data
-    };
-    const videoElement = document.createElement("video");
-    const attributeMap = {
-      preload: options.autoLoad !== false ? "auto" : void 0,
-      "webkit-playsinline": options.playsinline !== false ? "" : void 0,
-      playsinline: options.playsinline !== false ? "" : void 0,
-      muted: options.muted === true ? "" : void 0,
-      loop: options.loop === true ? "" : void 0,
-      autoplay: options.autoPlay !== false ? "" : void 0
-    };
-    Object.keys(attributeMap).forEach((key) => {
-      const value = attributeMap[key];
-      if (value !== void 0) videoElement.setAttribute(key, value);
-    });
-    if (options.muted === true) {
-      videoElement.muted = true;
-    }
-    crossOrigin(videoElement, url, options.crossorigin);
-    const sourceElement = document.createElement("source");
-    let mime;
-    if (options.mime) {
-      mime = options.mime;
-    } else if (url.startsWith("data:")) {
-      mime = url.slice(5, url.indexOf(";"));
-    } else if (!url.startsWith("blob:")) {
-      const ext = url.split("?")[0].slice(url.lastIndexOf(".") + 1).toLowerCase();
-      mime = VideoSource.MIME_TYPES[ext] || `video/${ext}`;
-    }
-    sourceElement.src = url;
-    if (mime) {
-      sourceElement.type = mime;
-    }
-    return new Promise((resolve, reject) => {
-      if (options.preload && !options.autoPlay) {
-        videoElement.load();
-      }
-      videoElement.addEventListener("canplay", onCanPlay);
-      videoElement.addEventListener("error", onError);
-      sourceElement.addEventListener("error", onError);
-      videoElement.appendChild(sourceElement);
-      async function onCanPlay() {
-        const base = new VideoSource({ ...options, resource: videoElement });
-        cleanup();
-        if (asset.data.preload) {
-          await preloadVideo(videoElement);
-        }
-        resolve(createTexture(base, loader, url));
-      }
-      function onError(event) {
-        cleanup();
-        reject(event);
-      }
-      function cleanup() {
-        videoElement.removeEventListener("canplay", onCanPlay);
-        videoElement.removeEventListener("error", onError);
-        sourceElement.removeEventListener("error", onError);
-      }
-    });
-  },
-  unload(texture) {
-    texture.destroy(true);
-  }
-};
-
-// node_modules/pixi.js/lib/assets/resolver/parsers/resolveJsonUrl.mjs
-init_Extensions();
-init_Resolver();
-
-// node_modules/pixi.js/lib/assets/resolver/parsers/resolveTextureUrl.mjs
-init_Extensions();
-init_Resolver();
-var resolveTextureUrl = {
-  extension: {
-    type: ExtensionType.ResolveParser,
-    name: "resolveTexture"
-  },
-  test: loadTextures.test,
-  parse: (value) => ({
-    resolution: parseFloat(Resolver.RETINA_PREFIX.exec(value)?.[1] ?? "1"),
-    format: value.split(".").pop(),
-    src: value
-  })
-};
-
-// node_modules/pixi.js/lib/assets/resolver/parsers/resolveJsonUrl.mjs
-var resolveJsonUrl = {
-  extension: {
-    type: ExtensionType.ResolveParser,
-    priority: -2,
-    name: "resolveJson"
-  },
-  test: (value) => Resolver.RETINA_PREFIX.test(value) && value.endsWith(".json"),
-  parse: resolveTextureUrl.parse
-};
-
-// node_modules/pixi.js/lib/assets/Assets.mjs
-init_Resolver();
-init_convertToList();
-init_isSingleItem();
-var AssetsClass = class {
-  constructor() {
-    this._detections = [];
-    this._initialized = false;
-    this.resolver = new Resolver();
-    this.loader = new Loader();
-    this.cache = Cache;
-    this._backgroundLoader = new BackgroundLoader(this.loader);
-    this._backgroundLoader.active = true;
-    this.reset();
-  }
-  /**
-   * Initializes the Assets class with configuration options. While not required,
-   * calling this before loading assets is recommended to set up default behaviors.
-   * @param options - Configuration options for the Assets system
-   * @example
-   * ```ts
-   * // Basic initialization (optional as Assets.load will call this automatically)
-   * await Assets.init();
-   *
-   * // With CDN configuration
-   * await Assets.init({
-   *     basePath: 'https://my-cdn.com/assets/',
-   *     defaultSearchParams: { version: '1.0.0' }
-   * });
-   *
-   * // With manifest and preferences
-   * await Assets.init({
-   *     manifest: {
-   *         bundles: [{
-   *             name: 'game-screen',
-   *             assets: [
-   *                 {
-   *                     alias: 'hero',
-   *                     src: 'hero.{png,webp}',
-   *                     data: { scaleMode: SCALE_MODES.NEAREST }
-   *                 },
-   *                 {
-   *                     alias: 'map',
-   *                     src: 'map.json'
-   *                 }
-   *             ]
-   *         }]
-   *     },
-   *     // Optimize for device capabilities
-   *     texturePreference: {
-   *         resolution: window.devicePixelRatio,
-   *         format: ['webp', 'png']
-   *     },
-   *     // Set global preferences
-   *     preferences: {
-   *         crossOrigin: 'anonymous',
-   *     }
-   * });
-   *
-   * // Load assets after initialization
-   * const heroTexture = await Assets.load('hero');
-   * ```
-   * @remarks
-   * - Can be called only once; subsequent calls will be ignored with a warning
-   * - Format detection runs automatically unless `skipDetections` is true
-   * - The manifest can be a URL to a JSON file or an inline object
-   * @see {@link AssetInitOptions} For all available initialization options
-   * @see {@link AssetsManifest} For manifest format details
-   */
-  async init(options = {}) {
-    if (this._initialized) {
-      warn("[Assets]AssetManager already initialized, did you load before calling this Assets.init()?");
-      return;
-    }
-    this._initialized = true;
-    if (options.defaultSearchParams) {
-      this.resolver.setDefaultSearchParams(options.defaultSearchParams);
-    }
-    if (options.basePath) {
-      this.resolver.basePath = options.basePath;
-    }
-    if (options.bundleIdentifier) {
-      this.resolver.setBundleIdentifier(options.bundleIdentifier);
-    }
-    if (options.manifest) {
-      let manifest = options.manifest;
-      if (typeof manifest === "string") {
-        manifest = await this.load(manifest);
-      }
-      this.resolver.addManifest(manifest);
-    }
-    const resolutionPref = options.texturePreference?.resolution ?? 1;
-    const resolution = typeof resolutionPref === "number" ? [resolutionPref] : resolutionPref;
-    const formats = await this._detectFormats({
-      preferredFormats: options.texturePreference?.format,
-      skipDetections: options.skipDetections,
-      detections: this._detections
-    });
-    this.resolver.prefer({
-      params: {
-        format: formats,
-        resolution
-      }
-    });
-    if (options.preferences) {
-      this.setPreferences(options.preferences);
-    }
-    if (options.loadOptions) {
-      this.loader.loadOptions = {
-        ...this.loader.loadOptions,
-        ...options.loadOptions
-      };
-    }
-  }
-  /**
-   * Registers assets with the Assets resolver. This method maps keys (aliases) to asset sources,
-   * allowing you to load assets using friendly names instead of direct URLs.
-   * @param assets - The unresolved assets to add to the resolver
-   * @example
-   * ```ts
-   * // Basic usage - single asset
-   * Assets.add({
-   *     alias: 'myTexture',
-   *     src: 'assets/texture.png'
-   * });
-   * const texture = await Assets.load('myTexture');
-   *
-   * // Multiple aliases for the same asset
-   * Assets.add({
-   *     alias: ['hero', 'player'],
-   *     src: 'hero.png'
-   * });
-   * const hero1 = await Assets.load('hero');
-   * const hero2 = await Assets.load('player'); // Same texture
-   *
-   * // Multiple format support
-   * Assets.add({
-   *     alias: 'character',
-   *     src: 'character.{webp,png}' // Will choose best format
-   * });
-   * Assets.add({
-   *     alias: 'character',
-   *     src: ['character.webp', 'character.png'], // Explicitly specify formats
-   * });
-   *
-   * // With texture options
-   * Assets.add({
-   *     alias: 'sprite',
-   *     src: 'sprite.png',
-   *     data: { scaleMode: 'nearest' }
-   * });
-   *
-   * // Multiple assets at once
-   * Assets.add([
-   *     { alias: 'bg', src: 'background.png' },
-   *     { alias: 'music', src: 'music.mp3' },
-   *     { alias: 'spritesheet', src: 'sheet.json', data: { ignoreMultiPack: false } }
-   * ]);
-   * ```
-   * @remarks
-   * - Assets are resolved when loaded, not when added
-   * - Multiple formats use the best available format for the browser
-   * - Adding with same alias overwrites previous definition
-   * - The `data` property is passed to the asset loader
-   * @see {@link Resolver} For details on asset resolution
-   * @see {@link LoaderParser} For asset-specific data options
-   * @advanced
-   */
-  add(assets) {
-    this.resolver.add(assets);
-  }
-  async load(urls, onProgress) {
-    if (!this._initialized) {
-      await this.init();
-    }
-    const singleAsset = isSingleItem(urls);
-    const urlArray = convertToList(urls).map((url) => {
-      if (typeof url !== "string") {
-        const aliases = this.resolver.getAlias(url);
-        if (aliases.some((alias) => !this.resolver.hasKey(alias))) {
-          this.add(url);
-        }
-        return Array.isArray(aliases) ? aliases[0] : aliases;
-      }
-      if (!this.resolver.hasKey(url)) this.add({ alias: url, src: url });
-      return url;
-    });
-    const resolveResults = this.resolver.resolve(urlArray);
-    const out2 = await this._mapLoadToResolve(resolveResults, onProgress);
-    return singleAsset ? out2[urlArray[0]] : out2;
-  }
-  /**
-   * Registers a bundle of assets that can be loaded as a group. Bundles are useful for organizing
-   * assets into logical groups, such as game levels or UI screens.
-   * @param bundleId - Unique identifier for the bundle
-   * @param assets - Assets to include in the bundle
-   * @example
-   * ```ts
-   * // Add a bundle using array format
-   * Assets.addBundle('animals', [
-   *     { alias: 'bunny', src: 'bunny.png' },
-   *     { alias: 'chicken', src: 'chicken.png' },
-   *     { alias: 'thumper', src: 'thumper.png' },
-   * ]);
-   *
-   * // Add a bundle using object format
-   * Assets.addBundle('animals', {
-   *     bunny: 'bunny.png',
-   *     chicken: 'chicken.png',
-   *     thumper: 'thumper.png',
-   * });
-   *
-   * // Add a bundle with advanced options
-   * Assets.addBundle('ui', [
-   *     {
-   *         alias: 'button',
-   *         src: 'button.{webp,png}',
-   *         data: { scaleMode: 'nearest' }
-   *     },
-   *     {
-   *         alias: ['logo', 'brand'],  // Multiple aliases
-   *         src: 'logo.svg',
-   *         data: { resolution: 2 }
-   *     }
-   * ]);
-   *
-   * // Load the bundle
-   * await Assets.loadBundle('animals');
-   *
-   * // Use the loaded assets
-   * const bunny = Sprite.from('bunny');
-   * const chicken = Sprite.from('chicken');
-   * ```
-   * @remarks
-   * - Bundle IDs must be unique
-   * - Assets in bundles are not loaded until `loadBundle` is called
-   * - Bundles can be background loaded using `backgroundLoadBundle`
-   * - Assets in bundles can be loaded individually using their aliases
-   * @see {@link Assets.loadBundle} For loading bundles
-   * @see {@link Assets.backgroundLoadBundle} For background loading bundles
-   * @see {@link Assets.unloadBundle} For unloading bundles
-   * @see {@link AssetsManifest} For manifest format details
-   */
-  addBundle(bundleId, assets) {
-    this.resolver.addBundle(bundleId, assets);
-  }
-  /**
-   * Loads a bundle or multiple bundles of assets. Bundles are collections of related assets
-   * that can be loaded together.
-   * @param bundleIds - Single bundle ID or array of bundle IDs to load
-   * @param onProgress - Optional callback for load progress (0.0 to 1.0)
-   * @returns Promise that resolves with the loaded bundle assets
-   * @example
-   * ```ts
-   * // Define bundles in your manifest
-   * const manifest = {
-   *     bundles: [
-   *         {
-   *             name: 'load-screen',
-   *             assets: [
-   *                 {
-   *                     alias: 'background',
-   *                     src: 'sunset.png',
-   *                 },
-   *                 {
-   *                     alias: 'bar',
-   *                     src: 'load-bar.{png,webp}', // use an array of individual assets
-   *                 },
-   *             ],
-   *         },
-   *         {
-   *             name: 'game-screen',
-   *             assets: [
-   *                 {
-   *                     alias: 'character',
-   *                     src: 'robot.png',
-   *                 },
-   *                 {
-   *                     alias: 'enemy',
-   *                     src: 'bad-guy.png',
-   *                 },
-   *             ],
-   *         },
-   *     ]
-   * };
-   *
-   * // Initialize with manifest
-   * await Assets.init({ manifest });
-   *
-   * // Or add bundles programmatically
-   * Assets.addBundle('load-screen', [...]);
-   * Assets.loadBundle('load-screen');
-   *
-   * // Load a single bundle
-   * await Assets.loadBundle('load-screen');
-   * const bg = Sprite.from('background'); // Uses alias from bundle
-   *
-   * // Load multiple bundles
-   * await Assets.loadBundle([
-   *     'load-screen',
-   *     'game-screen'
-   * ]);
-   *
-   * // Load with progress tracking
-   * await Assets.loadBundle('game-screen', (progress) => {
-   *     console.log(`Loading: ${Math.round(progress * 100)}%`);
-   * });
-   * ```
-   * @remarks
-   * - Bundle assets are cached automatically
-   * - Bundles can be pre-loaded using `backgroundLoadBundle`
-   * - Assets in bundles can be accessed by their aliases
-   * - Progress callback receives values from 0.0 to 1.0
-   * @throws {Error} If the bundle ID doesn't exist in the manifest
-   * @see {@link Assets.addBundle} For adding bundles programmatically
-   * @see {@link Assets.backgroundLoadBundle} For background loading bundles
-   * @see {@link Assets.unloadBundle} For unloading bundles
-   * @see {@link AssetsManifest} For manifest format details
-   */
-  async loadBundle(bundleIds, onProgress) {
-    if (!this._initialized) {
-      await this.init();
-    }
-    let singleAsset = false;
-    if (typeof bundleIds === "string") {
-      singleAsset = true;
-      bundleIds = [bundleIds];
-    }
-    const resolveResults = this.resolver.resolveBundle(bundleIds);
-    const out2 = {};
-    const keys = Object.keys(resolveResults);
-    let total = 0;
-    const counts = [];
-    const _onProgress = () => {
-      onProgress?.(counts.reduce((a2, b2) => a2 + b2, 0) / total);
-    };
-    const promises = keys.map((bundleId, i2) => {
-      const resolveResult = resolveResults[bundleId];
-      const values = Object.values(resolveResult);
-      const totalAssetsToLoad = [...new Set(values.flat())];
-      const progressSize = totalAssetsToLoad.reduce((sum, asset) => sum + (asset.progressSize || 1), 0);
-      counts.push(0);
-      total += progressSize;
-      return this._mapLoadToResolve(resolveResult, (e2) => {
-        counts[i2] = e2 * progressSize;
-        _onProgress();
-      }).then((resolveResult2) => {
-        out2[bundleId] = resolveResult2;
-      });
-    });
-    await Promise.all(promises);
-    return singleAsset ? out2[bundleIds[0]] : out2;
-  }
-  /**
-   * Initiates background loading of assets. This allows assets to be loaded passively while other operations
-   * continue, making them instantly available when needed later.
-   *
-   * Background loading is useful for:
-   * - Preloading game levels while in a menu
-   * - Loading non-critical assets during gameplay
-   * - Reducing visible loading screens
-   * @param urls - Single URL/alias or array of URLs/aliases to load in the background
-   * @example
-   * ```ts
-   * // Basic background loading
-   * Assets.backgroundLoad('images/level2-assets.png');
-   *
-   * // Background load multiple assets
-   * Assets.backgroundLoad([
-   *     'images/sprite1.png',
-   *     'images/sprite2.png',
-   *     'images/background.png'
-   * ]);
-   *
-   * // Later, when you need the assets
-   * const textures = await Assets.load([
-   *     'images/sprite1.png',
-   *     'images/sprite2.png'
-   * ]); // Resolves immediately if background loading completed
-   * ```
-   * @remarks
-   * - Background loading happens one asset at a time to avoid blocking the main thread
-   * - Loading can be interrupted safely by calling `Assets.load()`
-   * - Assets are cached as they complete loading
-   * - No progress tracking is available for background loading
-   */
-  async backgroundLoad(urls) {
-    if (!this._initialized) {
-      await this.init();
-    }
-    if (typeof urls === "string") {
-      urls = [urls];
-    }
-    const resolveResults = this.resolver.resolve(urls);
-    this._backgroundLoader.add(Object.values(resolveResults));
-  }
-  /**
-   * Initiates background loading of asset bundles. Similar to backgroundLoad but works with
-   * predefined bundles of assets.
-   *
-   * Perfect for:
-   * - Preloading level bundles during gameplay
-   * - Loading UI assets during splash screens
-   * - Preparing assets for upcoming game states
-   * @param bundleIds - Single bundle ID or array of bundle IDs to load in the background
-   * @example
-   * ```ts
-   * // Define bundles in your manifest
-   * await Assets.init({
-   *     manifest: {
-   *         bundles: [
-   *             {
-   *               name: 'home',
-   *               assets: [
-   *                 {
-   *                     alias: 'background',
-   *                     src: 'images/home-bg.png',
-   *                 },
-   *                 {
-   *                     alias: 'logo',
-   *                     src: 'images/logo.png',
-   *                 }
-   *              ]
-   *            },
-   *            {
-   *             name: 'level-1',
-   *             assets: [
-   *                 {
-   *                     alias: 'background',
-   *                     src: 'images/level1/bg.png',
-   *                 },
-   *                 {
-   *                     alias: 'sprites',
-   *                     src: 'images/level1/sprites.json'
-   *                 }
-   *             ]
-   *         }]
-   *     }
-   * });
-   *
-   * // Load the home screen assets right away
-   * await Assets.loadBundle('home');
-   * showHomeScreen();
-   *
-   * // Start background loading while showing home screen
-   * Assets.backgroundLoadBundle('level-1');
-   *
-   * // When player starts level, load completes faster
-   * await Assets.loadBundle('level-1');
-   * hideHomeScreen();
-   * startLevel();
-   * ```
-   * @remarks
-   * - Bundle assets are loaded one at a time
-   * - Loading can be interrupted safely by calling `Assets.loadBundle()`
-   * - Assets are cached as they complete loading
-   * - Requires bundles to be registered via manifest or `addBundle`
-   * @see {@link Assets.addBundle} For adding bundles programmatically
-   * @see {@link Assets.loadBundle} For immediate bundle loading
-   * @see {@link AssetsManifest} For manifest format details
-   */
-  async backgroundLoadBundle(bundleIds) {
-    if (!this._initialized) {
-      await this.init();
-    }
-    if (typeof bundleIds === "string") {
-      bundleIds = [bundleIds];
-    }
-    const resolveResults = this.resolver.resolveBundle(bundleIds);
-    Object.values(resolveResults).forEach((resolveResult) => {
-      this._backgroundLoader.add(Object.values(resolveResult));
-    });
-  }
-  /**
-   * Only intended for development purposes.
-   * This will wipe the resolver and caches.
-   * You will need to reinitialize the Asset
-   * @internal
-   */
-  reset() {
-    this.resolver.reset();
-    this.loader.reset();
-    this.cache.reset();
-    this._initialized = false;
-  }
-  get(keys) {
-    if (typeof keys === "string") {
-      return Cache.get(keys);
-    }
-    const assets = {};
-    for (let i2 = 0; i2 < keys.length; i2++) {
-      assets[i2] = Cache.get(keys[i2]);
-    }
-    return assets;
-  }
-  /**
-   * helper function to map resolved assets back to loaded assets
-   * @param resolveResults - the resolve results from the resolver
-   * @param progressOrLoadOptions - the progress callback or load options
-   */
-  async _mapLoadToResolve(resolveResults, progressOrLoadOptions) {
-    const resolveArray = [...new Set(Object.values(resolveResults))];
-    this._backgroundLoader.active = false;
-    const loadedAssets = await this.loader.load(resolveArray, progressOrLoadOptions);
-    this._backgroundLoader.active = true;
-    const out2 = {};
-    resolveArray.forEach((resolveResult) => {
-      const asset = loadedAssets[resolveResult.src];
-      const keys = [resolveResult.src];
-      if (resolveResult.alias) {
-        keys.push(...resolveResult.alias);
-      }
-      keys.forEach((key) => {
-        out2[key] = asset;
-      });
-      Cache.set(keys, asset);
-    });
-    return out2;
-  }
-  /**
-   * Unloads assets and releases them from memory. This method ensures proper cleanup of
-   * loaded assets when they're no longer needed.
-   * @param urls - Single URL/alias or array of URLs/aliases to unload
-   * @example
-   * ```ts
-   * // Unload a single asset
-   * await Assets.unload('images/sprite.png');
-   *
-   * // Unload using an alias
-   * await Assets.unload('hero'); // Unloads the asset registered with 'hero' alias
-   *
-   * // Unload multiple assets
-   * await Assets.unload([
-   *     'images/background.png',
-   *     'images/character.png',
-   *     'hero'
-   * ]);
-   *
-   * // Unload and handle creation of new instances
-   * await Assets.unload('hero');
-   * const newHero = await Assets.load('hero'); // Will load fresh from source
-   * ```
-   * @remarks
-   * > [!WARNING]
-   * > Make sure assets aren't being used before unloading:
-   * > - Remove sprites using the texture
-   * > - Clear any references to the asset
-   * > - Textures will be destroyed and can't be used after unloading
-   * @throws {Error} If the asset is not found in cache
-   */
-  async unload(urls) {
-    if (!this._initialized) {
-      await this.init();
-    }
-    const urlArray = convertToList(urls).map((url) => typeof url !== "string" ? url.src : url);
-    const resolveResults = this.resolver.resolve(urlArray);
-    await this._unloadFromResolved(resolveResults);
-  }
-  /**
-   * Unloads all assets in a bundle. Use this to free memory when a bundle's assets
-   * are no longer needed, such as when switching game levels.
-   * @param bundleIds - Single bundle ID or array of bundle IDs to unload
-   * @example
-   * ```ts
-   * // Define and load a bundle
-   * Assets.addBundle('level-1', {
-   *     background: 'level1/bg.png',
-   *     sprites: 'level1/sprites.json',
-   *     music: 'level1/music.mp3'
-   * });
-   *
-   * // Load the bundle
-   * const level1 = await Assets.loadBundle('level-1');
-   *
-   * // Use the assets
-   * const background = Sprite.from(level1.background);
-   *
-   * // When done with the level, unload everything
-   * await Assets.unloadBundle('level-1');
-   * // background sprite is now invalid!
-   *
-   * // Unload multiple bundles
-   * await Assets.unloadBundle([
-   *     'level-1',
-   *     'level-2',
-   *     'ui-elements'
-   * ]);
-   * ```
-   * @remarks
-   * > [!WARNING]
-   * > - All assets in the bundle will be destroyed
-   * > - Bundle needs to be reloaded to use assets again
-   * > - Make sure no sprites or other objects are using the assets
-   * @throws {Error} If the bundle is not found
-   * @see {@link Assets.addBundle} For adding bundles
-   * @see {@link Assets.loadBundle} For loading bundles
-   */
-  async unloadBundle(bundleIds) {
-    if (!this._initialized) {
-      await this.init();
-    }
-    bundleIds = convertToList(bundleIds);
-    const resolveResults = this.resolver.resolveBundle(bundleIds);
-    const promises = Object.keys(resolveResults).map((bundleId) => this._unloadFromResolved(resolveResults[bundleId]));
-    await Promise.all(promises);
-  }
-  async _unloadFromResolved(resolveResult) {
-    const resolveArray = Object.values(resolveResult);
-    resolveArray.forEach((resolveResult2) => {
-      Cache.remove(resolveResult2.src);
-    });
-    await this.loader.unload(resolveArray);
-  }
-  /**
-   * Detects the supported formats for the browser, and returns an array of supported formats, respecting
-   * the users preferred formats order.
-   * @param options - the options to use when detecting formats
-   * @param options.preferredFormats - the preferred formats to use
-   * @param options.skipDetections - if we should skip the detections altogether
-   * @param options.detections - the detections to use
-   * @returns - the detected formats
-   */
-  async _detectFormats(options) {
-    let formats = [];
-    if (options.preferredFormats) {
-      formats = Array.isArray(options.preferredFormats) ? options.preferredFormats : [options.preferredFormats];
-    }
-    for (const detection of options.detections) {
-      if (options.skipDetections || await detection.test()) {
-        formats = await detection.add(formats);
-      } else if (!options.skipDetections) {
-        formats = await detection.remove(formats);
-      }
-    }
-    formats = formats.filter((format, index) => formats.indexOf(format) === index);
-    return formats;
-  }
-  /**
-   * All the detection parsers currently added to the Assets class.
-   * @advanced
-   */
-  get detections() {
-    return this._detections;
-  }
-  /**
-   * Sets global preferences for asset loading behavior. This method configures how assets
-   * are loaded and processed across all parsers.
-   * @param preferences - Asset loading preferences
-   * @example
-   * ```ts
-   * // Basic preferences
-   * Assets.setPreferences({
-   *     crossOrigin: 'anonymous',
-   *     parseAsGraphicsContext: false
-   * });
-   * ```
-   * @remarks
-   * Preferences are applied to all compatible parsers and affect future asset loading.
-   * Common preferences include:
-   * - `crossOrigin`: CORS setting for loaded assets
-   * - `preferWorkers`: Whether to use web workers for loading textures
-   * - `preferCreateImageBitmap`: Use `createImageBitmap` for texture creation. Turning this off will use the `Image` constructor instead.
-   * @see {@link AssetsPreferences} For all available preferences
-   */
-  setPreferences(preferences) {
-    this.loader.parsers.forEach((parser) => {
-      if (!parser.config) return;
-      Object.keys(parser.config).filter((key) => key in preferences).forEach((key) => {
-        parser.config[key] = preferences[key];
-      });
-    });
-  }
-};
-var Assets = new AssetsClass();
-extensions.handleByList(ExtensionType.LoadParser, Assets.loader.parsers).handleByList(ExtensionType.ResolveParser, Assets.resolver.parsers).handleByList(ExtensionType.CacheParser, Assets.cache.parsers).handleByList(ExtensionType.DetectionParser, Assets.detections);
-extensions.add(
-  cacheTextureArray,
-  detectDefaults,
-  detectAvif,
-  detectWebp,
-  detectMp4,
-  detectOgv,
-  detectWebm,
-  loadJson,
-  loadTxt,
-  loadWebFont,
-  loadSvg,
-  loadTextures,
-  loadVideoTextures,
-  loadBitmapFont,
-  bitmapFontCachePlugin,
-  resolveTextureUrl,
-  resolveJsonUrl
-);
-var assetKeyMap = {
-  loader: ExtensionType.LoadParser,
-  resolver: ExtensionType.ResolveParser,
-  cache: ExtensionType.CacheParser,
-  detection: ExtensionType.DetectionParser
-};
-extensions.handle(ExtensionType.Asset, (extension) => {
-  const ref = extension.ref;
-  Object.entries(assetKeyMap).filter(([key]) => !!ref[key]).forEach(([key, type]) => extensions.add(Object.assign(
-    ref[key],
-    // Allow the function to optionally define it's own
-    // ExtensionMetadata, the use cases here is priority for LoaderParsers
-    { extension: ref[key].extension ?? type }
-  )));
-}, (extension) => {
-  const ref = extension.ref;
-  Object.keys(assetKeyMap).filter((key) => !!ref[key]).forEach((key) => extensions.remove(ref[key]));
-});
-
-// node_modules/pixi.js/lib/filters/defaults/blur/BlurFilter.mjs
-init_TexturePool();
-init_types();
-init_deprecation();
-init_Filter();
-
-// node_modules/pixi.js/lib/filters/defaults/blur/BlurFilterPass.mjs
-init_TexturePool();
-init_types();
-init_Filter();
-
-// node_modules/pixi.js/lib/filters/defaults/blur/gl/generateBlurGlProgram.mjs
-init_GlProgram();
-
-// node_modules/pixi.js/lib/filters/defaults/blur/const.mjs
-var GAUSSIAN_VALUES = {
-  5: [0.153388, 0.221461, 0.250301],
-  7: [0.071303, 0.131514, 0.189879, 0.214607],
-  9: [0.028532, 0.067234, 0.124009, 0.179044, 0.20236],
-  11: [93e-4, 0.028002, 0.065984, 0.121703, 0.175713, 0.198596],
-  13: [2406e-6, 9255e-6, 0.027867, 0.065666, 0.121117, 0.174868, 0.197641],
-  15: [489e-6, 2403e-6, 9246e-6, 0.02784, 0.065602, 0.120999, 0.174697, 0.197448]
-};
-
-// node_modules/pixi.js/lib/filters/defaults/blur/gl/generateBlurFragSource.mjs
-var fragTemplate2 = [
-  "in vec2 vBlurTexCoords[%size%];",
-  "uniform sampler2D uTexture;",
-  "out vec4 finalColor;",
-  "void main(void)",
-  "{",
-  "    %blur%",
-  "}"
-].join("\n");
-function generateBlurFragSource(kernelSize) {
-  const kernel = GAUSSIAN_VALUES[kernelSize];
-  const halfLength = kernel.length;
-  let blurLoop = "";
-  const prefixFirst = "finalColor = ";
-  const prefixRest = "    + ";
-  const template = "texture(uTexture, vBlurTexCoords[%index%]) * %value%";
-  for (let i2 = 0; i2 < kernelSize; i2++) {
-    const prefix = i2 === 0 ? prefixFirst : prefixRest;
-    const value = i2 < halfLength ? i2 : kernelSize - i2 - 1;
-    const blur = template.replace("%index%", i2.toString()).replace("%value%", kernel[value].toString());
-    blurLoop += `${prefix}${blur}
-`;
-  }
-  return fragTemplate2.replace("%blur%", `${blurLoop};`).replace("%size%", kernelSize.toString());
-}
-
-// node_modules/pixi.js/lib/filters/defaults/blur/gl/generateBlurVertSource.mjs
-var vertTemplate = `
-    in vec2 aPosition;
-
-    uniform float uStrength;
-
-    out vec2 vBlurTexCoords[%size%];
-
-    uniform vec4 uInputSize;
-    uniform vec4 uOutputFrame;
-    uniform vec4 uOutputTexture;
-
-    vec4 filterVertexPosition( void )
-{
-    vec2 position = aPosition * uOutputFrame.zw + uOutputFrame.xy;
-
-    position.x = position.x * (2.0 / uOutputTexture.x) - 1.0;
-    position.y = position.y * (2.0*uOutputTexture.z / uOutputTexture.y) - uOutputTexture.z;
-
-    return vec4(position, 0.0, 1.0);
-}
-
-    vec2 filterTextureCoord( void )
-    {
-        return aPosition * (uOutputFrame.zw * uInputSize.zw);
-    }
-
-    void main(void)
-    {
-        gl_Position = filterVertexPosition();
-
-        float pixelStrength = uInputSize.%dimension% * uStrength;
-
-        vec2 textureCoord = filterTextureCoord();
-        %blur%
-    }`;
-function generateBlurVertSource(kernelSize, x2) {
-  const halfLength = Math.ceil(kernelSize / 2);
-  let vertSource = vertTemplate;
-  let blurLoop = "";
-  let template;
-  if (x2) {
-    template = "vBlurTexCoords[%index%] =  textureCoord + vec2(%sampleIndex% * pixelStrength, 0.0);";
-  } else {
-    template = "vBlurTexCoords[%index%] =  textureCoord + vec2(0.0, %sampleIndex% * pixelStrength);";
-  }
-  for (let i2 = 0; i2 < kernelSize; i2++) {
-    let blur = template.replace("%index%", i2.toString());
-    blur = blur.replace("%sampleIndex%", `${i2 - (halfLength - 1)}.0`);
-    blurLoop += blur;
-    blurLoop += "\n";
-  }
-  vertSource = vertSource.replace("%blur%", blurLoop);
-  vertSource = vertSource.replace("%size%", kernelSize.toString());
-  vertSource = vertSource.replace("%dimension%", x2 ? "z" : "w");
-  return vertSource;
-}
-
-// node_modules/pixi.js/lib/filters/defaults/blur/gl/generateBlurGlProgram.mjs
-function generateBlurGlProgram(horizontal, kernelSize) {
-  const vertex3 = generateBlurVertSource(kernelSize, horizontal);
-  const fragment4 = generateBlurFragSource(kernelSize);
-  return GlProgram.from({
-    vertex: vertex3,
-    fragment: fragment4,
-    name: `blur-${horizontal ? "horizontal" : "vertical"}-pass-filter`
-  });
-}
-
-// node_modules/pixi.js/lib/filters/defaults/blur/gpu/generateBlurProgram.mjs
-init_GpuProgram();
-
-// node_modules/pixi.js/lib/filters/defaults/blur/gpu/blur-template.wgsl.mjs
-var source3 = "\n\nstruct GlobalFilterUniforms {\n  uInputSize:vec4<f32>,\n  uInputPixel:vec4<f32>,\n  uInputClamp:vec4<f32>,\n  uOutputFrame:vec4<f32>,\n  uGlobalFrame:vec4<f32>,\n  uOutputTexture:vec4<f32>,\n};\n\nstruct BlurUniforms {\n  uStrength:f32,\n};\n\n@group(0) @binding(0) var<uniform> gfu: GlobalFilterUniforms;\n@group(0) @binding(1) var uTexture: texture_2d<f32>;\n@group(0) @binding(2) var uSampler : sampler;\n\n@group(1) @binding(0) var<uniform> blurUniforms : BlurUniforms;\n\n\nstruct VSOutput {\n    @builtin(position) position: vec4<f32>,\n    %blur-struct%\n  };\n\nfn filterVertexPosition(aPosition:vec2<f32>) -> vec4<f32>\n{\n    var position = aPosition * gfu.uOutputFrame.zw + gfu.uOutputFrame.xy;\n\n    position.x = position.x * (2.0 / gfu.uOutputTexture.x) - 1.0;\n    position.y = position.y * (2.0*gfu.uOutputTexture.z / gfu.uOutputTexture.y) - gfu.uOutputTexture.z;\n\n    return vec4(position, 0.0, 1.0);\n}\n\nfn filterTextureCoord( aPosition:vec2<f32> ) -> vec2<f32>\n{\n    return aPosition * (gfu.uOutputFrame.zw * gfu.uInputSize.zw);\n}\n\nfn globalTextureCoord( aPosition:vec2<f32> ) -> vec2<f32>\n{\n  return  (aPosition.xy / gfu.uGlobalFrame.zw) + (gfu.uGlobalFrame.xy / gfu.uGlobalFrame.zw);\n}\n\nfn getSize() -> vec2<f32>\n{\n  return gfu.uGlobalFrame.zw;\n}\n\n\n@vertex\nfn mainVertex(\n  @location(0) aPosition : vec2<f32>,\n) -> VSOutput {\n\n  let filteredCord = filterTextureCoord(aPosition);\n\n  let pixelStrength = gfu.uInputSize.%dimension% * blurUniforms.uStrength;\n\n  return VSOutput(\n   filterVertexPosition(aPosition),\n    %blur-vertex-out%\n  );\n}\n\n@fragment\nfn mainFragment(\n  @builtin(position) position: vec4<f32>,\n  %blur-fragment-in%\n) -> @location(0) vec4<f32> {\n\n    var   finalColor = vec4(0.0);\n\n    %blur-sampling%\n\n    return finalColor;\n}\n";
-
-// node_modules/pixi.js/lib/filters/defaults/blur/gpu/generateBlurProgram.mjs
-function generateBlurProgram(horizontal, kernelSize) {
-  const kernel = GAUSSIAN_VALUES[kernelSize];
-  const halfLength = kernel.length;
-  const blurStructSource = [];
-  const blurOutSource = [];
-  const blurSamplingSource = [];
-  for (let i2 = 0; i2 < kernelSize; i2++) {
-    blurStructSource[i2] = `@location(${i2}) offset${i2}: vec2<f32>,`;
-    if (horizontal) {
-      blurOutSource[i2] = `filteredCord + vec2(${i2 - halfLength + 1} * pixelStrength, 0.0),`;
-    } else {
-      blurOutSource[i2] = `filteredCord + vec2(0.0, ${i2 - halfLength + 1} * pixelStrength),`;
-    }
-    const kernelIndex = i2 < halfLength ? i2 : kernelSize - i2 - 1;
-    const kernelValue = kernel[kernelIndex].toString();
-    blurSamplingSource[i2] = `finalColor += textureSample(uTexture, uSampler, offset${i2}) * ${kernelValue};`;
-  }
-  const blurStruct = blurStructSource.join("\n");
-  const blurOut = blurOutSource.join("\n");
-  const blurSampling = blurSamplingSource.join("\n");
-  const finalSource = source3.replace("%blur-struct%", blurStruct).replace("%blur-vertex-out%", blurOut).replace("%blur-fragment-in%", blurStruct).replace("%blur-sampling%", blurSampling).replace("%dimension%", horizontal ? "z" : "w");
-  return GpuProgram.from({
-    vertex: {
-      source: finalSource,
-      entryPoint: "mainVertex"
-    },
-    fragment: {
-      source: finalSource,
-      entryPoint: "mainFragment"
-    }
-  });
-}
-
-// node_modules/pixi.js/lib/filters/defaults/blur/BlurFilterPass.mjs
-var _BlurFilterPass = class _BlurFilterPass2 extends Filter {
-  /**
-   * @param options
-   * @param options.horizontal - Do pass along the x-axis (`true`) or y-axis (`false`).
-   * @param options.strength - The strength of the blur filter.
-   * @param options.quality - The quality of the blur filter.
-   * @param options.kernelSize - The kernelSize of the blur filter.Options: 5, 7, 9, 11, 13, 15.
-   */
-  constructor(options) {
-    options = { ..._BlurFilterPass2.defaultOptions, ...options };
-    const glProgram = generateBlurGlProgram(options.horizontal, options.kernelSize);
-    const gpuProgram = generateBlurProgram(options.horizontal, options.kernelSize);
-    super({
-      glProgram,
-      gpuProgram,
-      resources: {
-        blurUniforms: {
-          uStrength: { value: 0, type: "f32" }
-        }
-      },
-      ...options
-    });
-    this.horizontal = options.horizontal;
-    this.legacy = options.legacy ?? false;
-    this._quality = 0;
-    this.quality = options.quality;
-    this.blur = options.strength;
-    this._blurUniforms = this.resources.blurUniforms;
-    this._uniforms = this._blurUniforms.uniforms;
-  }
-  /**
-   * Applies the filter.
-   * @param filterManager - The manager.
-   * @param input - The input target.
-   * @param output - The output target.
-   * @param clearMode - How to clear
-   */
-  apply(filterManager, input, output, clearMode) {
-    if (this.legacy) {
-      this._applyLegacy(filterManager, input, output, clearMode);
-    } else {
-      this._applyOptimized(filterManager, input, output, clearMode);
-    }
-  }
-  _applyLegacy(filterManager, input, output, clearMode) {
-    this._uniforms.uStrength = this.strength / this.passes;
-    if (this.passes === 1) {
-      filterManager.applyFilter(this, input, output, clearMode);
-    } else {
-      const tempTexture = TexturePool.getSameSizeTexture(input);
-      let flip = input;
-      let flop = tempTexture;
-      this._state.blend = false;
-      const shouldClear = filterManager.renderer.type === RendererType.WEBGPU;
-      for (let i2 = 0; i2 < this.passes - 1; i2++) {
-        filterManager.applyFilter(this, flip, flop, i2 === 0 ? true : shouldClear);
-        const temp = flop;
-        flop = flip;
-        flip = temp;
-      }
-      this._state.blend = true;
-      filterManager.applyFilter(this, flip, output, clearMode);
-      TexturePool.returnTexture(tempTexture);
-    }
-  }
-  _applyOptimized(filterManager, input, output, clearMode) {
-    this._uniforms.uStrength = this._calculateInitialStrength();
-    if (this.passes === 1) {
-      filterManager.applyFilter(this, input, output, clearMode);
-    } else {
-      const tempTexture = TexturePool.getSameSizeTexture(input);
-      let flip = input;
-      let flop = tempTexture;
-      this._state.blend = false;
-      const renderer = filterManager.renderer;
-      const isWebGPU = renderer.type === RendererType.WEBGPU;
-      const uboBatcher = isWebGPU ? renderer.renderPipes.uniformBatch : null;
-      for (let i2 = 0; i2 < this.passes - 1; i2++) {
-        if (uboBatcher) {
-          this.groups[1].setResource(uboBatcher.getUboResource(this._blurUniforms), 0);
-        }
-        filterManager.applyFilter(this, flip, flop, isWebGPU);
-        const temp = flop;
-        flop = flip;
-        flip = temp;
-        this._uniforms.uStrength *= 0.5;
-      }
-      if (uboBatcher) {
-        this.groups[1].setResource(uboBatcher.getUboResource(this._blurUniforms), 0);
-      }
-      this._state.blend = true;
-      filterManager.applyFilter(this, flip, output, clearMode);
-      TexturePool.returnTexture(tempTexture);
-    }
-  }
-  /**
-   * Calculates the initial strength for the first blur pass so that the combined
-   * effect of all passes matches the filter's target strength.
-   *
-   * Uses variance addition property: for Gaussian blurs, σ_combined² = Σσᵢ²
-   * With halving scheme (s, s/2, s/4, ...), sum of squared coefficients = 4/3
-   */
-  _calculateInitialStrength() {
-    let sumOfSquares = 1;
-    let coefficient = 0.5;
-    for (let i2 = 1; i2 < this.passes; i2++) {
-      sumOfSquares += coefficient * coefficient;
-      coefficient *= 0.5;
-    }
-    return this.strength / Math.sqrt(sumOfSquares);
-  }
-  /**
-   * Sets the strength of both the blur.
-   * @default 16
-   */
-  get blur() {
-    return this.strength;
-  }
-  set blur(value) {
-    this.padding = 1 + Math.abs(value) * 2;
-    this.strength = value;
-  }
-  /**
-   * Sets the quality of the blur by modifying the number of passes. More passes means higher
-   * quality blurring but the lower the performance.
-   * @default 4
-   */
-  get quality() {
-    return this._quality;
-  }
-  set quality(value) {
-    this._quality = value;
-    this.passes = value;
-  }
-};
-_BlurFilterPass.defaultOptions = {
-  /** The strength of the blur filter. */
-  strength: 8,
-  /** The quality of the blur filter. */
-  quality: 4,
-  /** The kernelSize of the blur filter.Options: 5, 7, 9, 11, 13, 15. */
-  kernelSize: 5,
-  /** Whether to use legacy blur pass behavior. */
-  legacy: false
-};
-var BlurFilterPass = _BlurFilterPass;
-
-// node_modules/pixi.js/lib/filters/defaults/blur/BlurFilter.mjs
-var BlurFilter = class extends Filter {
-  constructor(...args) {
-    let options = args[0] ?? {};
-    if (typeof options === "number") {
-      deprecation(v8_0_0, "BlurFilter constructor params are now options object. See params: { strength, quality, resolution, kernelSize }");
-      options = { strength: options };
-      if (args[1] !== void 0) options.quality = args[1];
-      if (args[2] !== void 0) options.resolution = args[2] || "inherit";
-      if (args[3] !== void 0) options.kernelSize = args[3];
-    }
-    options = { ...BlurFilterPass.defaultOptions, ...options };
-    const { strength, strengthX, strengthY, quality, ...rest } = options;
-    super({
-      ...rest,
-      compatibleRenderers: RendererType.BOTH,
-      resources: {}
-    });
-    this._repeatEdgePixels = false;
-    this.blurXFilter = new BlurFilterPass({ horizontal: true, ...options });
-    this.blurYFilter = new BlurFilterPass({ horizontal: false, ...options });
-    this.quality = quality;
-    this.strengthX = strengthX ?? strength;
-    this.strengthY = strengthY ?? strength;
-    this.repeatEdgePixels = false;
-  }
-  /**
-   * Applies the filter.
-   * @param filterManager - The manager.
-   * @param input - The input target.
-   * @param output - The output target.
-   * @param clearMode - How to clear
-   * @advanced
-   */
-  apply(filterManager, input, output, clearMode) {
-    const xStrength = Math.abs(this.blurXFilter.strength);
-    const yStrength = Math.abs(this.blurYFilter.strength);
-    if (xStrength && yStrength) {
-      const tempTexture = TexturePool.getSameSizeTexture(input);
-      this.blurXFilter.blendMode = "normal";
-      this.blurXFilter.apply(filterManager, input, tempTexture, true);
-      this.blurYFilter.blendMode = this.blendMode;
-      this.blurYFilter.apply(filterManager, tempTexture, output, clearMode);
-      TexturePool.returnTexture(tempTexture);
-    } else if (yStrength) {
-      this.blurYFilter.blendMode = this.blendMode;
-      this.blurYFilter.apply(filterManager, input, output, clearMode);
-    } else {
-      this.blurXFilter.blendMode = this.blendMode;
-      this.blurXFilter.apply(filterManager, input, output, clearMode);
-    }
-  }
-  updatePadding() {
-    if (this._repeatEdgePixels) {
-      this.padding = 0;
-    } else {
-      this.padding = Math.max(Math.abs(this.blurXFilter.blur), Math.abs(this.blurYFilter.blur)) * 2;
-    }
-  }
-  /**
-   * Sets the strength of both the blurX and blurY properties simultaneously.
-   * Controls the overall intensity of the Gaussian blur effect.
-   * @example
-   * ```ts
-   * // Set equal blur strength for both axes
-   * filter.strength = 8;
-   *
-   * // Will throw error if X and Y are different
-   * filter.strengthX = 4;
-   * filter.strengthY = 8;
-   * filter.strength; // Error: BlurFilter's strengthX and strengthY are different
-   * ```
-   * @default 8
-   * @throws {Error} If strengthX and strengthY are different values
-   */
-  get strength() {
-    if (this.strengthX !== this.strengthY) {
-      throw new Error("BlurFilter's strengthX and strengthY are different");
-    }
-    return this.strengthX;
-  }
-  set strength(value) {
-    this.blurXFilter.blur = this.blurYFilter.blur = value;
-    this.updatePadding();
-  }
-  /**
-   * Sets the number of passes for blur. More passes means higher quality blurring.
-   * Controls the precision and smoothness of the blur effect at the cost of performance.
-   * @example
-   * ```ts
-   * // High quality blur (slower)
-   * filter.quality = 8;
-   *
-   * // Low quality blur (faster)
-   * filter.quality = 2;
-   * ```
-   * @default 4
-   * @remarks Higher values produce better quality but impact performance
-   */
-  get quality() {
-    return this.blurXFilter.quality;
-  }
-  set quality(value) {
-    this.blurXFilter.quality = this.blurYFilter.quality = value;
-  }
-  /**
-   * Sets the strength of horizontal blur.
-   * Controls the blur intensity along the x-axis independently.
-   * @example
-   * ```ts
-   * // Apply horizontal-only blur
-   * filter.strengthX = 8;
-   * filter.strengthY = 0;
-   *
-   * // Create motion blur effect
-   * filter.strengthX = 16;
-   * filter.strengthY = 2;
-   * ```
-   * @default 8
-   */
-  get strengthX() {
-    return this.blurXFilter.blur;
-  }
-  set strengthX(value) {
-    this.blurXFilter.blur = value;
-    this.updatePadding();
-  }
-  /**
-   * Sets the strength of the vertical blur.
-   * Controls the blur intensity along the y-axis independently.
-   * @example
-   * ```ts
-   * // Apply vertical-only blur
-   * filter.strengthX = 0;
-   * filter.strengthY = 8;
-   *
-   * // Create radial blur effect
-   * filter.strengthX = 8;
-   * filter.strengthY = 8;
-   * ```
-   * @default 8
-   */
-  get strengthY() {
-    return this.blurYFilter.blur;
-  }
-  set strengthY(value) {
-    this.blurYFilter.blur = value;
-    this.updatePadding();
-  }
-  /**
-   * Sets the strength of both the blurX and blurY properties simultaneously
-   * @default 2
-   * @deprecated since 8.3.0
-   * @see BlurFilter.strength
-   */
-  get blur() {
-    deprecation("8.3.0", "BlurFilter.blur is deprecated, please use BlurFilter.strength instead.");
-    return this.strength;
-  }
-  set blur(value) {
-    deprecation("8.3.0", "BlurFilter.blur is deprecated, please use BlurFilter.strength instead.");
-    this.strength = value;
-  }
-  /**
-   * Sets the strength of the blurX property
-   * @default 2
-   * @deprecated since 8.3.0
-   * @see BlurFilter.strengthX
-   */
-  get blurX() {
-    deprecation("8.3.0", "BlurFilter.blurX is deprecated, please use BlurFilter.strengthX instead.");
-    return this.strengthX;
-  }
-  set blurX(value) {
-    deprecation("8.3.0", "BlurFilter.blurX is deprecated, please use BlurFilter.strengthX instead.");
-    this.strengthX = value;
-  }
-  /**
-   * Sets the strength of the blurY property
-   * @default 2
-   * @deprecated since 8.3.0
-   * @see BlurFilter.strengthY
-   */
-  get blurY() {
-    deprecation("8.3.0", "BlurFilter.blurY is deprecated, please use BlurFilter.strengthY instead.");
-    return this.strengthY;
-  }
-  set blurY(value) {
-    deprecation("8.3.0", "BlurFilter.blurY is deprecated, please use BlurFilter.strengthY instead.");
-    this.strengthY = value;
-  }
-  /**
-   * If set to true the edge of the target will be clamped
-   * @default false
-   */
-  get repeatEdgePixels() {
-    return this._repeatEdgePixels;
-  }
-  set repeatEdgePixels(value) {
-    this._repeatEdgePixels = value;
-    this.updatePadding();
-  }
-};
-BlurFilter.defaultOptions = {
-  /** The strength of the blur filter. */
-  strength: 8,
-  /** The quality of the blur filter. */
-  quality: 4,
-  /** The kernelSize of the blur filter.Options: 5, 7, 9, 11, 13, 15. */
-  kernelSize: 5,
-  /** Whether to use legacy blur pass behavior. */
-  legacy: false
-};
-
-// node_modules/pixi.js/lib/filters/defaults/noise/NoiseFilter.mjs
-init_GlProgram();
-init_GpuProgram();
-init_UniformGroup();
-init_Filter();
-init_defaultFilter_vert();
-
-// node_modules/pixi.js/lib/filters/defaults/noise/noise.frag.mjs
-var fragment3 = "\nin vec2 vTextureCoord;\nin vec4 vColor;\n\nout vec4 finalColor;\n\nuniform float uNoise;\nuniform float uSeed;\nuniform sampler2D uTexture;\n\nfloat rand(vec2 co)\n{\n    return fract(sin(dot(co.xy, vec2(12.9898, 78.233))) * 43758.5453);\n}\n\nvoid main()\n{\n    vec4 color = texture(uTexture, vTextureCoord);\n    float randomValue = rand(gl_FragCoord.xy * uSeed);\n    float diff = (randomValue - 0.5) *  uNoise;\n\n    // Un-premultiply alpha before applying the color matrix. See issue #3539.\n    if (color.a > 0.0) {\n        color.rgb /= color.a;\n    }\n\n    color.r += diff;\n    color.g += diff;\n    color.b += diff;\n\n    // Premultiply alpha again.\n    color.rgb *= color.a;\n\n    finalColor = color;\n}\n";
-
-// node_modules/pixi.js/lib/filters/defaults/noise/noise.wgsl.mjs
-var source4 = "\n\nstruct GlobalFilterUniforms {\n  uInputSize:vec4<f32>,\n  uInputPixel:vec4<f32>,\n  uInputClamp:vec4<f32>,\n  uOutputFrame:vec4<f32>,\n  uGlobalFrame:vec4<f32>,\n  uOutputTexture:vec4<f32>,\n};\n\nstruct NoiseUniforms {\n  uNoise:f32,\n  uSeed:f32,\n};\n\n@group(0) @binding(0) var<uniform> gfu: GlobalFilterUniforms;\n@group(0) @binding(1) var uTexture: texture_2d<f32>;\n@group(0) @binding(2) var uSampler : sampler;\n\n@group(1) @binding(0) var<uniform> noiseUniforms : NoiseUniforms;\n\nstruct VSOutput {\n    @builtin(position) position: vec4<f32>,\n    @location(0) uv : vec2<f32>\n  };\n\nfn filterVertexPosition(aPosition:vec2<f32>) -> vec4<f32>\n{\n    var position = aPosition * gfu.uOutputFrame.zw + gfu.uOutputFrame.xy;\n\n    position.x = position.x * (2.0 / gfu.uOutputTexture.x) - 1.0;\n    position.y = position.y * (2.0*gfu.uOutputTexture.z / gfu.uOutputTexture.y) - gfu.uOutputTexture.z;\n\n    return vec4(position, 0.0, 1.0);\n}\n\nfn filterTextureCoord( aPosition:vec2<f32> ) -> vec2<f32>\n{\n    return aPosition * (gfu.uOutputFrame.zw * gfu.uInputSize.zw);\n}\n\nfn globalTextureCoord( aPosition:vec2<f32> ) -> vec2<f32>\n{\n  return  (aPosition.xy / gfu.uGlobalFrame.zw) + (gfu.uGlobalFrame.xy / gfu.uGlobalFrame.zw);  \n}\n\nfn getSize() -> vec2<f32>\n{\n  return gfu.uGlobalFrame.zw;\n}\n  \n@vertex\nfn mainVertex(\n  @location(0) aPosition : vec2<f32>, \n) -> VSOutput {\n  return VSOutput(\n   filterVertexPosition(aPosition),\n   filterTextureCoord(aPosition)\n  );\n}\n\nfn rand(co:vec2<f32>) -> f32\n{\n  return fract(sin(dot(co.xy, vec2(12.9898, 78.233))) * 43758.5453);\n}\n\n\n\n@fragment\nfn mainFragment(\n  @location(0) uv: vec2<f32>,\n  @builtin(position) position: vec4<f32>\n) -> @location(0) vec4<f32> {\n\n    var pixelPosition =  globalTextureCoord(position.xy);// / (getSize());//-  gfu.uOutputFrame.xy);\n  \n    \n    var sample = textureSample(uTexture, uSampler, uv);\n    var randomValue =  rand(pixelPosition.xy * noiseUniforms.uSeed);\n    var diff = (randomValue - 0.5) * noiseUniforms.uNoise;\n  \n    // Un-premultiply alpha before applying the color matrix. See issue #3539.\n    if (sample.a > 0.0) {\n      sample.r /= sample.a;\n      sample.g /= sample.a;\n      sample.b /= sample.a;\n    }\n\n    sample.r += diff;\n    sample.g += diff;\n    sample.b += diff;\n\n    // Premultiply alpha again.\n    sample.r *= sample.a;\n    sample.g *= sample.a;\n    sample.b *= sample.a;\n    \n    return sample;\n}";
-
-// node_modules/pixi.js/lib/filters/defaults/noise/NoiseFilter.mjs
-var _NoiseFilter = class _NoiseFilter2 extends Filter {
-  /**
-   * @param options - The options of the noise filter.
-   */
-  constructor(options = {}) {
-    options = { ..._NoiseFilter2.defaultOptions, ...options };
-    const gpuProgram = GpuProgram.from({
-      vertex: {
-        source: source4,
-        entryPoint: "mainVertex"
-      },
-      fragment: {
-        source: source4,
-        entryPoint: "mainFragment"
-      }
-    });
-    const glProgram = GlProgram.from({
-      vertex,
-      fragment: fragment3,
-      name: "noise-filter"
-    });
-    const { noise, seed: seed2, ...rest } = options;
-    super({
-      ...rest,
-      gpuProgram,
-      glProgram,
-      resources: {
-        noiseUniforms: new UniformGroup({
-          uNoise: { value: 1, type: "f32" },
-          uSeed: { value: 1, type: "f32" }
-        })
-      }
-    });
-    this.noise = noise;
-    this.seed = seed2 ?? Math.random();
-  }
-  /**
-   * The amount of noise to apply to the filtered content.
-   *
-   * This value controls the intensity of the random noise effect:
-   * - Values close to 0 produce subtle noise
-   * - Values around 0.5 produce moderate noise
-   * - Values close to 1 produce strong noise
-   * @default 0.5
-   * @example
-   * ```ts
-   * const noiseFilter = new NoiseFilter();
-   *
-   * // Set to subtle noise
-   * noiseFilter.noise = 0.2;
-   *
-   * // Set to maximum noise
-   * noiseFilter.noise = 1.0;
-   * ```
-   */
-  get noise() {
-    return this.resources.noiseUniforms.uniforms.uNoise;
-  }
-  set noise(value) {
-    this.resources.noiseUniforms.uniforms.uNoise = value;
-  }
-  /**
-   * The seed value used for random noise generation.
-   *
-   * This value determines the noise pattern:
-   * - Using the same seed will generate identical noise patterns
-   * - Different seeds produce different but consistent patterns
-   * - `Math.random()` can be used for random patterns
-   * @default Math.random()
-   * @example
-   * ```ts
-   * const noiseFilter = new NoiseFilter();
-   *
-   * // Use a fixed seed for consistent noise
-   * noiseFilter.seed = 12345;
-   *
-   * // Generate new random pattern
-   * noiseFilter.seed = Math.random();
-   * ```
-   */
-  get seed() {
-    return this.resources.noiseUniforms.uniforms.uSeed;
-  }
-  set seed(value) {
-    this.resources.noiseUniforms.uniforms.uSeed = value;
-  }
-};
-_NoiseFilter.defaultOptions = {
-  noise: 0.5
-};
-var NoiseFilter = _NoiseFilter;
 
 // node_modules/pixi.js/lib/scene/text/Text.mjs
 init_TextureSource();
@@ -46213,16 +43409,16 @@ function ensureInternalCanvas(width, height) {
     _internalCanvas.height = nextPow2(height);
   }
 }
-function checkRow(data2, width, y2) {
+function checkRow(data, width, y2) {
   for (let x2 = 0, index = 4 * y2 * width; x2 < width; ++x2, index += 4) {
-    if (data2[index + 3] !== 0) return false;
+    if (data[index + 3] !== 0) return false;
   }
   return true;
 }
-function checkColumn(data2, width, x2, top, bottom) {
+function checkColumn(data, width, x2, top, bottom) {
   const stride = 4 * width;
   for (let y2 = top, index = top * stride + 4 * x2; y2 <= bottom; ++y2, index += stride) {
-    if (data2[index + 3] !== 0) return false;
+    if (data[index + 3] !== 0) return false;
   }
   return true;
 }
@@ -46252,16 +43448,16 @@ function getCanvasBoundingBox(...args) {
     height * resolution
   );
   const imageData = _internalContext.getImageData(0, 0, width, height);
-  const data2 = imageData.data;
+  const data = imageData.data;
   let left = 0;
   let top = 0;
   let right = width - 1;
   let bottom = height - 1;
-  while (top < height && checkRow(data2, width, top)) ++top;
+  while (top < height && checkRow(data, width, top)) ++top;
   if (top === height) return Rectangle.EMPTY;
-  while (checkRow(data2, width, bottom)) --bottom;
-  while (checkColumn(data2, width, left, top, bottom)) ++left;
-  while (checkColumn(data2, width, right, top, bottom)) --right;
+  while (checkRow(data, width, bottom)) --bottom;
+  while (checkColumn(data, width, left, top, bottom)) ++left;
+  while (checkColumn(data, width, right, top, bottom)) --right;
   ++right;
   ++bottom;
   _internalContext.globalCompositeOperation = "source-over";
@@ -46944,17 +44140,17 @@ var AbstractTextSystem = class {
    * @param texture - The texture to be returned.
    */
   returnTexture(texture) {
-    const source5 = texture.source;
-    const resource = source5.resource;
+    const source3 = texture.source;
+    const resource = source3.resource;
     if (this._retainCanvasContext && resource?.getContext) {
       const context2 = resource.getContext("2d");
       if (context2) {
         CanvasTextGenerator.returnCanvasAndContext({ canvas: resource, context: context2 });
       }
     }
-    source5.resource = null;
-    source5.uploadMethodId = "unknown";
-    source5.alphaMode = "no-premultiply-alpha";
+    source3.resource = null;
+    source3.uploadMethodId = "unknown";
+    source3.alphaMode = "no-premultiply-alpha";
     TexturePool.returnTexture(texture, true);
   }
   /**
@@ -47137,7 +44333,7 @@ init_Sprite();
 init_eventemitter3();
 extensions.add(browserExt, webworkerExt);
 
-// src/world/createWorld.ts
+// src/world/createGalaxy.ts
 var KIND_COLORS = {
   moment: 11045104,
   title: 4906624,
@@ -47152,16 +44348,6 @@ function seed(s2) {
   for (let i2 = 0; i2 < s2.length; i2++) h2 = Math.imul(h2 ^ s2.charCodeAt(i2), 16777619);
   return (h2 >>> 0) % 1e4 / 1e4;
 }
-var bez = (p0, p1, p2, t2) => ({
-  x: (1 - t2) ** 2 * p0.x + 2 * (1 - t2) * t2 * p1.x + t2 ** 2 * p2.x,
-  y: (1 - t2) ** 2 * p0.y + 2 * (1 - t2) * t2 * p1.y + t2 ** 2 * p2.y
-});
-var bezN = (p0, p1, p2, t2) => {
-  const dx = 2 * (1 - t2) * (p1.x - p0.x) + 2 * t2 * (p2.x - p1.x);
-  const dy = 2 * (1 - t2) * (p1.y - p0.y) + 2 * t2 * (p2.y - p1.y);
-  const len = Math.hypot(dx, dy) || 1;
-  return { x: -dy / len, y: dx / len };
-};
 var hex = (n2) => `#${n2.toString(16).padStart(6, "0")}`;
 function radialTex(size, stops) {
   const c2 = document.createElement("canvas");
@@ -47184,14 +44370,13 @@ function linearTex(w2, h2, stops) {
   ctx.fillRect(0, 0, w2, h2);
   return Texture.from(c2);
 }
-var loadTex = (src) => Assets.load({ src, loadParser: "loadTextures" });
-async function createWorld(host2, data2, cb) {
+async function createGalaxy(host2, data, cb) {
   const app = new Application();
   await app.init({
     width: W,
     height: H2,
     backgroundAlpha: 1,
-    background: 394522,
+    background: 460303,
     antialias: true,
     resolution: Math.min(2, window.devicePixelRatio || 1),
     autoDensity: true
@@ -47200,706 +44385,315 @@ async function createWorld(host2, data2, cb) {
   app.canvas.style.width = "100%";
   app.canvas.style.height = "auto";
   app.canvas.style.display = "block";
-  const glowSoft = radialTex(256, [[0, "rgba(255,255,255,0.85)"], [0.35, "rgba(255,255,255,0.28)"], [1, "rgba(255,255,255,0)"]]);
+  app.canvas.style.touchAction = "none";
+  const glowSoft = radialTex(256, [[0, "rgba(255,255,255,0.9)"], [0.3, "rgba(255,255,255,0.32)"], [1, "rgba(255,255,255,0)"]]);
   const glowHard = radialTex(128, [[0, "rgba(255,255,255,1)"], [0.25, "rgba(255,255,255,0.9)"], [1, "rgba(255,255,255,0)"]]);
-  const mkGlow = (tint, size, alpha = 1, hard = false) => {
+  const mkGlow = (tint, size, alpha2 = 1, hard = false) => {
     const s2 = new Sprite(hard ? glowHard : glowSoft);
     s2.anchor.set(0.5);
     s2.tint = tint;
     s2.width = s2.height = size;
-    s2.alpha = alpha;
+    s2.alpha = alpha2;
     s2.blendMode = "add";
     return s2;
   };
-  const camera = new Container();
-  camera.position.set(W / 2, H2 / 2);
-  camera.pivot.set(W / 2, H2 / 2);
-  app.stage.addChild(camera);
-  const Lsky = new Container();
-  const Lfar = new Container();
-  const Lmid = new Container();
-  const Ltree = new Container();
-  const Lfront = new Container();
-  const Lfx = new Container();
-  camera.addChild(Lsky, Lfar, Lmid, Ltree, Lfront, Lfx);
-  Lfar.filters = [new BlurFilter({ strength: 2.5 })];
-  const animated = [];
-  if (data2.assets.sky) {
-    const s2 = new Sprite(await loadTex(data2.assets.sky));
-    s2.width = W;
-    s2.height = H2;
-    Lsky.addChild(s2);
-  } else {
-    const sky = new Sprite(linearTex(64, H2, [[0, "#05041a"], [0.4, "#100c30"], [0.75, "#2a1f5c"], [1, "#473573"]]));
-    sky.width = W;
-    sky.height = H2;
-    Lsky.addChild(sky);
+  const bg = new Container();
+  app.stage.addChild(bg);
+  const skyG = new Sprite(linearTex(32, H2, [[0, "#07060f"], [0.5, "#0a0918"], [1, "#0d0a1e"]]));
+  skyG.width = W;
+  skyG.height = H2;
+  bg.addChild(skyG);
+  const nebulae = [
+    { s: mkGlow(4864650, 900, 0.1), ph: 0 },
+    { s: mkGlow(2775674, 760, 0.08), ph: 2.4 },
+    { s: mkGlow(6961770, 680, 0.07), ph: 4.1 }
+  ];
+  nebulae[0].s.position.set(420, 300);
+  nebulae[1].s.position.set(880, 480);
+  nebulae[2].s.position.set(640, 180);
+  for (const n3 of nebulae) bg.addChild(n3.s);
+  const farStars = [];
+  for (let i2 = 0; i2 < 160; i2++) {
+    const s2 = mkGlow(13620991, seed(`fs${i2}`) > 0.93 ? 5 : 2.6, 0.7, true);
+    s2.x = seed(`fx${i2}`) * W;
+    s2.y = seed(`fy${i2}`) * H2;
+    bg.addChild(s2);
+    farStars.push({ s: s2, ph: seed(`fp${i2}`) * 6 });
   }
-  for (let i2 = 0; i2 < 120; i2++) {
-    const star = mkGlow(14673663, seed(`s${i2}`) > 0.9 ? 7 : 4, 0.8, true);
-    star.x = 20 + seed(`sx${i2}`) * (W - 40);
-    star.y = 14 + seed(`sy${i2}`) * 350;
-    const ph = seed(`sp${i2}`) * Math.PI * 2;
-    Lsky.addChild(star);
-    animated.push((t2) => {
-      star.alpha = 0.2 + 0.6 * (0.5 + 0.5 * Math.sin(t2 * 11e-4 + ph));
-    });
+  const world = new Container();
+  app.stage.addChild(world);
+  world.position.set(W / 2, H2 / 2);
+  const edgesG = new Graphics();
+  world.addChild(edgesG);
+  const vig = new Sprite(radialTex(512, [[0, "rgba(0,0,0,0)"], [0.7, "rgba(0,0,0,0)"], [1, "rgba(0,0,0,0.45)"]]));
+  vig.anchor.set(0.5);
+  vig.position.set(W / 2, H2 / 2);
+  vig.width = W * 1.2;
+  vig.height = H2 * 1.2;
+  app.stage.addChild(vig);
+  const n2 = data.nodes.length;
+  const px = new Float32Array(n2);
+  const py = new Float32Array(n2);
+  const vx2 = new Float32Array(n2);
+  const vy2 = new Float32Array(n2);
+  const degree = new Array(n2).fill(0);
+  for (const e2 of data.edges) {
+    degree[e2.a]++;
+    degree[e2.b]++;
   }
-  const shoot = new Sprite(linearTex(4, 64, [[0, "rgba(223,230,255,0)"], [1, "rgba(223,230,255,0.95)"]]));
-  shoot.anchor.set(0.5);
-  shoot.width = 3;
-  shoot.height = 90;
-  shoot.rotation = Math.PI * 0.72;
-  shoot.blendMode = "add";
-  shoot.alpha = 0;
-  Lsky.addChild(shoot);
-  animated.push((t2) => {
-    const cycle = t2 % 9e3 / 9e3;
-    if (cycle < 0.13) {
-      const k2 = cycle / 0.13;
-      shoot.x = 220 + k2 * 520;
-      shoot.y = 60 + k2 * 150;
-      shoot.alpha = Math.sin(k2 * Math.PI) * 0.9;
-    } else shoot.alpha = 0;
+  const shuffled = data.nodes.map((_, i2) => i2).sort((a2, b2) => seed(`sh${data.nodes[a2].id}`) - seed(`sh${data.nodes[b2].id}`));
+  shuffled.forEach((idx, order) => {
+    const t2 = order / Math.max(1, n2 - 1);
+    const r2 = 26 + 300 * Math.sqrt(t2);
+    const theta = order * 2.39996 + seed(data.nodes[idx].id) * 0.6;
+    px[idx] = Math.cos(theta) * r2;
+    py[idx] = Math.sin(theta) * r2 * 0.82;
   });
-  const auroraTex = linearTex(8, 90, [[0, "rgba(70,227,192,0)"], [0.5, "rgba(70,227,192,0.45)"], [1, "rgba(138,111,240,0)"]]);
-  for (let i2 = 0; i2 < 3; i2++) {
-    const a2 = new Sprite(auroraTex);
-    a2.width = 780 + i2 * 140;
-    a2.height = 110 - i2 * 18;
-    a2.anchor.set(0.5);
-    a2.x = 520 + i2 * 110;
-    a2.y = 120 + i2 * 50;
-    a2.rotation = -0.06 + i2 * 0.04;
-    a2.blendMode = "add";
-    a2.filters = [new BlurFilter({ strength: 14 })];
-    Lsky.addChild(a2);
-    animated.push((t2) => {
-      a2.x = 520 + i2 * 110 + Math.sin(t2 * 18e-5 + i2 * 1.7) * 36;
-      a2.alpha = 0.5 + 0.35 * Math.sin(t2 * 3e-4 + i2);
+  const adj = Array.from({ length: n2 }, () => []);
+  data.edges.forEach((e2) => {
+    adj[e2.a].push(e2.b);
+    adj[e2.b].push(e2.a);
+  });
+  let hovered = -1;
+  let dragIdx = -1;
+  const nodeC = [];
+  const labels = [];
+  const halos = [];
+  const radiusOf = (i2) => (data.nodes[i2].kind === "title" || data.nodes[i2].kind === "book" ? 4.6 : 3.6) + Math.min(5, degree[i2] * 1.1);
+  data.nodes.forEach((node, i2) => {
+    const c2 = new Container();
+    const r2 = radiusOf(i2);
+    const halo = mkGlow(KIND_COLORS[node.kind], r2 * 7, 0.55);
+    const core = new Graphics().circle(0, 0, r2).fill({ color: KIND_COLORS[node.kind] });
+    core.stroke({ width: 1.2, color: 460303, alpha: 0.9 });
+    const hl = new Graphics().circle(-r2 * 0.3, -r2 * 0.3, r2 * 0.32).fill({ color: 16777215, alpha: 0.85 });
+    c2.addChild(halo, core, hl);
+    halos.push(halo);
+    const label = new Text({
+      text: node.label.length > 26 ? node.label.slice(0, 25) + "\u2026" : node.label,
+      style: { fontFamily: "Inter, sans-serif", fontSize: 11, fill: 12107225 }
     });
-  }
-  const moonHalo = mkGlow(13490431, 340, 0.85);
-  moonHalo.x = 956;
-  moonHalo.y = 124;
-  const moon = new Graphics().circle(956, 124, 30).fill({ color: 15659775 });
-  Lsky.addChild(moonHalo, moon);
-  const rayTex = linearTex(8, 64, [[0, "rgba(205,216,255,0.16)"], [1, "rgba(205,216,255,0)"]]);
-  for (let i2 = 0; i2 < 3; i2++) {
-    const ray = new Sprite(rayTex);
-    ray.anchor.set(0.5, 0);
-    ray.width = 120 + i2 * 70;
-    ray.height = 560 + i2 * 40;
-    ray.x = 930 + i2 * 26;
-    ray.y = 150;
-    ray.rotation = 0.42 + i2 * 0.1;
-    ray.blendMode = "add";
-    Lsky.addChild(ray);
-    animated.push((t2) => ray.alpha = 0.35 + 0.3 * Math.sin(t2 * 45e-5 + i2 * 1.2));
-  }
-  animated.push((t2) => moonHalo.alpha = 0.7 + 0.18 * Math.sin(t2 * 6e-4));
-  const hill = (pts, color, alpha = 1) => {
-    const g2 = new Graphics();
-    g2.moveTo(pts[0][0], pts[0][1]);
-    for (let i2 = 1; i2 < pts.length - 1; i2 += 2) g2.quadraticCurveTo(pts[i2][0], pts[i2][1], pts[i2 + 1][0], pts[i2 + 1][1]);
-    g2.lineTo(W, H2).lineTo(0, H2).closePath();
-    g2.fill({ color, alpha });
-    return g2;
-  };
-  if (data2.assets.hillsFar) {
-    const s2 = new Sprite(await loadTex(data2.assets.hillsFar));
-    s2.width = W;
-    s2.height = H2;
-    Lfar.addChild(s2);
-  } else {
-    Lfar.addChild(hill([[0, 470], [200, 380], [400, 450], [640, 400], [880, 455], [1050, 415], [1200, 440]], 2497618, 0.9));
-    for (let i2 = 0; i2 < 14; i2++) {
-      const px = 60 + i2 * 86 + seed(`pn${i2}`) * 40;
-      const py = 430 + Math.sin(i2 * 0.8) * 22;
-      const ph = 26 + seed(`pnh${i2}`) * 26;
-      const pine = new Graphics().moveTo(px - 7, py).lineTo(px, py - ph).lineTo(px + 7, py).closePath().fill({ color: 1905989, alpha: 0.9 });
-      Lfar.addChild(pine);
-    }
-  }
-  if (data2.assets.hillsNear) {
-    const s2 = new Sprite(await loadTex(data2.assets.hillsNear));
-    s2.width = W;
-    s2.height = H2;
-    Lmid.addChild(s2);
-  } else {
-    Lmid.addChild(hill([[0, 540], [260, 450], [520, 525], [800, 480], [1e3, 525], [1100, 500], [1200, 515]], 1774400));
-    Lmid.addChild(hill([[0, 620], [300, 560], [620, 600], [900, 575], [1200, 595]], 1248560));
-  }
-  const mist = mkGlow(9280511, 800, 0.15);
-  mist.x = 600;
-  mist.y = 595;
-  mist.scale.y *= 0.2;
-  Lmid.addChild(mist);
-  animated.push((t2) => mist.x = 600 + Math.sin(t2 * 12e-5) * 44);
-  Lfront.addChild(hill([[0, 642], [300, 606], [620, 630], [900, 612], [1200, 626]], 919846));
-  const hot = (c2, onTap, tipData) => {
+    label.anchor.set(0.5, 0);
+    label.y = r2 + 5;
+    label.alpha = 0;
+    c2.addChild(label);
+    labels.push(label);
     c2.eventMode = "static";
     c2.cursor = "pointer";
-    c2.on("pointertap", onTap);
-    c2.on("pointermove", (e2) => cb.tip({ clientX: e2.clientX, clientY: e2.clientY, ...tipData() }));
-    c2.on("pointerover", () => animateScale(c2, 1.04));
+    c2.on("pointerover", () => {
+      hovered = i2;
+      reheat(0.06);
+    });
     c2.on("pointerout", () => {
-      animateScale(c2, 1);
+      if (hovered === i2) hovered = -1;
       cb.tip(null);
     });
+    c2.on("pointermove", (e2) => {
+      cb.tip({
+        clientX: e2.clientX,
+        clientY: e2.clientY,
+        color: hex(KIND_COLORS[node.kind]),
+        head: data.kindNames[node.kind],
+        label: node.label,
+        sub: node.sub
+      });
+    });
+    c2.on("pointerdown", (e2) => {
+      dragIdx = i2;
+      dragMoved = false;
+      e2.stopPropagation();
+    });
+    world.addChild(c2);
+    nodeC.push(c2);
+  });
+  let alpha = 1;
+  const reheat = (to = 0.5) => {
+    alpha = Math.max(alpha, to);
   };
-  const animateScale = (c2, target) => {
-    const from = c2.scale.x;
-    const start = performance.now();
-    const step = () => {
-      const k2 = Math.min(1, (performance.now() - start) / 140);
-      c2.scale.set(from + (target - from) * k2);
-      if (k2 < 1) requestAnimationFrame(step);
-    };
-    step();
-  };
-  const forest = new Container();
-  forest.pivot.set(210, 615);
-  forest.position.set(210, 615);
-  for (let i2 = 0; i2 < 7; i2++) {
-    const fx = 86 + i2 * 42 + seed(`f${i2}`) * 16;
-    const fh = 58 + seed(`fh${i2}`) * 46;
-    const fy = 616 - seed(`fy${i2}`) * 10;
-    forest.addChild(new Graphics().moveTo(fx, fy).lineTo(fx, fy - fh * 0.45).stroke({ width: 5, color: 2300750, cap: "round" }));
-    forest.addChild(new Graphics().ellipse(fx, fy - fh * 0.66, 17 + seed(`fr${i2}`) * 10, fh * 0.4).fill({ color: i2 % 2 ? 2366290 : 3418736 }));
-    forest.addChild(new Graphics().ellipse(fx - 6, fy - fh * 0.58, 9, fh * 0.22).fill({ color: 4010368, alpha: 0.6 }));
-    if (i2 % 2 === 0) {
-      const berry = mkGlow(4906624, 16, 0.9);
-      berry.x = fx + 7;
-      berry.y = fy - fh * 0.66;
-      forest.addChild(berry);
-      const ph = i2 * 1.3;
-      animated.push((t2) => berry.alpha = 0.35 + 0.55 * (0.5 + 0.5 * Math.sin(t2 * 14e-4 + ph)));
-    }
-  }
-  hot(forest, () => cb.navigate("/library"), () => ({ color: hex(KIND_COLORS.title), head: data2.zoneLabels.library, label: String(data2.stats.titles) }));
-  Lfront.addChild(forest);
-  const lake = new Container();
-  lake.pivot.set(1010, 688);
-  lake.position.set(1010, 688);
-  lake.addChild(new Graphics().ellipse(1010, 688, 158, 28).fill({ color: 1909848 }));
-  lake.addChild(new Graphics().ellipse(1010, 688, 158, 28).stroke({ width: 1.5, color: 10466559, alpha: 0.3 }));
-  const moonRefl = mkGlow(12374271, 120, 0.5);
-  moonRefl.x = 1052;
-  moonRefl.y = 684;
-  moonRefl.scale.y *= 0.22;
-  lake.addChild(moonRefl);
-  for (let i2 = 0; i2 < 3; i2++) {
-    const shine = new Sprite(linearTex(64, 4, [[0, "rgba(188,208,255,0)"], [0.5, "rgba(188,208,255,0.8)"], [1, "rgba(188,208,255,0)"]]));
-    shine.anchor.set(0.5);
-    shine.x = 960 + i2 * 46;
-    shine.y = 682 + i2 * 5;
-    shine.width = 60 - i2 * 12;
-    shine.height = 2.4;
-    shine.blendMode = "add";
-    lake.addChild(shine);
-    animated.push((t2) => shine.alpha = 0.3 + 0.6 * (0.5 + 0.5 * Math.sin(t2 * 12e-4 + i2 * 2.1)));
-  }
-  const ripple = new Graphics();
-  lake.addChild(ripple);
-  animated.push((t2) => {
-    const k2 = t2 % 5200 / 5200;
-    ripple.clear();
-    ripple.ellipse(1e3 + 30 * Math.sin(Math.floor(t2 / 5200)), 690, 18 + k2 * 70, (18 + k2 * 70) * 0.18);
-    ripple.stroke({ width: 1.4, color: 10466559, alpha: (1 - k2) * 0.5 });
-  });
-  hot(lake, () => cb.navigate("/journal"), () => ({ color: hex(KIND_COLORS.journal), head: data2.zoneLabels.journal, label: data2.zoneLabels.journalSub }));
-  Lfront.addChild(lake);
-  const garden = new Container();
-  garden.pivot.set(820, 640);
-  garden.position.set(820, 640);
-  for (let i2 = 0; i2 < 9; i2++) {
-    const gx = 758 + i2 * 15 + seed(`g${i2}`) * 9;
-    const gy = 648 - seed(`gy${i2}`) * 8;
-    const gh = 20 + seed(`gh${i2}`) * 18;
-    garden.addChild(new Graphics().moveTo(gx, gy).quadraticCurveTo(gx + 3, gy - gh * 0.6, gx + 1, gy - gh).stroke({ width: 1.8, color: 3818100, cap: "round" }));
-    const head2 = mkGlow(6333946, 18 + seed(`ghd${i2}`) * 10, 0.95);
-    head2.x = gx + 1;
-    head2.y = gy - gh - 2;
-    garden.addChild(head2);
-    const ph = seed(`gp${i2}`) * 6;
-    animated.push((t2) => {
-      head2.alpha = 0.5 + 0.45 * (0.5 + 0.5 * Math.sin(t2 * 16e-4 + ph));
-      head2.y = gy - gh - 2 + Math.sin(t2 * 9e-4 + ph) * 1.6;
-    });
-  }
-  hot(garden, () => cb.navigate("/notes"), () => ({ color: hex(KIND_COLORS.note), head: data2.zoneLabels.notes, label: String(data2.stats.notes) }));
-  Lfront.addChild(garden);
-  const path2 = new Container();
-  path2.pivot.set(520, 700);
-  path2.position.set(520, 700);
-  const pathG = new Graphics();
-  const p0 = { x: 410, y: 756 };
-  const p1 = { x: 500, y: 692 };
-  const p2 = { x: 608, y: 650 };
-  for (let i2 = 0; i2 <= 16; i2++) {
-    const pt = bez(p0, p1, p2, i2 / 16);
-    pathG.circle(pt.x, pt.y, 2.4 - i2 / 16 * 1.1).fill({ color: 4865918, alpha: 0.9 });
-  }
-  path2.addChild(pathG);
-  const lanternCount = 4;
-  const totalTasks = data2.stats.openTasks + data2.stats.doneTasks;
-  const lit = totalTasks > 0 ? Math.round(data2.stats.doneTasks / totalTasks * lanternCount) : 0;
-  for (let i2 = 0; i2 < lanternCount; i2++) {
-    const lp = bez(p0, p1, p2, 0.16 + i2 * 0.25);
-    path2.addChild(new Graphics().moveTo(lp.x, lp.y).lineTo(lp.x, lp.y - 27).stroke({ width: 2.5, color: 2300750 }));
-    const isLit = i2 < lit;
-    path2.addChild(new Graphics().circle(lp.x, lp.y - 31, 4).fill({ color: isLit ? 16765565 : 4866934 }));
-    if (isLit) {
-      const halo = mkGlow(16762475, 46, 0.85);
-      halo.x = lp.x;
-      halo.y = lp.y - 31;
-      path2.addChild(halo);
-      const ph = i2 * 0.9;
-      animated.push((t2) => halo.alpha = 0.5 + 0.4 * (0.5 + 0.5 * Math.sin(t2 * 21e-4 + ph)));
-    }
-  }
-  hot(path2, () => cb.navigate("/tasks"), () => ({ color: "#ffd27d", head: data2.zoneLabels.tasks, label: data2.zoneLabels.tasksSub }));
-  Lfront.addChild(path2);
-  for (let i2 = 0; i2 < 3; i2++) {
-    const mx = 330 + i2 * 26 + seed(`m${i2}`) * 12;
-    const my = 700 + seed(`my${i2}`) * 24;
-    const mh = 10 + seed(`mh${i2}`) * 8;
-    Lfront.addChild(new Graphics().moveTo(mx, my).lineTo(mx, my - mh).stroke({ width: 2.5, color: 10134744, cap: "round" }));
-    Lfront.addChild(new Graphics().ellipse(mx, my - mh, 7, 4).fill({ color: 8381394 }));
-    const mg = mkGlow(8381394, 26, 0.8);
-    mg.x = mx;
-    mg.y = my - mh;
-    Lfront.addChild(mg);
-    const ph = i2 * 2;
-    animated.push((t2) => mg.alpha = 0.4 + 0.4 * (0.5 + 0.5 * Math.sin(t2 * 18e-4 + ph)));
-  }
-  const rock = new Graphics();
-  rock.ellipse(760, 666, 26, 14).fill({ color: 1577530 });
-  rock.ellipse(795, 672, 16, 9).fill({ color: 1314611 });
-  Lfront.addChild(rock);
-  for (let i2 = 0; i2 < 3; i2++) {
-    const rg = mkGlow(11045104, 10, 0.9, true);
-    rg.x = 750 + i2 * 10;
-    rg.y = 662 + i2 % 2 * 5;
-    Lfront.addChild(rg);
-    animated.push((t2) => rg.alpha = 0.3 + 0.6 * (0.5 + 0.5 * Math.sin(t2 * 2e-3 + i2 * 2.2)));
-  }
-  const grass = new Graphics();
-  for (let i2 = 0; i2 < 80; i2++) {
-    const gx = 14 + i2 * 15 + seed(`gr${i2}`) * 10;
-    const gy = 700 + seed(`gry${i2}`) * 48;
-    const gh = 7 + seed(`grh${i2}`) * 14;
-    grass.moveTo(gx, gy).lineTo(gx + (seed(`grd${i2}`) - 0.5) * 7, gy - gh).stroke({ width: 1.6, color: 1906244, cap: "round" });
-  }
-  Lfront.addChild(grass);
-  const treeC = new Container();
-  Ltree.addChild(treeC);
-  const crownHalo = mkGlow(13623551, 520, 0.5);
-  crownHalo.x = 600;
-  crownHalo.y = 250;
-  treeC.addChild(crownHalo);
-  animated.push((t2) => crownHalo.alpha = 0.36 + 0.16 * Math.sin(t2 * 5e-4));
-  const groundGlow = mkGlow(10466559, 300, 0.35);
-  groundGlow.x = 600;
-  groundGlow.y = 668;
-  groundGlow.scale.y *= 0.18;
-  treeC.addChild(groundGlow);
-  if (data2.assets.tree) {
-    const s2 = new Sprite(await loadTex(data2.assets.tree));
-    s2.width = W;
-    s2.height = H2;
-    treeC.addChild(s2);
-  } else {
-    const drawTrunk = (g2) => {
-      g2.moveTo(556, 668);
-      g2.bezierCurveTo(572, 592, 580, 524, 585, 458);
-      g2.bezierCurveTo(589, 392, 583, 320, 595, 246);
-      g2.bezierCurveTo(597, 224, 600, 206, 601, 192);
-      g2.bezierCurveTo(603, 208, 607, 232, 610, 254);
-      g2.bezierCurveTo(621, 334, 616, 410, 622, 480);
-      g2.bezierCurveTo(628, 554, 640, 614, 654, 668);
-      g2.closePath();
-    };
-    const glowTrunk = new Graphics();
-    drawTrunk(glowTrunk);
-    glowTrunk.fill({ color: 10466559, alpha: 0.85 });
-    glowTrunk.filters = [new BlurFilter({ strength: 20 })];
-    glowTrunk.blendMode = "add";
-    treeC.addChild(glowTrunk);
-    const roots = new Graphics();
-    roots.moveTo(566, 660).bezierCurveTo(534, 668, 498, 676, 452, 672);
-    roots.moveTo(580, 666).bezierCurveTo(560, 676, 540, 682, 512, 684);
-    roots.moveTo(640, 660).bezierCurveTo(672, 668, 706, 676, 750, 671);
-    roots.moveTo(626, 666).bezierCurveTo(648, 678, 668, 683, 696, 685);
-    roots.stroke({ width: 9, color: 12174578, cap: "round" });
-    treeC.addChild(roots);
-    const trunk = new Graphics();
-    drawTrunk(trunk);
-    trunk.fill({ color: 15331327 });
-    treeC.addChild(trunk);
-    const shade = new Graphics();
-    shade.moveTo(556, 668);
-    shade.bezierCurveTo(572, 592, 580, 524, 585, 458);
-    shade.bezierCurveTo(589, 392, 585, 328, 595, 250);
-    shade.bezierCurveTo(589, 330, 587, 420, 591, 500);
-    shade.bezierCurveTo(594, 570, 587, 632, 579, 668);
-    shade.closePath();
-    shade.fill({ color: 11187432, alpha: 0.6 });
-    treeC.addChild(shade);
-    const rim = new Graphics();
-    rim.moveTo(610, 254).bezierCurveTo(621, 334, 616, 410, 622, 480).bezierCurveTo(628, 554, 640, 614, 652, 664);
-    rim.stroke({ width: 2.2, color: 16777215, alpha: 0.9, cap: "round" });
-    rim.blendMode = "add";
-    treeC.addChild(rim);
-    for (let i2 = 0; i2 < 3; i2++) {
-      const vein = new Graphics();
-      if (i2 === 0) vein.moveTo(592, 650).bezierCurveTo(596, 560, 592, 470, 599, 300);
-      else if (i2 === 1) vein.moveTo(614, 650).bezierCurveTo(610, 560, 614, 470, 604, 320);
-      else vein.moveTo(602, 640).bezierCurveTo(606, 540, 600, 430, 602, 330);
-      vein.stroke({ width: i2 === 2 ? 1.2 : 2, color: 13954303, cap: "round" });
-      vein.blendMode = "add";
-      treeC.addChild(vein);
-      animated.push((t2) => vein.alpha = 0.3 + 0.6 * (0.5 + 0.5 * Math.sin(t2 * 8e-4 + i2 * 1.4)));
-    }
-    const boughs = [
-      { from: { x: 598, y: 240 }, ctrl: { x: 520, y: 190 }, to: { x: 440, y: 175 } },
-      { from: { x: 604, y: 235 }, ctrl: { x: 690, y: 185 }, to: { x: 768, y: 172 } },
-      { from: { x: 600, y: 215 }, ctrl: { x: 560, y: 150 }, to: { x: 512, y: 112 } },
-      { from: { x: 602, y: 212 }, ctrl: { x: 650, y: 145 }, to: { x: 700, y: 108 } },
-      { from: { x: 601, y: 200 }, ctrl: { x: 600, y: 150 }, to: { x: 598, y: 92 } }
-    ];
-    const canopyTints = [12572415, 13624063, 11980031];
-    boughs.forEach((b2, bi) => {
-      const bough = new Graphics();
-      bough.moveTo(b2.from.x, b2.from.y).quadraticCurveTo(b2.ctrl.x, b2.ctrl.y, b2.to.x, b2.to.y);
-      bough.stroke({ width: 7 - bi * 0.8, color: 14541823, cap: "round" });
-      treeC.addChild(bough);
-      for (let c2 = 0; c2 < 6; c2++) {
-        const blob = mkGlow(canopyTints[c2 % 3], 46 + seed(`cb${bi}-${c2}`) * 56, 0.5);
-        blob.x = b2.to.x + (seed(`cbx${bi}-${c2}`) - 0.5) * 90;
-        blob.y = b2.to.y + (seed(`cby${bi}-${c2}`) - 0.5) * 56;
-        treeC.addChild(blob);
-        const ph = seed(`cbp${bi}-${c2}`) * 6;
-        animated.push((t2) => blob.alpha = 0.3 + 0.3 * (0.5 + 0.5 * Math.sin(t2 * 7e-4 + ph)));
+  function simStep() {
+    if (alpha < 0.012) return;
+    const rep = 1300;
+    const spring = 0.028;
+    const rest = 78;
+    for (let i2 = 0; i2 < n2; i2++) {
+      vx2[i2] -= px[i2] * 12e-4 * alpha;
+      vy2[i2] -= py[i2] * 16e-4 * alpha;
+      for (let j2 = i2 + 1; j2 < n2; j2++) {
+        let dx = px[i2] - px[j2];
+        let dy = py[i2] - py[j2];
+        let d2 = dx * dx + dy * dy;
+        if (d2 < 1) {
+          dx = (seed(`${i2}-${j2}`) - 0.5) * 2;
+          dy = (seed(`${j2}-${i2}`) - 0.5) * 2;
+          d2 = 1;
+        }
+        if (d2 > 9e4) continue;
+        const f2 = rep / d2 * alpha;
+        const d3 = Math.sqrt(d2);
+        const fx = dx / d3 * f2;
+        const fy = dy / d3 * f2;
+        vx2[i2] += fx;
+        vy2[i2] += fy;
+        vx2[j2] -= fx;
+        vy2[j2] -= fy;
       }
-      const tipLight = mkGlow(15659775, 22, 1, true);
-      tipLight.x = b2.to.x;
-      tipLight.y = b2.to.y;
-      treeC.addChild(tipLight);
-      animated.push((t2) => tipLight.alpha = 0.5 + 0.45 * (0.5 + 0.5 * Math.sin(t2 * 16e-4 + bi)));
-    });
-  }
-  const spirit = new Container();
-  spirit.position.set(702, 648);
-  const sGlow = mkGlow(14674431, 70, 0.8);
-  const body = new Graphics().ellipse(0, -8, 7, 10).fill({ color: 15659775 });
-  const head = new Graphics().circle(0, -22, 6.5).fill({ color: 15659775 });
-  const earL = new Graphics().moveTo(-3, -27).quadraticCurveTo(-8, -40, -4, -44).quadraticCurveTo(-1, -38, -1, -28).closePath().fill({ color: 15659775 });
-  const earR = new Graphics().moveTo(3, -27).quadraticCurveTo(9, -38, 6, -43).quadraticCurveTo(2, -37, 1, -28).closePath().fill({ color: 15659775 });
-  const eyeL = new Graphics().circle(-2.4, -23, 1).fill({ color: 2761042 });
-  const eyeR = new Graphics().circle(2.4, -23, 1).fill({ color: 2761042 });
-  spirit.addChild(sGlow, earL, earR, body, head, eyeL, eyeR);
-  Lfront.addChild(spirit);
-  let hopT = -1;
-  animated.push((t2) => {
-    const bob = Math.sin(t2 * 15e-4) * 2;
-    spirit.y = 648 + bob + (hopT >= 0 ? -16 * Math.sin(Math.min(1, (t2 - hopT) / 420) * Math.PI) : 0);
-    if (hopT >= 0 && t2 - hopT > 420) hopT = -1;
-    const blink = t2 % 4200 < 140;
-    eyeL.visible = !blink;
-    eyeR.visible = !blink;
-    sGlow.alpha = 0.55 + 0.25 * Math.sin(t2 * 12e-4);
-  });
-  spirit.eventMode = "static";
-  spirit.cursor = "pointer";
-  let now = 0;
-  spirit.on("pointertap", () => {
-    hopT = now;
-    for (let i2 = 0; i2 < 9; i2++) {
-      const sp = mkGlow(13623551, 12, 1, true);
-      sp.x = spirit.x;
-      sp.y = spirit.y - 24;
-      Lfx.addChild(sp);
-      const ang = i2 / 9 * Math.PI * 2;
-      const start = now;
-      animated.push((t2) => {
-        const k2 = Math.min(1, (t2 - start) / 700);
-        sp.x = spirit.x + Math.cos(ang) * 38 * k2;
-        sp.y = spirit.y - 24 + Math.sin(ang) * 26 * k2 - 14 * k2;
-        sp.alpha = 1 - k2;
-        if (k2 >= 1) sp.visible = false;
-      });
     }
-  });
-  const byMonth = /* @__PURE__ */ new Map();
-  for (const ev of data2.events) {
-    const k2 = ev.date.slice(0, 7);
-    if (!byMonth.has(k2)) byMonth.set(k2, []);
-    byMonth.get(k2).push(ev);
-  }
-  data2.months.forEach(({ key, label }, i2) => {
-    const evs = byMonth.get(key) ?? [];
-    const attach = { x: 600 + Math.sin(i2 * 0.95) * 7, y: 596 - i2 * 31 };
-    const side = i2 % 2 === 0 ? -1 : 1;
-    const len = evs.length ? 120 + Math.min(evs.length, 14) * 13 : 70;
-    const lift = len * (0.4 + 0.16 * seed(key));
-    const tipPt = { x: attach.x + side * len, y: attach.y - lift };
-    const ctrl = { x: attach.x + side * len * 0.42, y: attach.y - lift * 0.08 };
-    const branch = new Graphics();
-    branch.moveTo(attach.x, attach.y).quadraticCurveTo(ctrl.x, ctrl.y, tipPt.x, tipPt.y);
-    branch.stroke({ width: evs.length ? 5 : 2.5, color: evs.length ? 14541823 : 7304877, cap: "round", alpha: evs.length ? 1 : 0.75 });
-    if (evs.length) {
-      const branchLight = new Graphics();
-      branchLight.moveTo(attach.x, attach.y).quadraticCurveTo(ctrl.x, ctrl.y, tipPt.x, tipPt.y);
-      branchLight.stroke({ width: 1.6, color: 16777215, alpha: 0.7, cap: "round" });
-      branchLight.blendMode = "add";
-      Ltree.addChild(branch, branchLight);
-    } else Ltree.addChild(branch);
-    const lbl = new Text({
-      text: label,
-      style: { fontFamily: "Inter, sans-serif", fontSize: 13, fill: evs.length ? 11054806 : 5659525 }
-    });
-    lbl.anchor.set(side === 1 ? 0 : 1, 0.5);
-    lbl.x = tipPt.x + side * 13;
-    lbl.y = tipPt.y;
-    Ltree.addChild(lbl);
-    evs.forEach((ev, j2) => {
-      const ft = 0.3 + 0.68 * (evs.length === 1 ? 0.85 : j2 / (evs.length - 1));
-      const p3 = bez(attach, ctrl, tipPt, ft);
-      const n2 = bezN(attach, ctrl, tipPt, ft);
-      const off = (seed(ev.key) - 0.5) * 2 * (10 + 15 * seed(ev.key + "o"));
-      const r2 = 3.5 + 2.5 * seed(ev.key + "r");
-      const orb = new Container();
-      orb.x = p3.x + n2.x * off;
-      orb.y = p3.y + n2.y * off;
-      const halo = mkGlow(KIND_COLORS[ev.kind], r2 * 8, 0.9);
-      const core = new Graphics().circle(0, 0, r2).fill({ color: KIND_COLORS[ev.kind] });
-      const spark = new Graphics().circle(-r2 * 0.3, -r2 * 0.3, r2 * 0.35).fill({ color: 16777215, alpha: 0.9 });
-      orb.addChild(halo, core, spark);
-      orb.eventMode = "static";
-      orb.cursor = "pointer";
-      orb.on("pointertap", () => {
-        if (ev.kind === "note") cb.navigate(`/notes?open=${ev.ref_id}`);
-        else if (ev.kind === "journal") cb.navigate("/journal");
-        else cb.navigate(`/title/${ev.ref_id}`);
-      });
-      orb.on(
-        "pointermove",
-        (e2) => cb.tip({
-          clientX: e2.clientX,
-          clientY: e2.clientY,
-          color: hex(KIND_COLORS[ev.kind]),
-          head: `${data2.kindNames[ev.kind]} \xB7 ${data2.dateOf(ev.date)}`,
-          label: ev.label,
-          sub: ev.sublabel
-        })
-      );
-      orb.on("pointerout", () => cb.tip(null));
-      Ltree.addChild(orb);
-      const ph = seed(ev.key) * 6;
-      const bx = orb.x;
-      const by = orb.y;
-      animated.push((t2) => {
-        orb.y = by + Math.sin(t2 * 8e-4 + ph) * 2.4;
-        orb.x = bx + Math.cos(t2 * 6e-4 + ph) * 1.4;
-        halo.alpha = 0.6 + 0.3 * Math.sin(t2 * 12e-4 + ph);
-      });
-    });
-  });
-  for (let i2 = 0; i2 < 36; i2++) {
-    const d2 = mkGlow(12374271, 6 + seed(`d${i2}`) * 8, 0.5, true);
-    const baseX = seed(`dx${i2}`) * W;
-    const speed = 6e-3 + seed(`ds${i2}`) * 0.012;
-    const ph = seed(`dp${i2}`) * 6;
-    Lfx.addChild(d2);
-    animated.push((t2) => {
-      const k2 = (t2 * speed / 10 + seed(`do${i2}`) * 100) % 120;
-      d2.x = baseX + Math.sin(t2 * 4e-4 + ph) * 30;
-      d2.y = 700 - k2 * 5.6;
-      d2.alpha = 0.12 + 0.3 * (0.5 + 0.5 * Math.sin(t2 * 1e-3 + ph)) * Math.min(1, (120 - k2) / 30);
-    });
-  }
-  for (let i2 = 0; i2 < 9; i2++) {
-    const petal = new Graphics().ellipse(0, 0, 4, 2).fill({ color: 10335487, alpha: 0.85 });
-    Lfx.addChild(petal);
-    const px = 380 + seed(`pe${i2}`) * 460;
-    const dur = 9e3 + seed(`ped${i2}`) * 6e3;
-    const ph = seed(`pep${i2}`) * dur;
-    animated.push((t2) => {
-      const k2 = (t2 + ph) % dur / dur;
-      petal.x = px + Math.sin(k2 * 9 + i2) * 46;
-      petal.y = 180 + k2 * 480;
-      petal.rotation = k2 * 7 + i2;
-      petal.alpha = k2 < 0.08 ? k2 / 0.08 : k2 > 0.9 ? (1 - k2) / 0.1 : 0.85;
-    });
-  }
-  const ffCount = Math.min(14, Math.max(5, data2.stats.moments));
-  const ffC = new Container();
-  for (let i2 = 0; i2 < ffCount; i2++) {
-    const f2 = mkGlow(16771491, 10, 0.9, true);
-    const cx = 180 + seed(`ff${i2}`) * 840;
-    const cyy = 430 + seed(`ffy${i2}`) * 200;
-    const ph = seed(`ffp${i2}`) * 6;
-    ffC.addChild(f2);
-    animated.push((t2) => {
-      f2.x = cx + Math.sin(t2 * 5e-4 + ph) * 46 + Math.sin(t2 * 13e-4 + ph * 2) * 12;
-      f2.y = cyy + Math.cos(t2 * 7e-4 + ph) * 26;
-      f2.alpha = 0.15 + 0.7 * (0.5 + 0.5 * Math.sin(t2 * 23e-4 + ph));
-    });
-  }
-  hot(ffC, () => cb.navigate("/moments"), () => ({ color: hex(KIND_COLORS.moment), head: data2.zoneLabels.moments, label: String(data2.stats.moments) }));
-  Lfx.addChild(ffC);
-  if (data2.assets.foreground) {
-    const s2 = new Sprite(await loadTex(data2.assets.foreground));
-    s2.width = W;
-    s2.height = H2;
-    Lfx.addChild(s2);
-  } else {
-    const frame = new Container();
-    const fern = (fx, fy, dir, n2) => {
-      const g2 = new Graphics();
-      for (let i2 = 0; i2 < n2; i2++) {
-        const ang = -0.5 - i2 * 0.22;
-        g2.moveTo(fx, fy).quadraticCurveTo(fx + dir * 50 * Math.cos(ang), fy + 60 * Math.sin(ang) * 0.6 - 20, fx + dir * (90 + i2 * 16) * Math.cos(ang), fy + (90 + i2 * 14) * Math.sin(ang));
+    for (const e2 of data.edges) {
+      const dx = px[e2.b] - px[e2.a];
+      const dy = py[e2.b] - py[e2.a];
+      const d2 = Math.hypot(dx, dy) || 1;
+      const k2 = spring * (e2.weak ? 0.35 : 1) * (d2 - rest) * alpha;
+      const fx = dx / d2 * k2;
+      const fy = dy / d2 * k2;
+      vx2[e2.a] += fx;
+      vy2[e2.a] += fy;
+      vx2[e2.b] -= fx;
+      vy2[e2.b] -= fy;
+    }
+    for (let i2 = 0; i2 < n2; i2++) {
+      if (i2 === dragIdx) {
+        vx2[i2] = 0;
+        vy2[i2] = 0;
+        continue;
       }
-      g2.stroke({ width: 4, color: 460060, cap: "round" });
-      return g2;
-    };
-    frame.addChild(fern(-10, 768, 1, 5));
-    frame.addChild(fern(1212, 776, -1, 5));
-    const tuft = new Graphics();
-    for (let i2 = 0; i2 < 26; i2++) {
-      const tx = i2 < 13 ? 8 + i2 * 14 : 1010 + (i2 - 13) * 15;
-      const th = 26 + seed(`tf${i2}`) * 40;
-      tuft.moveTo(tx, 764).quadraticCurveTo(tx + 6, 764 - th * 0.6, tx + (seed(`tfd${i2}`) - 0.5) * 18, 764 - th);
+      vx2[i2] *= 0.82;
+      vy2[i2] *= 0.82;
+      px[i2] += vx2[i2];
+      py[i2] += vy2[i2];
     }
-    tuft.stroke({ width: 3, color: 460060, cap: "round" });
-    frame.addChild(tuft);
-    frame.filters = [new BlurFilter({ strength: 2 })];
-    Lfx.addChild(frame);
+    alpha *= 0.985;
   }
-  const grade = new Sprite(linearTex(16, H2, [[0, "rgba(40,70,140,0.16)"], [0.55, "rgba(20,18,60,0.10)"], [1, "rgba(60,30,90,0.22)"]]));
-  grade.width = W;
-  grade.height = H2;
-  grade.blendMode = "multiply";
-  app.stage.addChild(grade);
-  const warm = mkGlow(16767392, 620, 0.1);
-  warm.x = 956;
-  warm.y = 124;
-  app.stage.addChild(warm);
-  const vig = new Sprite(radialTex(512, [[0, "rgba(0,0,0,0)"], [0.68, "rgba(0,0,0,0)"], [1, "rgba(0,0,0,0.5)"]]));
-  vig.anchor.set(0.5);
-  vig.x = W / 2;
-  vig.y = H2 / 2;
-  vig.width = W * 1.18;
-  vig.height = H2 * 1.18;
-  app.stage.addChild(vig);
-  const barH = 42;
-  const barTop = new Graphics().rect(0, 0, W, barH).fill({ color: 0 });
-  const barBot = new Graphics().rect(0, H2 - barH, W, barH).fill({ color: 0 });
-  app.stage.addChild(barTop, barBot);
-  const fade = new Graphics().rect(0, 0, W, H2).fill({ color: 394522 });
-  app.stage.addChild(fade);
-  app.stage.filters = [new NoiseFilter({ noise: 0.045 })];
-  const grain = app.stage.filters[0];
-  let targetX = 0;
-  let targetY = 0;
-  const onMove = (e2) => {
+  let scale = 1;
+  let panning = false;
+  let dragMoved = false;
+  let lastSX = 0;
+  let lastSY = 0;
+  const toScreen = (clientX, clientY) => {
     const rect = app.canvas.getBoundingClientRect();
-    targetX = ((e2.clientX - rect.left) / rect.width - 0.5) * 2;
-    targetY = ((e2.clientY - rect.top) / rect.height - 0.5) * 2;
+    return { sx: (clientX - rect.left) / rect.width * W, sy: (clientY - rect.top) / rect.height * H2 };
   };
-  app.canvas.addEventListener("pointermove", onMove);
+  app.stage.eventMode = "static";
+  app.stage.hitArea = { contains: () => true };
+  app.stage.on("pointerdown", (e2) => {
+    panning = true;
+    const s2 = toScreen(e2.clientX, e2.clientY);
+    lastSX = s2.sx;
+    lastSY = s2.sy;
+  });
+  app.stage.on("pointermove", (e2) => {
+    const s2 = toScreen(e2.clientX, e2.clientY);
+    if (dragIdx >= 0) {
+      px[dragIdx] = (s2.sx - world.x) / scale;
+      py[dragIdx] = (s2.sy - world.y) / scale;
+      dragMoved = true;
+      reheat(0.25);
+    } else if (panning) {
+      world.x += s2.sx - lastSX;
+      world.y += s2.sy - lastSY;
+      bg.x += (s2.sx - lastSX) * 0.06;
+      bg.y += (s2.sy - lastSY) * 0.06;
+    }
+    lastSX = s2.sx;
+    lastSY = s2.sy;
+  });
+  const endPointer = () => {
+    if (dragIdx >= 0 && !dragMoved) {
+      cb.navigate(data.nodes[dragIdx].route);
+    }
+    dragIdx = -1;
+    panning = false;
+  };
+  app.stage.on("pointerup", endPointer);
+  app.stage.on("pointerupoutside", endPointer);
+  const onWheel = (e2) => {
+    e2.preventDefault();
+    const s2 = toScreen(e2.clientX, e2.clientY);
+    const factor = Math.pow(1.0016, -e2.deltaY);
+    const next = Math.min(2.6, Math.max(0.45, scale * factor));
+    const k2 = next / scale;
+    world.x = s2.sx - (s2.sx - world.x) * k2;
+    world.y = s2.sy - (s2.sy - world.y) * k2;
+    scale = next;
+    world.scale.set(scale);
+  };
+  app.canvas.addEventListener("wheel", onWheel, { passive: false });
   let elapsed = 0;
+  const isNeighbor = (i2) => hovered === i2 || adj[hovered]?.includes(i2);
   const tick = () => {
     elapsed += app.ticker.deltaMS;
-    now = elapsed;
-    for (const fn of animated) fn(elapsed, app.ticker.deltaMS);
-    const intro = Math.min(1, elapsed / 2400);
-    const ease = 1 - (1 - intro) ** 3;
-    fade.alpha = 1 - Math.min(1, elapsed / 1100);
-    camera.scale.set(1.07 - 0.07 * ease + 6e-3 * Math.sin(elapsed * 22e-5));
-    camera.x = W / 2 + Math.sin(elapsed * 6e-5) * 7;
-    camera.y = H2 / 2 + Math.cos(elapsed * 5e-5) * 4;
-    const lerp = (c2, fx, fy) => {
-      c2.x += (targetX * fx - c2.x) * 0.04;
-      c2.y += (targetY * fy - c2.y) * 0.04;
-    };
-    lerp(Lsky, -6, -3);
-    lerp(Lfar, -13, -6);
-    lerp(Lmid, -22, -9);
-    lerp(Ltree, -30, -12);
-    lerp(Lfront, -42, -16);
-    lerp(Lfx, -52, -20);
-    grain.seed = elapsed % 1e3 / 1e3;
+    simStep();
+    for (const f2 of farStars) f2.s.alpha = 0.22 + 0.5 * (0.5 + 0.5 * Math.sin(elapsed * 1e-3 + f2.ph));
+    nebulae.forEach((nb, i2) => {
+      nb.s.alpha = (i2 === 0 ? 0.1 : i2 === 1 ? 0.08 : 0.07) * (0.8 + 0.25 * Math.sin(elapsed * 18e-5 + nb.ph));
+    });
+    edgesG.clear();
+    const focus = hovered >= 0;
+    for (const e2 of data.edges) {
+      const lit = focus && (e2.a === hovered || e2.b === hovered);
+      const dim = focus && !lit;
+      edgesG.moveTo(px[e2.a], py[e2.a]).lineTo(px[e2.b], py[e2.b]);
+      edgesG.stroke({
+        width: lit ? 1.6 / scale : (e2.weak ? 0.7 : 1) / scale,
+        color: lit ? 14673151 : 9080760,
+        alpha: lit ? 0.85 : dim ? 0.05 : e2.weak ? 0.1 : 0.16
+      });
+    }
+    const labelZoom = Math.min(1, Math.max(0, (scale - 1.15) * 1.8));
+    for (let i2 = 0; i2 < n2; i2++) {
+      const c2 = nodeC[i2];
+      c2.position.set(px[i2], py[i2]);
+      const lit = focus && isNeighbor(i2);
+      c2.alpha = focus ? lit ? 1 : 0.16 : 1;
+      halos[i2].alpha = (focus && lit ? 0.95 : 0.5) + 0.12 * Math.sin(elapsed * 12e-4 + i2);
+      const lblTarget = hovered === i2 ? 1 : lit ? Math.max(0.85, labelZoom) : labelZoom * 0.8;
+      labels[i2].alpha += (lblTarget - labels[i2].alpha) * 0.18;
+      labels[i2].scale.set(1 / Math.max(0.7, scale));
+    }
   };
   app.ticker.add(tick);
   return () => {
-    app.canvas.removeEventListener("pointermove", onMove);
+    app.canvas.removeEventListener("wheel", onWheel);
     app.destroy(true, { children: true, texture: true });
   };
 }
 
 // src/world/testMain.ts
-function mockEvents() {
-  const kinds = ["moment", "title", "book", "note", "journal"];
-  const out2 = [];
-  const now = /* @__PURE__ */ new Date();
-  let id = 1;
-  for (let m2 = 0; m2 < 12; m2++) {
-    const d2 = new Date(now);
-    d2.setMonth(d2.getMonth() - m2);
-    const count2 = [4, 2, 6, 1, 3, 0, 5, 2, 1, 3, 2, 4][m2];
-    for (let i2 = 0; i2 < count2; i2++) {
-      const day = String(1 + i2 * 7 % 27).padStart(2, "0");
-      const key = `${d2.getFullYear()}-${String(d2.getMonth() + 1).padStart(2, "0")}`;
-      out2.push({
-        key: `e${id}`,
-        kind: kinds[(m2 + i2) % kinds.length],
-        date: `${key}-${day} 12:00:00`,
-        label: `\u041F\u0430\u043C\u044F\u0442\u044C \u2116${id}`,
-        sublabel: i2 % 2 ? "\u0442\u0435\u0441\u0442\u043E\u0432\u0430\u044F \u0437\u0430\u043C\u0435\u0442\u043A\u0430" : null,
-        ref_id: id++
-      });
-    }
+function mock() {
+  const nodes = [];
+  const edges = [];
+  const kinds = ["title", "note", "moment", "book", "journal"];
+  for (let i2 = 0; i2 < 14; i2++) {
+    nodes.push({ id: `t${i2}`, kind: i2 % 5 === 4 ? "book" : "title", label: `\u0422\u0430\u0439\u0442\u043B \u2116${i2 + 1}`, sub: "2024", route: `/title/${i2}` });
   }
-  return out2.sort((a2, b2) => a2.date.localeCompare(b2.date));
-}
-function months() {
-  const names = ["\u042F\u043D\u0432", "\u0424\u0435\u0432", "\u041C\u0430\u0440", "\u0410\u043F\u0440", "\u041C\u0430\u0439", "\u0418\u044E\u043D", "\u0418\u044E\u043B", "\u0410\u0432\u0433", "\u0421\u0435\u043D", "\u041E\u043A\u0442", "\u041D\u043E\u044F", "\u0414\u0435\u043A"];
-  const out2 = [];
-  const cursor = /* @__PURE__ */ new Date();
-  cursor.setDate(1);
-  cursor.setMonth(cursor.getMonth() - 11);
+  for (let i2 = 0; i2 < 10; i2++) {
+    const id = nodes.length;
+    nodes.push({ id: `n${i2}`, kind: "note", label: `\u041C\u044B\u0441\u043B\u044C \u043E \u043D\u043E\u043C\u0435\u0440\u0435 ${i2 + 1}`, sub: null, route: `/notes?open=${i2}` });
+    edges.push({ a: id, b: i2 % 14 });
+    if (i2 > 0 && i2 % 3 === 0) edges.push({ a: id, b: id - 1 });
+  }
   for (let i2 = 0; i2 < 12; i2++) {
-    out2.push({
-      key: `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}`,
-      label: names[cursor.getMonth()]
-    });
-    cursor.setMonth(cursor.getMonth() + 1);
+    const id = nodes.length;
+    nodes.push({ id: `m${i2}`, kind: "moment", label: `\u041C\u043E\u043C\u0435\u043D\u0442 ${i2 + 1}`, sub: "\u044D\u043F\u0438\u0447\u043D\u043E", route: `/title/${i2 % 14}` });
+    edges.push({ a: id, b: i2 % 14 });
   }
-  return out2;
+  let prev = -1;
+  for (let i2 = 0; i2 < 9; i2++) {
+    const id = nodes.length;
+    nodes.push({ id: `j${i2}`, kind: "journal", label: `2026-06-${String(i2 + 1).padStart(2, "0")}`, sub: "\u0434\u0435\u043D\u044C", route: "/journal" });
+    if (prev >= 0) edges.push({ a: id, b: prev, weak: true });
+    prev = id;
+  }
+  for (let i2 = 0; i2 < 6; i2++) {
+    nodes.push({ id: `o${i2}`, kind: kinds[i2 % 5], label: `\u041E\u0434\u0438\u043D\u043E\u043A\u0430\u044F \u0437\u0432\u0435\u0437\u0434\u0430 ${i2 + 1}`, sub: null, route: "/library" });
+  }
+  return {
+    nodes,
+    edges,
+    kindNames: { moment: "\u041C\u043E\u043C\u0435\u043D\u0442", title: "\u0422\u0430\u0439\u0442\u043B", book: "\u041A\u043D\u0438\u0433\u0430", note: "\u0417\u0430\u043F\u0438\u0441\u044C", journal: "\u0414\u043D\u0435\u0432\u043D\u0438\u043A" }
+  };
 }
-var data = {
-  events: mockEvents(),
-  months: months(),
-  stats: { titles: 7, notes: 4, openTasks: 3, doneTasks: 5, streak: 4, moments: 8 },
-  assets: {},
-  zoneLabels: {
-    library: "\u041B\u0435\u0441 \u0438\u0441\u0442\u043E\u0440\u0438\u0439",
-    notes: "\u0421\u0430\u0434 \u043C\u044B\u0441\u043B\u0435\u0439",
-    journal: "\u041E\u0437\u0435\u0440\u043E \u0434\u043D\u0435\u0439",
-    tasks: "\u0422\u0440\u043E\u043F\u0430 \u0434\u0435\u043B",
-    moments: "\u0421\u0432\u0435\u0442\u043B\u044F\u0447\u043A\u0438",
-    tasksSub: "\u043E\u0442\u043A\u0440\u044B\u0442\u043E: 3",
-    journalSub: "\u0441\u0435\u0440\u0438\u044F: 4"
-  },
-  kindNames: { moment: "\u041C\u043E\u043C\u0435\u043D\u0442", title: "\u0417\u0430\u0432\u0435\u0440\u0448\u0435\u043D\u043E", book: "\u041A\u043D\u0438\u0433\u0430", note: "\u0417\u0430\u043F\u0438\u0441\u044C", journal: "\u0414\u043D\u0435\u0432\u043D\u0438\u043A" },
-  dateOf: (iso) => iso.slice(0, 10)
-};
 var host = document.getElementById("host");
-createWorld(host, data, {
+createGalaxy(host, mock(), {
   navigate: (to) => console.log("NAVIGATE", to),
   tip: () => void 0
 }).then(() => console.log("WORLD_OK")).catch((err) => {
