@@ -1,0 +1,94 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --accent: #7c5cbf;
+  --accent-rgb: 124 92 191;
+  --accent-bright-rgb: 168 136 240;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  @apply bg-bg text-zinc-200 antialiased;
+  font-family: 'Inter Variable', Inter, 'Segoe UI', system-ui, sans-serif;
+  overflow: hidden;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #2c2c3e transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-thumb {
+  background: #2c2c3e;
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+input[type='range'] {
+  @apply appearance-none bg-transparent;
+}
+input[type='range']::-webkit-slider-runnable-track {
+  @apply h-1 rounded-full bg-white/20;
+}
+input[type='range']::-webkit-slider-thumb {
+  @apply h-3 w-3 appearance-none rounded-full bg-white;
+  margin-top: -4px;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  scrollbar-width: none;
+}
+
+video::-webkit-media-controls {
+  display: none !important;
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40;
+  }
+  .btn-accent {
+    @apply btn bg-accent text-white hover:bg-accent/80;
+  }
+  .btn-ghost {
+    @apply btn bg-raised text-zinc-300 hover:bg-edge hover:text-white;
+  }
+  .btn-danger {
+    @apply btn bg-red-500/15 text-red-400 hover:bg-red-500/25;
+  }
+  .input {
+    @apply w-full rounded-lg border border-edge bg-raised px-3 py-2 text-sm text-zinc-200 outline-none transition-colors placeholder:text-zinc-600 focus:border-accent;
+  }
+  .select {
+    @apply rounded-lg border border-edge bg-raised px-2.5 py-2 text-sm text-zinc-300 outline-none transition-colors focus:border-accent;
+  }
+  .card {
+    @apply rounded-xl bg-surface;
+  }
+  .page {
+    @apply h-full overflow-y-auto px-10 py-8 animate-fade-in;
+  }
+  .page-title {
+    @apply mb-6 text-2xl font-semibold text-white;
+  }
+  .section-title {
+    @apply mb-3 text-sm font-semibold uppercase tracking-wider text-zinc-500;
+  }
+}
