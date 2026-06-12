@@ -1,4 +1,4 @@
-export type TitleType = 'anime' | 'movie' | 'series' | 'cartoon' | 'youtube'
+export type TitleType = 'anime' | 'movie' | 'series' | 'cartoon' | 'youtube' | 'book'
 export type TitleStatus = 'watching' | 'completed' | 'planned' | 'on_hold' | 'dropped'
 export type MomentTag = 'epic' | 'funny' | 'sad' | 'important' | 'beautiful'
 export type SubtitleLang = 'ru' | 'en' | 'off'
@@ -12,6 +12,7 @@ export interface Title {
   rating: number | null
   cover_path: string | null
   total_episodes: number
+  reading_progress: number
   year: number | null
   genres: string[]
   tags: string[]
@@ -52,6 +53,30 @@ export interface Moment {
   title_name?: string
   episode_number?: number | null
   episode_name?: string | null
+}
+
+export interface Note {
+  id: number
+  title: string
+  content: string
+  tags: string[]
+  linked_title_id: number | null
+  pinned: 0 | 1
+  created_at: string
+  updated_at: string
+  // derived
+  linked_title_name?: string | null
+}
+
+export type MemoryKind = 'moment' | 'title' | 'book' | 'note'
+
+export interface MemoryEvent {
+  key: string
+  kind: MemoryKind
+  date: string // YYYY-MM-DD HH:MM:SS
+  label: string
+  sublabel: string | null
+  ref_id: number
 }
 
 export interface YoutubeSource {
@@ -156,7 +181,7 @@ export const STATUS_COLORS: Record<TitleStatus, string> = {
   dropped: '#ef4444',
 }
 
-export const TITLE_TYPES: TitleType[] = ['anime', 'movie', 'series', 'cartoon', 'youtube']
+export const TITLE_TYPES: TitleType[] = ['anime', 'movie', 'series', 'cartoon', 'youtube', 'book']
 
 export const MOMENT_TAGS: MomentTag[] = ['epic', 'funny', 'sad', 'important', 'beautiful']
 

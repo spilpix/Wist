@@ -90,6 +90,9 @@ function createWindow() {
     autoHideMenuBar: true,
     show: false,
     title: 'Wist',
+    // frameless dark titlebar with native Windows window controls drawn on top
+    titleBarStyle: 'hidden',
+    titleBarOverlay: { color: '#111118', symbolColor: '#a1a1aa', height: 36 },
     // packaged builds inherit the window icon from the exe resource
     ...(app.isPackaged ? {} : { icon: path.join(__dirname, '../build/icon.png') }),
     webPreferences: {
@@ -110,6 +113,7 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  app.setAppUserModelId('com.wist.app') // proper taskbar identity on Windows
   registerMediaProtocol()
   openDatabase()
   registerIpcHandlers()

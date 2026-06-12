@@ -222,7 +222,7 @@ export default function SettingsPage() {
         </div>
       </section>
 
-      <div className="pb-4 text-center text-xs text-zinc-700">{t('set.footer', { version: '0.1.0' })}</div>
+      <div className="pb-4 text-center text-xs text-zinc-700">{t('set.footer', { version: '0.2.0' })}</div>
 
       {confirmClear && (
         <ConfirmDialog

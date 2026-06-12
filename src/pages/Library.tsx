@@ -20,10 +20,11 @@ export default function Library() {
   const [genres, setGenres] = useState<string[]>([])
   const [years, setYears] = useState<number[]>([])
 
-  // sidebar "My Lists" links set ?status=
+  // sidebar links set ?status= (My Lists) and ?type= (Books)
   useEffect(() => {
     const status = (searchParams.get('status') as TitleStatus | null) ?? 'all'
-    setFilters({ status })
+    const type = (searchParams.get('type') as TitleType | null) ?? 'all'
+    setFilters({ status, type })
   }, [searchParams]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -32,6 +33,7 @@ export default function Library() {
   }, [titles.length])
 
   const heading = useMemo(() => {
+    if (searchParams.get('type') === 'book') return t('nav.books')
     const status = searchParams.get('status') as TitleStatus | null
     return status && TITLE_STATUSES.includes(status) ? t(`status.${status}`) : t('nav.library')
   }, [searchParams, t])

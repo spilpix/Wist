@@ -1,6 +1,6 @@
 # Wist
 
-Personal media hub for Windows — like Obsidian for notes, but for everything you watch: local anime, movies, cartoons, series, plus YouTube channels and playlists. One dark, quiet place to track, discover and relive it all. Everything stays on your machine: SQLite database, PNG screenshots, no cloud, no accounts.
+Personal memory hub for Windows — one dark, quiet place for everything you experience: anime, movies and series you **watch**, books you **read**, thoughts you **write** (notes with `[[wiki links]]`), and scenes you **feel** (moments with screenshots). The **Memory Tree** turns your last twelve months into a living tree where every leaf is a memory. Everything stays on your machine: SQLite database, PNG screenshots, no cloud, no accounts.
 
 UI is fully bilingual — **Russian / English**. The language follows the system locale on first launch and can be switched in Settings → Appearance.
 
@@ -28,7 +28,9 @@ node scripts/test-parser.mjs        # filename-parser test cases (bundle first: 
 npx electron scripts/smoke-db.cjs   # verify better-sqlite3 loads inside Electron
 ```
 
-The installer (`release/Wist Setup 0.1.0.exe`) is bilingual (en/ru), lets you pick the install directory, and embeds the app icon. `build.npmRebuild` is `false` because node_modules already holds Electron-ABI prebuilds (see the `.npmrc` note below).
+The installer (`release/Wist Setup <version>.exe`) is bilingual (en/ru), lets you pick the install directory, and embeds the app icon. `build.npmRebuild` is `false` because node_modules already holds Electron-ABI prebuilds (see the `.npmrc` note below).
+
+The window uses a frameless dark title bar with native Windows controls (`titleBarOverlay`), so the app feels native on Windows 11.
 
 > `.npmrc` pins `runtime=electron` / `target=33.2.0` so `npm install` downloads better-sqlite3's **prebuilt Electron binary** instead of compiling for your system Node. If you bump the Electron version in `package.json`, update `target` to match.
 
@@ -58,8 +60,8 @@ electron/        main process: window, media:// streaming protocol, settings
   ipc/           IPC handlers: files, data export, yt-dlp, subtitles (SRT/ASS → VTT)
   preload.ts     contextBridge — renderer talks to the DB only through window.wist
 src/
-  pages/         Home, Library, TitleDetail, Player, Moments, Statistics, Settings, …
-  components/    sidebar, cards, heatmap, modals
+  pages/         Home, Library, TitleDetail, Player, Moments, Notes, MemoryTree, Statistics, …
+  components/    titlebar/sidebar layout, cards, heatmap, modals
   store/         Zustand stores (settings, library, toasts)
   i18n/          en/ru dictionaries + useI18n hook (Intl.PluralRules for Russian plurals)
   utils/         filename parser (5+ release-naming patterns), formatters

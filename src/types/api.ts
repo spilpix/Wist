@@ -4,9 +4,11 @@ import type {
   Episode,
   HeatmapDay,
   ImportGroup,
+  MemoryEvent,
   Moment,
   MomentTag,
   MonthBar,
+  Note,
   StatsSummary,
   SubtitleTrack,
   Title,
@@ -66,6 +68,14 @@ export interface WistApi {
     remove(id: number): Promise<void>
     exportAll(): Promise<{ exported: number; dir: string } | null>
   }
+  notes: {
+    list(filters?: { search?: string; tag?: string }): Promise<Note[]>
+    get(id: number): Promise<Note | null>
+    create(data: Partial<Note>): Promise<Note>
+    update(id: number, patch: Partial<Note>): Promise<Note>
+    remove(id: number): Promise<void>
+    tags(): Promise<string[]>
+  }
   youtube: {
     sources(titleId?: number): Promise<YoutubeSource[]>
     addSource(titleId: number, url: string): Promise<YoutubeSource>
@@ -84,6 +94,7 @@ export interface WistApi {
     monthly(): Promise<MonthBar[]>
     topRated(): Promise<Title[]>
     recentlyAdded(): Promise<Title[]>
+    memories(): Promise<MemoryEvent[]>
   }
   files: {
     pickVideos(): Promise<string[]>

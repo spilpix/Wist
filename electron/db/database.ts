@@ -95,6 +95,45 @@ const MIGRATIONS: string[] = [
     created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
   );
   `,
+
+  // 002 — books (type CHECK rebuild + reading_progress) and notes
+  `
+  CREATE TABLE titles_new (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    original_title TEXT,
+    type TEXT NOT NULL DEFAULT 'anime' CHECK (type IN ('anime','movie','series','cartoon','youtube','book')),
+    status TEXT NOT NULL DEFAULT 'planned' CHECK (status IN ('watching','completed','planned','on_hold','dropped')),
+    rating INTEGER CHECK (rating BETWEEN 1 AND 10),
+    cover_path TEXT,
+    total_episodes INTEGER NOT NULL DEFAULT 1,
+    reading_progress INTEGER NOT NULL DEFAULT 0,
+    year INTEGER,
+    genres TEXT NOT NULL DEFAULT '[]',
+    tags TEXT NOT NULL DEFAULT '[]',
+    notes TEXT,
+    intro_end_seconds REAL,
+    date_added TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    date_started TEXT,
+    date_finished TEXT
+  );
+  INSERT INTO titles_new (id,title,original_title,type,status,rating,cover_path,total_episodes,year,genres,tags,notes,intro_end_seconds,date_added,date_started,date_finished)
+    SELECT id,title,original_title,type,status,rating,cover_path,total_episodes,year,genres,tags,notes,intro_end_seconds,date_added,date_started,date_finished FROM titles;
+  DROP TABLE titles;
+  ALTER TABLE titles_new RENAME TO titles;
+
+  CREATE TABLE notes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL DEFAULT '',
+    content TEXT NOT NULL DEFAULT '',
+    tags TEXT NOT NULL DEFAULT '[]',
+    linked_title_id INTEGER REFERENCES titles(id) ON DELETE SET NULL,
+    pinned INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+  );
+  CREATE INDEX idx_notes_updated ON notes(updated_at);
+  `,
 ]
 
 function migrate(d: Database.Database) {
@@ -102,14 +141,28 @@ function migrate(d: Database.Database) {
   const applied = new Set(
     (d.prepare('SELECT version FROM schema_migrations').all() as Array<{ version: number }>).map((r) => r.version)
   )
-  const run = d.transaction((version: number, sql: string) => {
-    d.exec(sql)
-    d.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run(version)
-  })
-  MIGRATIONS.forEach((sql, i) => {
-    const version = i + 1
-    if (!applied.has(version)) run(version, sql)
-  })
+  const pending = MIGRATIONS.map((sql, i) => ({ version: i + 1, sql })).filter((m) => !applied.has(m.version))
+  if (!pending.length) return
+
+  // FK enforcement must be off while tables are rebuilt (CHECK constraints can't
+  // be altered in SQLite) — otherwise DROP TABLE titles would cascade-delete
+  // episodes/moments. PRAGMA is a no-op inside a transaction, so manage them manually.
+  d.pragma('foreign_keys = OFF')
+  try {
+    for (const m of pending) {
+      d.exec('BEGIN')
+      try {
+        d.exec(m.sql)
+        d.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run(m.version)
+        d.exec('COMMIT')
+      } catch (err) {
+        d.exec('ROLLBACK')
+        throw err
+      }
+    }
+  } finally {
+    d.pragma('foreign_keys = ON')
+  }
 }
 
 export function now(): string {

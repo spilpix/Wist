@@ -159,7 +159,9 @@ export default function AddTitleModal({ existing, onSaved, onClose }: Props) {
           </div>
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <label className="mb-1 block text-xs font-medium text-zinc-500">{t('modal.episodes')}</label>
+              <label className="mb-1 block text-xs font-medium text-zinc-500">
+                {type === 'book' ? t('modal.chapters') : t('modal.episodes')}
+              </label>
               <input
                 type="number"
                 min={1}

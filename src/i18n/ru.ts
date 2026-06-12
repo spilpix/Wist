@@ -27,6 +27,10 @@ const ru: Record<keyof typeof en, string> = {
   'nav.youtube': 'YouTube',
   'nav.statistics': 'Статистика',
   'nav.settings': 'Настройки',
+  'nav.books': 'Книги',
+  'nav.notes': 'Записи',
+  'nav.tree': 'Древо памяти',
+  'nav.memory': 'Память',
 
   // statuses / types / moment tags
   'status.watching': 'Смотрю',
@@ -39,6 +43,7 @@ const ru: Record<keyof typeof en, string> = {
   'type.series': 'Сериал',
   'type.cartoon': 'Мультсериал',
   'type.youtube': 'YouTube',
+  'type.book': 'Книга',
   'tag.epic': 'Эпично',
   'tag.funny': 'Смешно',
   'tag.sad': 'Грустно',
@@ -49,6 +54,7 @@ const ru: Record<keyof typeof en, string> = {
   'card.watched': 'просмотрено',
   'card.notWatched': 'не просмотрено',
   'card.epProgress': '{w}/{t} эп',
+  'card.chProgress': '{w}/{t} гл',
 
   // home
   'home.loading': 'Загружаем ваш хаб…',
@@ -98,6 +104,7 @@ const ru: Record<keyof typeof en, string> = {
   'modal.type': 'Тип',
   'modal.status': 'Статус',
   'modal.episodes': 'Эпизоды',
+  'modal.chapters': 'Главы',
   'modal.year': 'Год',
   'modal.rating': 'Рейтинг',
   'modal.genres': 'Жанры',
@@ -142,6 +149,43 @@ const ru: Record<keyof typeof en, string> = {
   'detail.deleted': 'Тайтл удалён',
   'detail.invalidUrl': 'Вставьте корректную ссылку на канал или плейлист',
   'detail.syncResult': 'Синхронизировано: {added} новых из {total} видео',
+
+  // book reading
+  'book.chapters': 'главы',
+  'book.progress': 'Прогресс чтения',
+  'book.chaptersOf': '{n} из {total} глав',
+  'book.markFinished': 'Отметить прочитанной',
+  'book.finished': 'Прочитано — отлично!',
+
+  // notes
+  'notes.new': 'Новая запись',
+  'notes.search': 'Поиск по записям…',
+  'notes.emptyTitle': 'Записей пока нет',
+  'notes.emptySubtitle': 'Сохраняйте мысли о том, что смотрите и читаете. Напишите [[Название]], чтобы связать запись с библиотекой.',
+  'notes.emptyFiltered': 'Ничего не найдено',
+  'notes.emptyFilteredSubtitle': 'Попробуйте другой тег или запрос.',
+  'notes.titlePlaceholder': 'Заголовок',
+  'notes.contentPlaceholder': 'Пишите здесь… [[Название]] свяжет с тайтлом или другой записью',
+  'notes.tagsPlaceholder': 'Тег + Enter',
+  'notes.linkedTitle': 'Связанный тайтл',
+  'notes.noLink': 'Без привязки',
+  'notes.pin': 'Закрепить',
+  'notes.unpin': 'Открепить',
+  'notes.pinned': 'Закреплённые',
+  'notes.deleteConfirmTitle': 'Удалить запись?',
+  'notes.deleteConfirmMessage': 'Запись будет удалена навсегда. Действие необратимо.',
+  'notes.deleted': 'Запись удалена',
+  'notes.editedRel': 'изменено {rel}',
+
+  // memory tree
+  'tree.subtitle': 'Год вашей памяти. Каждый лист — то, что вы посмотрели, прочитали, почувствовали или записали. Двенадцать ветвей — по одной на месяц.',
+  'tree.emptyTitle': 'Дерево ещё растёт',
+  'tree.emptySubtitle': 'Завершайте тайтлы, сохраняйте моменты и пишите записи — здесь начнут появляться листья.',
+  'tree.memories': 'Воспоминаний за год: {n}',
+  'tree.kind.moment': 'Момент',
+  'tree.kind.title': 'Завершено',
+  'tree.kind.book': 'Книга прочитана',
+  'tree.kind.note': 'Запись',
 
   // continue watching page
   'cont.emptyTitle': 'Нет начатых эпизодов',

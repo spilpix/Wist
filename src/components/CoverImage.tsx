@@ -1,4 +1,4 @@
-import { Clapperboard, Film, MonitorPlay, Sparkles, Youtube } from 'lucide-react'
+import { BookOpen, Clapperboard, Film, MonitorPlay, Sparkles, Youtube } from 'lucide-react'
 import type { TitleType } from '../types/models'
 
 const TYPE_ICONS = {
@@ -7,6 +7,7 @@ const TYPE_ICONS = {
   series: MonitorPlay,
   cartoon: Clapperboard,
   youtube: Youtube,
+  book: BookOpen,
 }
 
 // deterministic placeholder hue from the title text

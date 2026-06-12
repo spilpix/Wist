@@ -5,7 +5,7 @@ import { db } from '../db/database'
 import { listMoments } from '../db/moments'
 import { getSettings } from '../settings'
 
-const TABLES = ['titles', 'episodes', 'moments', 'youtube_sources', 'watch_sessions', 'screenshots'] as const
+const TABLES = ['titles', 'episodes', 'moments', 'youtube_sources', 'watch_sessions', 'screenshots', 'notes'] as const
 
 function win(): BrowserWindow | undefined {
   return BrowserWindow.getAllWindows()[0]

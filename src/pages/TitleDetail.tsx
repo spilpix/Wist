@@ -123,8 +123,19 @@ export default function TitleDetail() {
 
   if (loading || !title) return <Spinner />
 
-  const total = Math.max(title.total_episodes, episodes.length, 1)
+  const isBook = title.type === 'book'
+  const total = Math.max(title.total_episodes, isBook ? 0 : episodes.length, 1)
   const watched = episodes.filter((e) => e.watched).length
+  const readingDone = Math.min(title.reading_progress ?? 0, total)
+
+  const setReading = async (n: number) => {
+    const clamped = Math.max(0, Math.min(total, n))
+    const patch: Partial<Title> = { reading_progress: clamped }
+    if (clamped >= total && total > 0 && title.status !== 'completed') patch.status = 'completed'
+    else if (clamped > 0 && title.status === 'planned') patch.status = 'watching'
+    await window.wist.titles.update(titleId, patch)
+    reload()
+  }
 
   return (
     <div className="page">
@@ -189,8 +200,8 @@ export default function TitleDetail() {
 
           <div className="mt-5 grid max-w-md grid-cols-3 gap-3 text-sm">
             <div className="card px-4 py-3">
-              <div className="text-lg font-semibold text-white">{watched}/{total}</div>
-              <div className="text-xs text-zinc-500">{t('detail.episodes')}</div>
+              <div className="text-lg font-semibold text-white">{isBook ? readingDone : watched}/{total}</div>
+              <div className="text-xs text-zinc-500">{isBook ? t('book.chapters') : t('detail.episodes')}</div>
             </div>
             <div className="card px-4 py-3">
               <div className="text-lg font-semibold text-white">{formatDate(title.date_started)}</div>
@@ -219,7 +230,51 @@ export default function TitleDetail() {
         </div>
       </div>
 
+      {/* reading progress (books) */}
+      {isBook && (
+        <section className="mt-10 max-w-2xl">
+          <h2 className="section-title">{t('book.progress')}</h2>
+          <div className="card px-5 py-4">
+            <div className="flex items-center gap-4">
+              <button
+                className="btn-ghost !px-3 !py-1.5 text-base"
+                disabled={readingDone <= 0}
+                onClick={() => setReading(readingDone - 1)}
+              >
+                −
+              </button>
+              <div className="min-w-0 flex-1">
+                <div className="mb-2 text-sm text-zinc-300">{t('book.chaptersOf', { n: readingDone, total })}</div>
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-raised">
+                  <div
+                    className="h-full bg-accent transition-all"
+                    style={{ width: `${Math.min(100, (readingDone / total) * 100)}%` }}
+                  />
+                </div>
+              </div>
+              <button
+                className="btn-ghost !px-3 !py-1.5 text-base"
+                disabled={readingDone >= total}
+                onClick={() => setReading(readingDone + 1)}
+              >
+                +
+              </button>
+            </div>
+            <div className="mt-3 flex justify-end">
+              {readingDone >= total && total > 0 ? (
+                <span className="text-xs text-green-400">{t('book.finished')}</span>
+              ) : (
+                <button className="btn-ghost !py-1.5 text-xs" onClick={() => setReading(total)}>
+                  {t('book.markFinished')}
+                </button>
+              )}
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* episodes */}
+      {!isBook && (
       <section className="mt-10">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="section-title !mb-0">{t('detail.sectionEpisodes')}</h2>
@@ -305,8 +360,10 @@ export default function TitleDetail() {
           </div>
         )}
       </section>
+      )}
 
       {/* youtube sources */}
+      {!isBook && (
       <section className="mt-10">
         <h2 className="section-title">{t('detail.ytSources')}</h2>
         <div className="card p-4">
@@ -365,6 +422,7 @@ export default function TitleDetail() {
           )}
         </div>
       </section>
+      )}
 
       {/* moments */}
       {moments.length > 0 && (

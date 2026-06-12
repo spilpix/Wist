@@ -91,7 +91,7 @@ export function getTitle(id: number): Title | null {
 
 const WRITABLE = [
   'title', 'original_title', 'type', 'status', 'rating', 'cover_path', 'total_episodes',
-  'year', 'genres', 'tags', 'notes', 'intro_end_seconds', 'date_started', 'date_finished',
+  'reading_progress', 'year', 'genres', 'tags', 'notes', 'intro_end_seconds', 'date_started', 'date_finished',
 ] as const
 
 function normalizeValue(key: string, value: any): any {

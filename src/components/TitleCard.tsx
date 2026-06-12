@@ -10,6 +10,9 @@ export function progressLabel(title: Title, t: Translate): string {
   if (title.type === 'movie') {
     return (title.watched_count ?? 0) > 0 ? t('card.watched') : t('card.notWatched')
   }
+  if (title.type === 'book') {
+    return t('card.chProgress', { w: title.reading_progress ?? 0, t: title.total_episodes || '?' })
+  }
   const total = Math.max(title.total_episodes, title.episode_count ?? 0)
   return t('card.epProgress', { w: title.watched_count ?? 0, t: total || '?' })
 }
@@ -17,8 +20,10 @@ export function progressLabel(title: Title, t: Translate): string {
 export default function TitleCard({ title }: { title: Title }) {
   const navigate = useNavigate()
   const { t } = useI18n()
-  const total = Math.max(title.total_episodes, title.episode_count ?? 0, 1)
-  const progress = Math.min(1, (title.watched_count ?? 0) / total)
+  const isBook = title.type === 'book'
+  const total = Math.max(title.total_episodes, isBook ? 0 : title.episode_count ?? 0, 1)
+  const done = isBook ? title.reading_progress ?? 0 : title.watched_count ?? 0
+  const progress = Math.min(1, done / total)
 
   return (
     <button

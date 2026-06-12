@@ -31,6 +31,14 @@ const api = {
     remove: (id: number) => invoke('moments:remove', id),
     exportAll: () => invoke('moments:exportAll'),
   },
+  notes: {
+    list: (filters?: unknown) => invoke('notes:list', filters),
+    get: (id: number) => invoke('notes:get', id),
+    create: (data: unknown) => invoke('notes:create', data),
+    update: (id: number, patch: unknown) => invoke('notes:update', id, patch),
+    remove: (id: number) => invoke('notes:remove', id),
+    tags: () => invoke('notes:tags'),
+  },
   youtube: {
     sources: (titleId?: number) => invoke('youtube:sources', titleId),
     addSource: (titleId: number, url: string) => invoke('youtube:addSource', titleId, url),
@@ -49,6 +57,7 @@ const api = {
     monthly: () => invoke('stats:monthly'),
     topRated: () => invoke('stats:topRated'),
     recentlyAdded: () => invoke('stats:recentlyAdded'),
+    memories: () => invoke('stats:memories'),
   },
   files: {
     pickVideos: () => invoke('files:pickVideos'),

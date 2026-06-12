@@ -25,6 +25,10 @@ const en = {
   'nav.youtube': 'YouTube',
   'nav.statistics': 'Statistics',
   'nav.settings': 'Settings',
+  'nav.books': 'Books',
+  'nav.notes': 'Notes',
+  'nav.tree': 'Memory Tree',
+  'nav.memory': 'Memory',
 
   // statuses / types / moment tags
   'status.watching': 'Watching',
@@ -37,6 +41,7 @@ const en = {
   'type.series': 'Series',
   'type.cartoon': 'Cartoon',
   'type.youtube': 'YouTube',
+  'type.book': 'Book',
   'tag.epic': 'Epic',
   'tag.funny': 'Funny',
   'tag.sad': 'Sad',
@@ -47,6 +52,7 @@ const en = {
   'card.watched': 'watched',
   'card.notWatched': 'not watched',
   'card.epProgress': '{w}/{t} ep',
+  'card.chProgress': '{w}/{t} ch',
 
   // home
   'home.loading': 'Loading your hub…',
@@ -96,6 +102,7 @@ const en = {
   'modal.type': 'Type',
   'modal.status': 'Status',
   'modal.episodes': 'Episodes',
+  'modal.chapters': 'Chapters',
   'modal.year': 'Year',
   'modal.rating': 'Rating',
   'modal.genres': 'Genres',
@@ -140,6 +147,43 @@ const en = {
   'detail.deleted': 'Title deleted',
   'detail.invalidUrl': 'Paste a valid channel or playlist URL',
   'detail.syncResult': 'Synced: {added} new of {total} videos',
+
+  // book reading
+  'book.chapters': 'chapters',
+  'book.progress': 'Reading Progress',
+  'book.chaptersOf': '{n} of {total} chapters',
+  'book.markFinished': 'Mark as read',
+  'book.finished': 'Finished — nice one!',
+
+  // notes
+  'notes.new': 'New note',
+  'notes.search': 'Search notes…',
+  'notes.emptyTitle': 'No notes yet',
+  'notes.emptySubtitle': 'Capture thoughts about what you watch and read. Type [[Title Name]] to link a note to your library.',
+  'notes.emptyFiltered': 'Nothing matches',
+  'notes.emptyFilteredSubtitle': 'Try a different tag or search query.',
+  'notes.titlePlaceholder': 'Title',
+  'notes.contentPlaceholder': 'Write here… [[Name]] links to a title or another note',
+  'notes.tagsPlaceholder': 'Tag + Enter',
+  'notes.linkedTitle': 'Linked title',
+  'notes.noLink': 'No link',
+  'notes.pin': 'Pin',
+  'notes.unpin': 'Unpin',
+  'notes.pinned': 'Pinned',
+  'notes.deleteConfirmTitle': 'Delete note?',
+  'notes.deleteConfirmMessage': 'The note will be removed permanently. This cannot be undone.',
+  'notes.deleted': 'Note deleted',
+  'notes.editedRel': 'edited {rel}',
+
+  // memory tree
+  'tree.subtitle': 'A year of your memory. Every leaf is something you watched, read, felt or wrote — twelve branches, one per month.',
+  'tree.emptyTitle': 'The tree is still growing',
+  'tree.emptySubtitle': 'Finish titles, save moments and write notes — leaves will start to appear.',
+  'tree.memories': '{n} memories in the last year',
+  'tree.kind.moment': 'Moment',
+  'tree.kind.title': 'Completed',
+  'tree.kind.book': 'Book finished',
+  'tree.kind.note': 'Note',
 
   // continue watching page
   'cont.emptyTitle': 'Nothing in progress',

@@ -2,6 +2,7 @@ import { NavLink, useSearchParams } from 'react-router-dom'
 import {
   BarChart3,
   Bookmark,
+  BookOpen,
   CheckCircle2,
   CircleDot,
   Clock,
@@ -10,8 +11,9 @@ import {
   Home,
   Library,
   PauseCircle,
-  Play,
+  PenLine,
   Settings,
+  TreePine,
   XCircle,
   Youtube,
 } from 'lucide-react'
@@ -21,9 +23,15 @@ import { useI18n, type TKey } from '../i18n'
 const mainLinks: Array<{ to: string; key: TKey; icon: typeof Home }> = [
   { to: '/', key: 'nav.home', icon: Home },
   { to: '/library', key: 'nav.library', icon: Library },
+  { to: '/library?type=book', key: 'nav.books', icon: BookOpen },
   { to: '/continue', key: 'nav.continue', icon: Clock },
   { to: '/favorites', key: 'nav.favorites', icon: Heart },
+]
+
+const memoryLinks: Array<{ to: string; key: TKey; icon: typeof Bookmark }> = [
   { to: '/moments', key: 'nav.moments', icon: Bookmark },
+  { to: '/notes', key: 'nav.notes', icon: PenLine },
+  { to: '/tree', key: 'nav.tree', icon: TreePine },
 ]
 
 const listLinks: Array<{ status: TitleStatus; icon: typeof CircleDot }> = [
@@ -54,25 +62,43 @@ function linkClass(isActive: boolean): string {
 export default function Sidebar() {
   const [searchParams] = useSearchParams()
   const activeStatus = searchParams.get('status')
+  const activeType = searchParams.get('type')
   const { t } = useI18n()
+  const onLibrary = location.hash.split('?')[0].endsWith('/library')
 
   return (
     <aside className="flex h-full w-[200px] shrink-0 flex-col border-r border-edge/60 bg-surface">
-      <div className="flex items-center gap-2 px-5 pb-5 pt-6">
-        <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-accent">
-          <Play size={14} className="fill-white text-white" />
-        </span>
-        <span className="text-lg font-bold tracking-tight text-white">Wist</span>
-      </div>
-
-      <nav className="flex-1 space-y-5 overflow-y-auto px-3 pb-4">
+      <nav className="flex-1 space-y-5 overflow-y-auto px-3 pb-4 pt-4">
         <div className="space-y-0.5">
           {mainLinks.map(({ to, key, icon: Icon }) => (
-            <NavLink key={to} to={to} end={to === '/'} className={({ isActive }) => linkClass(isActive)}>
+            <NavLink
+              key={to}
+              to={to}
+              end={to === '/'}
+              className={({ isActive }) => {
+                if (to === '/library') return linkClass(onLibrary && activeType !== 'book')
+                if (to === '/library?type=book') return linkClass(onLibrary && activeType === 'book')
+                return linkClass(isActive)
+              }}
+            >
               <Icon size={15} />
               {t(key)}
             </NavLink>
           ))}
+        </div>
+
+        <div>
+          <div className="mb-1.5 px-3 text-[10px] font-semibold uppercase tracking-widest text-zinc-600">
+            {t('nav.memory')}
+          </div>
+          <div className="space-y-0.5">
+            {memoryLinks.map(({ to, key, icon: Icon }) => (
+              <NavLink key={to} to={to} className={({ isActive }) => linkClass(isActive)}>
+                <Icon size={15} />
+                {t(key)}
+              </NavLink>
+            ))}
+          </div>
         </div>
 
         <div>

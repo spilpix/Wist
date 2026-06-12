@@ -4,9 +4,11 @@ import fs from 'node:fs'
 import * as titles from '../db/titles'
 import * as episodes from '../db/episodes'
 import * as moments from '../db/moments'
+import * as notes from '../db/notes'
 import * as sessions from '../db/sessions'
 import * as stats from '../db/stats'
 import * as youtube from '../db/youtube'
+import { memories } from '../db/memories'
 import * as files from './files'
 import * as data from './data'
 import { detectSubtitles } from './subtitles'
@@ -72,6 +74,14 @@ export function registerIpcHandlers(): void {
   })
   ipcMain.handle('moments:exportAll', () => data.exportMoments())
 
+  // --- notes ---
+  ipcMain.handle('notes:list', (_e, filters) => notes.listNotes(filters ?? {}))
+  ipcMain.handle('notes:get', (_e, id: number) => notes.getNote(id))
+  ipcMain.handle('notes:create', (_e, payload) => notes.createNote(payload ?? {}))
+  ipcMain.handle('notes:update', (_e, id: number, patch) => notes.updateNote(id, patch ?? {}))
+  ipcMain.handle('notes:remove', (_e, id: number) => notes.deleteNote(id))
+  ipcMain.handle('notes:tags', () => notes.distinctNoteTags())
+
   // --- youtube ---
   ipcMain.handle('youtube:sources', (_e, titleId?: number) => youtube.listSources(titleId))
   ipcMain.handle('youtube:addSource', (_e, titleId: number, url: string) => youtube.addSource(titleId, url))
@@ -95,6 +105,7 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('stats:monthly', () => stats.monthly())
   ipcMain.handle('stats:topRated', () => stats.topRated())
   ipcMain.handle('stats:recentlyAdded', () => stats.recentlyAdded())
+  ipcMain.handle('stats:memories', () => memories())
 
   // --- files ---
   ipcMain.handle('files:pickVideos', () => files.pickVideos())
