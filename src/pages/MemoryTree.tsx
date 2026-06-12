@@ -58,6 +58,7 @@ export default function MemoryTree() {
   const [stats, setStats] = useState<WorldStats | null>(null)
   const [assets, setAssets] = useState<Record<string, string> | null>(null)
   const [tip, setTip] = useState<(WorldTip & { x: number; y: number }) | null>(null)
+  const [worldError, setWorldError] = useState<string | null>(null)
 
   useEffect(() => {
     Promise.all([
@@ -143,10 +144,15 @@ export default function MemoryTree() {
           if (rect) setTip({ ...wt, x: wt.clientX - rect.left, y: wt.clientY - rect.top })
         },
       }
-    ).then((d) => {
-      if (cancelled) d()
-      else destroy = d
-    })
+    )
+      .then((d) => {
+        if (cancelled) d()
+        else destroy = d
+      })
+      .catch((err) => {
+        console.error('WORLD_BOOT_ERR', err)
+        setWorldError(String(err?.message ?? err))
+      })
 
     return () => {
       cancelled = true
@@ -214,6 +220,11 @@ export default function MemoryTree() {
         <>
           <div ref={containerRef} className="relative overflow-hidden rounded-2xl border border-edge/50 bg-black">
             <div ref={hostRef} />
+            {worldError && (
+              <div className="p-6 text-sm text-red-400">
+                {worldError}
+              </div>
+            )}
             {tip && (
               <div
                 className="pointer-events-none absolute z-10 max-w-xs rounded-lg border border-edge bg-raised px-3 py-2"

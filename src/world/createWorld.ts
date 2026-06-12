@@ -1,3 +1,6 @@
+// CSP-safe shader math: the renderer forbids eval, this swaps Pixi's
+// new Function() codegen for a precompiled fallback. Must come first.
+import 'pixi.js/unsafe-eval'
 import {
   Application,
   BlurFilter,
