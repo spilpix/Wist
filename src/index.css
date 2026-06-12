@@ -186,6 +186,63 @@ video::-webkit-media-controls {
   }
 }
 
+/* the world: Ori-night / Ghibli-dawn scene */
+.world-orb {
+  animation: leafSway 5.5s ease-in-out infinite alternate;
+}
+.world-vein {
+  animation: veinPulse 4s ease-in-out infinite alternate;
+}
+.world-aurora {
+  animation: auroraDrift 14s ease-in-out infinite alternate;
+}
+.world-cloud {
+  animation: cloudDrift 46s ease-in-out infinite alternate;
+}
+.world-shine {
+  animation: starTwinkle 4.5s ease-in-out infinite alternate;
+}
+.world-lantern {
+  animation: lanternFlicker 3.2s ease-in-out infinite alternate;
+}
+@keyframes veinPulse {
+  from {
+    opacity: 0.25;
+  }
+  to {
+    opacity: 0.9;
+  }
+}
+@keyframes auroraDrift {
+  from {
+    transform: translateX(-26px);
+    opacity: 0.7;
+  }
+  to {
+    transform: translateX(26px);
+    opacity: 1;
+  }
+}
+@keyframes cloudDrift {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(70px);
+  }
+}
+@keyframes lanternFlicker {
+  0% {
+    opacity: 0.55;
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.8;
+  }
+}
+
 @layer components {
   .btn {
     @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40;

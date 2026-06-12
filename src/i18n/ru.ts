@@ -29,13 +29,31 @@ const ru: Record<keyof typeof en, string> = {
   'nav.settings': 'Настройки',
   'nav.books': 'Книги',
   'nav.notes': 'Записи',
-  'nav.tree': 'Древо памяти',
+  'nav.tree': 'Мой мир',
   'nav.memory': 'Память',
   'nav.journal': 'Дневник',
   'nav.tasks': 'Задачи',
   'nav.music': 'Музыка',
   'nav.vault': 'Файлы',
   'nav.tools': 'Инструменты',
+
+  // the world
+  'world.light': 'Свет духа',
+  'world.zone.library': 'Лес историй',
+  'world.zone.notes': 'Сад мыслей',
+  'world.zone.journal': 'Озеро дней',
+  'world.zone.tasks': 'Тропа дел',
+  'world.zone.moments': 'Светлячки',
+  'world.zone.openTasks': 'открыто: {n}',
+  'world.zone.streak': 'серия: {n}',
+  'world.hint': 'Этот мир растёт из того, что вы проживаете. Кликните по месту, чтобы перенестись туда.',
+
+  // home / sanctuary
+  'home.today': 'Сегодня',
+  'home.journalDone': 'Запись сделана ✓',
+  'home.tasksEmpty': 'Всё сделано ✓',
+  'home.moreTasks': '+ ещё {n}',
+  'home.spiritLevel': 'Уровень {n}',
 
   // statuses / types / moment tags
   'status.watching': 'Смотрю',
@@ -209,7 +227,7 @@ const ru: Record<keyof typeof en, string> = {
   'notes.saveClose': 'Сохранить и закрыть',
 
   // memory tree
-  'tree.subtitle': 'Год вашей памяти, нарисованный чернилами и пикселями. Каждый лист — то, что вы посмотрели, прочитали, почувствовали или записали. Двенадцать ветвей — по одной на месяц. Дерево растёт вместе с вами.',
+  'tree.subtitle': 'Ваш внутренний мир. Древо духа растёт из всего, что вы проживаете: двенадцать ветвей — по одной на месяц, каждый светящийся шар — воспоминание. Вокруг — Лес историй, Сад мыслей, Озеро дней и Тропа дел.',
   'tree.emptyTitle': 'Дерево ещё растёт',
   'tree.emptySubtitle': 'Завершайте тайтлы, сохраняйте моменты, пишите записи и дневник — здесь начнут появляться листья.',
   'tree.memories': 'Воспоминаний за год: {n}',

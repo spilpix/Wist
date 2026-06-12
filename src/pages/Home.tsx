@@ -1,14 +1,42 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Bookmark, Clock, Flame, Library as LibraryIcon, Play, Tv } from 'lucide-react'
+import {
+  Bookmark,
+  CalendarDays,
+  Check,
+  Clock,
+  Flame,
+  Library as LibraryIcon,
+  ListTodo,
+  PenLine,
+  Play,
+  Plus,
+  Sparkles,
+  Tv,
+} from 'lucide-react'
 import Heatmap from '../components/Heatmap'
 import CoverImage from '../components/CoverImage'
 import TitleCard from '../components/TitleCard'
 import EmptyState from '../components/ui/EmptyState'
 import Spinner from '../components/ui/Spinner'
-import type { ContinueItem, HeatmapDay, StatsSummary, Title } from '../types/models'
-import { formatDurationHuman, formatHours, formatTimestamp } from '../utils/formatters'
+import type { ContinueItem, HeatmapDay, JournalEntry, Note, StatsSummary, Task, Title } from '../types/models'
+import { formatDurationHuman, formatHours, formatRelative, formatTimestamp } from '../utils/formatters'
 import { useI18n, DATE_LOCALE, type TKey } from '../i18n'
+
+const MOODS = ['😞', '😐', '🙂', '😄', '🤩']
+
+function todayKey(): string {
+  const d = new Date()
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+}
+
+// spirit level thresholds mirror the world page: level k needs 3·k² memories
+function spiritLevel(n: number): number {
+  let level = 1
+  while (level < 6 && n >= 3 * (level + 1) ** 2) level++
+  return level
+}
 
 function greetingKey(): TKey {
   const h = new Date().getHours()
@@ -123,10 +151,18 @@ function StatTile({ icon: Icon, value, label, sub }: { icon: typeof Tv; value: s
 export default function Home() {
   const { t, tn, lang } = useI18n()
   const [loading, setLoading] = useState(true)
+  const navigate = useNavigate()
   const [continueItems, setContinueItems] = useState<ContinueItem[]>([])
   const [recent, setRecent] = useState<Title[]>([])
   const [summary, setSummary] = useState<StatsSummary | null>(null)
   const [heat, setHeat] = useState<HeatmapDay[]>([])
+  const [openTasks, setOpenTasks] = useState<Task[]>([])
+  const [recentNotes, setRecentNotes] = useState<Note[]>([])
+  const [todayEntry, setTodayEntry] = useState<JournalEntry | null>(null)
+  const [streak, setStreak] = useState(0)
+  const [spiritXp, setSpiritXp] = useState(0)
+
+  const loadTasks = useCallback(() => window.wist.tasks.list({ done: false }).then(setOpenTasks), [])
 
   useEffect(() => {
     Promise.all([
@@ -134,15 +170,39 @@ export default function Home() {
       window.wist.stats.recentlyAdded(),
       window.wist.stats.summary(),
       window.wist.stats.heatmap(),
+      window.wist.tasks.list({ done: false }),
+      window.wist.notes.list({}),
+      window.wist.journal.get(todayKey()),
+      window.wist.journal.streak(),
+      window.wist.stats.memories(),
     ])
-      .then(([cw, rec, sum, hm]) => {
+      .then(([cw, rec, sum, hm, tasks, notes, entry, st, mem]) => {
         setContinueItems(cw)
         setRecent(rec)
         setSummary(sum)
         setHeat(hm)
+        setOpenTasks(tasks)
+        setRecentNotes(notes.slice(0, 3))
+        setTodayEntry(entry)
+        setStreak(st)
+        setSpiritXp(mem.length)
       })
       .finally(() => setLoading(false))
-  }, [])
+    // agents can add tasks while the app is open
+    return window.wist.events.onDataChanged((kind) => {
+      if (kind === 'tasks') loadTasks()
+    })
+  }, [loadTasks])
+
+  const toggleTask = async (task: Task) => {
+    await window.wist.tasks.update(task.id, { done: 1 })
+    loadTasks()
+  }
+
+  const quickMood = async (value: number) => {
+    await window.wist.journal.upsert(todayKey(), { mood: value })
+    navigate('/journal')
+  }
 
   if (loading) return <Spinner label={t('home.loading')} />
 
@@ -156,11 +216,120 @@ export default function Home() {
 
   return (
     <div className="page space-y-10">
-      <header className="relative">
+      <header className="relative flex items-start justify-between">
         <div className="pointer-events-none absolute -top-28 left-1/4 h-64 w-[460px] rounded-full bg-accent/10 blur-3xl" />
-        <h1 className="relative text-3xl font-bold tracking-tight text-white">{t(greetingKey())}</h1>
-        <p className="relative mt-1 text-sm capitalize text-zinc-500">{dateStr}</p>
+        <div className="relative">
+          <h1 className="text-3xl font-bold tracking-tight text-white">{t(greetingKey())}</h1>
+          <p className="mt-1 text-sm capitalize text-zinc-500">{dateStr}</p>
+        </div>
+        <Link
+          to="/tree"
+          className="relative flex items-center gap-2 rounded-xl border border-accent/30 bg-accent/10 px-3 py-2 text-sm text-accent-bright transition-colors hover:bg-accent/20"
+        >
+          <Sparkles size={15} />
+          <span className="font-semibold">{t('home.spiritLevel', { n: spiritLevel(spiritXp) })}</span>
+          <span className="text-xs opacity-70">· {t('world.light')}: {spiritXp}</span>
+        </Link>
       </header>
+
+      {/* today — the assistant strip */}
+      <section>
+        <h2 className="section-title">{t('home.today')}</h2>
+        <div className="grid grid-cols-3 gap-4">
+          {/* journal */}
+          <div role="button" tabIndex={0} onClick={() => navigate('/journal')} className="card flex cursor-pointer flex-col px-5 py-4 text-left transition-transform hover:-translate-y-0.5">
+            <div className="mb-2 flex items-center justify-between">
+              <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                <CalendarDays size={13} className="text-[#f472b6]" /> {t('nav.journal')}
+              </span>
+              {streak > 0 && (
+                <span className="flex items-center gap-1 text-xs text-zinc-500">
+                  <Flame size={12} className="text-amber-500" /> {streak}
+                </span>
+              )}
+            </div>
+            {todayEntry?.content ? (
+              <>
+                <div className="text-sm text-zinc-300">
+                  {todayEntry.mood ? `${MOODS[todayEntry.mood - 1]} ` : ''}
+                  {t('home.journalDone')}
+                </div>
+                <p className="mt-1 line-clamp-2 text-xs text-zinc-500">{todayEntry.content}</p>
+              </>
+            ) : (
+              <>
+                <div className="text-sm text-zinc-300">{t('journal.placeholder')}</div>
+                <div className="mt-2 flex gap-1" onClick={(e) => e.stopPropagation()}>
+                  {MOODS.map((emoji, i) => (
+                    <button
+                      key={i}
+                      onClick={() => quickMood(i + 1)}
+                      className="rounded-lg px-1 py-0.5 text-lg opacity-60 grayscale transition-all hover:scale-125 hover:opacity-100 hover:grayscale-0"
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* tasks */}
+          <div className="card flex flex-col px-5 py-4">
+            <button onClick={() => navigate('/tasks')} className="mb-2 flex items-center justify-between text-left">
+              <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-zinc-500 hover:text-zinc-300">
+                <ListTodo size={13} className="text-[#ffd27d]" /> {t('nav.tasks')}
+              </span>
+              {openTasks.length > 0 && <span className="text-xs text-zinc-500">{openTasks.length}</span>}
+            </button>
+            {openTasks.length === 0 ? (
+              <div className="text-sm text-zinc-500">{t('home.tasksEmpty')}</div>
+            ) : (
+              <div className="space-y-1.5">
+                {openTasks.slice(0, 3).map((task) => (
+                  <div key={task.id} className="flex items-center gap-2">
+                    <button
+                      onClick={() => toggleTask(task)}
+                      className="flex h-4 w-4 shrink-0 items-center justify-center rounded border border-edge text-transparent transition-colors hover:border-accent hover:text-accent"
+                    >
+                      <Check size={10} />
+                    </button>
+                    <span className="min-w-0 truncate text-sm text-zinc-300">{task.title}</span>
+                  </div>
+                ))}
+                {openTasks.length > 3 && (
+                  <button onClick={() => navigate('/tasks')} className="text-xs text-zinc-600 hover:text-zinc-400">
+                    {t('home.moreTasks', { n: openTasks.length - 3 })}
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* notes */}
+          <div className="card flex flex-col px-5 py-4">
+            <button onClick={() => navigate('/notes')} className="mb-2 flex items-center justify-between text-left">
+              <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-zinc-500 hover:text-zinc-300">
+                <PenLine size={13} className="text-[#60a5fa]" /> {t('nav.notes')}
+              </span>
+            </button>
+            {recentNotes.length === 0 ? (
+              <button onClick={() => navigate('/notes?new=1')} className="flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-300">
+                <Plus size={14} /> {t('cmdk.newNote')}
+              </button>
+            ) : (
+              <div className="space-y-1.5">
+                {recentNotes.map((n) => (
+                  <button key={n.id} onClick={() => navigate(`/notes?open=${n.id}`)} className="block w-full truncate text-left text-sm text-zinc-300 hover:text-white">
+                    {n.title || n.content.slice(0, 40)}
+                    <span className="ml-2 text-[11px] text-zinc-600">{formatRelative(n.updated_at)}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
 
       {heroItem && <HeroCard item={heroItem} />}
 

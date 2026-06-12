@@ -27,13 +27,31 @@ const en = {
   'nav.settings': 'Settings',
   'nav.books': 'Books',
   'nav.notes': 'Notes',
-  'nav.tree': 'Memory Tree',
+  'nav.tree': 'My World',
   'nav.memory': 'Memory',
   'nav.journal': 'Journal',
   'nav.tasks': 'Tasks',
   'nav.music': 'Music',
   'nav.vault': 'Vault',
   'nav.tools': 'Tools',
+
+  // the world
+  'world.light': 'Spirit Light',
+  'world.zone.library': 'Story Forest',
+  'world.zone.notes': 'Garden of Thoughts',
+  'world.zone.journal': 'Lake of Days',
+  'world.zone.tasks': 'Path of Deeds',
+  'world.zone.moments': 'Fireflies',
+  'world.zone.openTasks': '{n} open',
+  'world.zone.streak': 'streak: {n}',
+  'world.hint': 'This world grows out of what you live through. Click a place to travel there.',
+
+  // home / sanctuary
+  'home.today': 'Today',
+  'home.journalDone': 'Entry written ✓',
+  'home.tasksEmpty': 'All clear ✓',
+  'home.moreTasks': '+{n} more',
+  'home.spiritLevel': 'Level {n}',
 
   // statuses / types / moment tags
   'status.watching': 'Watching',
@@ -207,7 +225,7 @@ const en = {
   'notes.saveClose': 'Save & close',
 
   // memory tree
-  'tree.subtitle': 'A year of your memory, drawn in ink and pixels. Every leaf is something you watched, read, felt or wrote — twelve branches, one per month. The tree grows with you.',
+  'tree.subtitle': 'Your inner world. The Spirit Tree grows from everything you live through — twelve branches, one per month, every glowing orb a memory. Around it: the Story Forest, the Garden of Thoughts, the Lake of Days and the Path of Deeds.',
   'tree.emptyTitle': 'The tree is still growing',
   'tree.emptySubtitle': 'Finish titles, save moments, write notes and journal entries — leaves will start to appear.',
   'tree.memories': '{n} memories this year',
