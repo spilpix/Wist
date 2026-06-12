@@ -2,7 +2,7 @@
 
 Personal memory hub for Windows — one dark, quiet place for everything you experience: anime, movies and series you **watch**, books you **read**, thoughts you **write** (notes with `[[wiki links]]`), and scenes you **feel** (moments with screenshots). The **Memory Tree** turns your last twelve months into a living tree where every leaf is a memory. Everything stays on your machine: SQLite database, PNG screenshots, no cloud, no accounts.
 
-UI is fully bilingual — **Russian / English**. The language follows the system locale on first launch and can be switched in Settings → Appearance.
+UI is fully bilingual — **Russian / English** — and fully themeable: **dark, light or system**, switched instantly from the titlebar, the **Ctrl+K command palette** or Settings. The palette also gives Notion-style instant search across pages, titles and notes. Heavy pages (charts, player, memory tree) are lazy-loaded, so startup stays instant.
 
 📘 Полная документация на русском: [ДОКУМЕНТАЦИЯ.md](ДОКУМЕНТАЦИЯ.md)
 
