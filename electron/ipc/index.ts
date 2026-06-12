@@ -1,6 +1,7 @@
-import { ipcMain, shell, dialog, BrowserWindow } from 'electron'
+import { app, ipcMain, shell, dialog, BrowserWindow } from 'electron'
 import { spawn } from 'node:child_process'
 import fs from 'node:fs'
+import path from 'node:path'
 import * as titles from '../db/titles'
 import * as episodes from '../db/episodes'
 import * as moments from '../db/moments'
@@ -120,6 +121,30 @@ export function registerIpcHandlers(): void {
   })
   ipcMain.handle('vault:remove', (_e, id: number) => vault.removeVaultFile(id))
   ipcMain.handle('vault:open', (_e, p: string) => shell.openPath(p))
+
+  // --- world art layers (user-painted PNGs in %APPDATA%/Wist/world) ---
+  ipcMain.handle('files:worldAssets', () => {
+    const dir = path.join(app.getPath('userData'), 'world')
+    fs.mkdirSync(dir, { recursive: true })
+    const layers: Record<string, string> = {
+      sky: 'sky',
+      hillsFar: 'hills-far',
+      hillsNear: 'hills-near',
+      tree: 'tree',
+      foreground: 'foreground',
+    }
+    const out: Record<string, string> = { _dir: dir }
+    for (const [key, base] of Object.entries(layers)) {
+      for (const ext of ['.png', '.webp', '.jpg']) {
+        const p = path.join(dir, base + ext)
+        if (fs.existsSync(p)) {
+          out[key] = p
+          break
+        }
+      }
+    }
+    return out
+  })
 
   // --- metadata from the internet ---
   ipcMain.handle('meta:searchTitles', (_e, type: TitleType, query: string) => searchTitleMeta(type, query))
