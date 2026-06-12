@@ -44370,13 +44370,40 @@ function linearTex(w2, h2, stops) {
   ctx.fillRect(0, 0, w2, h2);
   return Texture.from(c2);
 }
-async function createGalaxy(host2, data, cb) {
+async function createGalaxy(host2, data, cb, initial) {
+  const opts = { ...initial };
+  const P = opts.light ? {
+    bgTop: "#f7f7fb",
+    bgBot: "#ecedf4",
+    dust: 12172751,
+    edge: 8225432,
+    edgeLit: 4014680,
+    label: 4869987,
+    coreStroke: 16777215,
+    vignette: "rgba(40,40,80,0.10)",
+    haloBlend: "normal",
+    haloAlpha: 0.32,
+    edgeAlpha: 0.32,
+    edgeWeakAlpha: 0.2
+  } : {
+    bgTop: "#0a0916",
+    bgBot: "#100d22",
+    dust: 13620991,
+    edge: 9080760,
+    edgeLit: 14673151,
+    label: 12107225,
+    coreStroke: 657686,
+    vignette: "rgba(0,0,0,0.4)",
+    haloBlend: "add",
+    haloAlpha: 0.55,
+    edgeAlpha: 0.18,
+    edgeWeakAlpha: 0.1
+  };
   const app = new Application();
   await app.init({
     width: W,
     height: H2,
-    backgroundAlpha: 1,
-    background: 460303,
+    backgroundAlpha: 0,
     antialias: true,
     resolution: Math.min(2, window.devicePixelRatio || 1),
     autoDensity: true
@@ -44388,44 +44415,44 @@ async function createGalaxy(host2, data, cb) {
   app.canvas.style.touchAction = "none";
   const glowSoft = radialTex(256, [[0, "rgba(255,255,255,0.9)"], [0.3, "rgba(255,255,255,0.32)"], [1, "rgba(255,255,255,0)"]]);
   const glowHard = radialTex(128, [[0, "rgba(255,255,255,1)"], [0.25, "rgba(255,255,255,0.9)"], [1, "rgba(255,255,255,0)"]]);
-  const mkGlow = (tint, size, alpha2 = 1, hard = false) => {
-    const s2 = new Sprite(hard ? glowHard : glowSoft);
-    s2.anchor.set(0.5);
-    s2.tint = tint;
-    s2.width = s2.height = size;
-    s2.alpha = alpha2;
-    s2.blendMode = "add";
-    return s2;
-  };
   const bg = new Container();
   app.stage.addChild(bg);
-  const skyG = new Sprite(linearTex(32, H2, [[0, "#07060f"], [0.5, "#0a0918"], [1, "#0d0a1e"]]));
-  skyG.width = W;
-  skyG.height = H2;
-  bg.addChild(skyG);
-  const nebulae = [
-    { s: mkGlow(4864650, 900, 0.1), ph: 0 },
-    { s: mkGlow(2775674, 760, 0.08), ph: 2.4 },
-    { s: mkGlow(6961770, 680, 0.07), ph: 4.1 }
-  ];
-  nebulae[0].s.position.set(420, 300);
-  nebulae[1].s.position.set(880, 480);
-  nebulae[2].s.position.set(640, 180);
-  for (const n3 of nebulae) bg.addChild(n3.s);
-  const farStars = [];
-  for (let i2 = 0; i2 < 160; i2++) {
-    const s2 = mkGlow(13620991, seed(`fs${i2}`) > 0.93 ? 5 : 2.6, 0.7, true);
+  const sky = new Sprite(linearTex(32, H2, [[0, P.bgTop], [1, P.bgBot]]));
+  sky.width = W;
+  sky.height = H2;
+  bg.addChild(sky);
+  const dust = [];
+  for (let i2 = 0; i2 < 130; i2++) {
+    const s2 = new Sprite(glowHard);
+    s2.anchor.set(0.5);
+    s2.tint = P.dust;
+    s2.width = s2.height = seed(`fs${i2}`) > 0.92 ? 4.5 : 2.4;
+    s2.alpha = opts.light ? 0.35 : 0.6;
+    if (!opts.light) s2.blendMode = "add";
     s2.x = seed(`fx${i2}`) * W;
     s2.y = seed(`fy${i2}`) * H2;
     bg.addChild(s2);
-    farStars.push({ s: s2, ph: seed(`fp${i2}`) * 6 });
+    dust.push({ s: s2, ph: seed(`fp${i2}`) * 6 });
+  }
+  if (!opts.light) {
+    const nebTints = [4864650, 2775674];
+    nebTints.forEach((tint, i2) => {
+      const nb = new Sprite(glowSoft);
+      nb.anchor.set(0.5);
+      nb.tint = tint;
+      nb.width = nb.height = 820 - i2 * 160;
+      nb.alpha = 0.08;
+      nb.blendMode = "add";
+      nb.position.set(i2 === 0 ? 420 : 860, i2 === 0 ? 300 : 470);
+      bg.addChild(nb);
+    });
   }
   const world = new Container();
   app.stage.addChild(world);
   world.position.set(W / 2, H2 / 2);
   const edgesG = new Graphics();
   world.addChild(edgesG);
-  const vig = new Sprite(radialTex(512, [[0, "rgba(0,0,0,0)"], [0.7, "rgba(0,0,0,0)"], [1, "rgba(0,0,0,0.45)"]]));
+  const vig = new Sprite(radialTex(512, [[0, "rgba(0,0,0,0)"], [0.72, "rgba(0,0,0,0)"], [1, P.vignette]]));
   vig.anchor.set(0.5);
   vig.position.set(W / 2, H2 / 2);
   vig.width = W * 1.2;
@@ -44441,63 +44468,65 @@ async function createGalaxy(host2, data, cb) {
     degree[e2.a]++;
     degree[e2.b]++;
   }
-  const shuffled = data.nodes.map((_, i2) => i2).sort((a2, b2) => seed(`sh${data.nodes[a2].id}`) - seed(`sh${data.nodes[b2].id}`));
-  shuffled.forEach((idx, order) => {
-    const t2 = order / Math.max(1, n2 - 1);
-    const r2 = 26 + 300 * Math.sqrt(t2);
-    const theta = order * 2.39996 + seed(data.nodes[idx].id) * 0.6;
-    px[idx] = Math.cos(theta) * r2;
-    py[idx] = Math.sin(theta) * r2 * 0.82;
-  });
   const adj = Array.from({ length: n2 }, () => []);
   data.edges.forEach((e2) => {
     adj[e2.a].push(e2.b);
     adj[e2.b].push(e2.a);
+  });
+  const maxR = Math.min(330, 26 + 26 * Math.sqrt(n2));
+  const order = data.nodes.map((_, i2) => i2).sort((a2, b2) => seed(`sh${data.nodes[a2].id}`) - seed(`sh${data.nodes[b2].id}`));
+  order.forEach((idx, k2) => {
+    const t2 = n2 === 1 ? 0 : k2 / (n2 - 1);
+    const r2 = 14 + maxR * Math.sqrt(t2);
+    const theta = k2 * 2.39996 + seed(data.nodes[idx].id) * 0.6;
+    px[idx] = Math.cos(theta) * r2;
+    py[idx] = Math.sin(theta) * r2 * 0.85;
   });
   let hovered = -1;
   let dragIdx = -1;
   const nodeC = [];
   const labels = [];
   const halos = [];
-  const radiusOf = (i2) => (data.nodes[i2].kind === "title" || data.nodes[i2].kind === "book" ? 4.6 : 3.6) + Math.min(5, degree[i2] * 1.1);
+  const cores = [];
+  const baseR = (i2) => (data.nodes[i2].kind === "title" || data.nodes[i2].kind === "book" ? 4.4 : 3.5) + Math.min(5, degree[i2] * 1.05);
   data.nodes.forEach((node, i2) => {
     const c2 = new Container();
-    const r2 = radiusOf(i2);
-    const halo = mkGlow(KIND_COLORS[node.kind], r2 * 7, 0.55);
-    const core = new Graphics().circle(0, 0, r2).fill({ color: KIND_COLORS[node.kind] });
-    core.stroke({ width: 1.2, color: 460303, alpha: 0.9 });
-    const hl = new Graphics().circle(-r2 * 0.3, -r2 * 0.3, r2 * 0.32).fill({ color: 16777215, alpha: 0.85 });
+    const halo = new Sprite(glowSoft);
+    halo.anchor.set(0.5);
+    halo.tint = KIND_COLORS[node.kind];
+    halo.blendMode = P.haloBlend;
+    halo.alpha = P.haloAlpha;
+    const core = new Graphics();
+    const hl = new Graphics();
     c2.addChild(halo, core, hl);
     halos.push(halo);
+    cores.push(core);
     const label = new Text({
       text: node.label.length > 26 ? node.label.slice(0, 25) + "\u2026" : node.label,
-      style: { fontFamily: "Inter, sans-serif", fontSize: 11, fill: 12107225 }
+      style: { fontFamily: "Inter, sans-serif", fontSize: 11, fill: P.label }
     });
     label.anchor.set(0.5, 0);
-    label.y = r2 + 5;
     label.alpha = 0;
     c2.addChild(label);
     labels.push(label);
     c2.eventMode = "static";
     c2.cursor = "pointer";
-    c2.on("pointerover", () => {
-      hovered = i2;
-      reheat(0.06);
-    });
+    c2.on("pointerover", () => hovered = i2);
     c2.on("pointerout", () => {
       if (hovered === i2) hovered = -1;
       cb.tip(null);
     });
-    c2.on("pointermove", (e2) => {
-      cb.tip({
+    c2.on(
+      "pointermove",
+      (e2) => cb.tip({
         clientX: e2.clientX,
         clientY: e2.clientY,
         color: hex(KIND_COLORS[node.kind]),
         head: data.kindNames[node.kind],
         label: node.label,
         sub: node.sub
-      });
-    });
+      })
+    );
     c2.on("pointerdown", (e2) => {
       dragIdx = i2;
       dragMoved = false;
@@ -44506,18 +44535,27 @@ async function createGalaxy(host2, data, cb) {
     world.addChild(c2);
     nodeC.push(c2);
   });
-  let alpha = 1;
-  const reheat = (to = 0.5) => {
-    alpha = Math.max(alpha, to);
-  };
-  function simStep() {
-    if (alpha < 0.012) return;
-    const rep = 1300;
-    const spring = 0.028;
-    const rest = 78;
+  let drawnScale = -1;
+  const redrawNodes = () => {
+    if (drawnScale === opts.nodeScale) return;
+    drawnScale = opts.nodeScale;
     for (let i2 = 0; i2 < n2; i2++) {
-      vx2[i2] -= px[i2] * 12e-4 * alpha;
-      vy2[i2] -= py[i2] * 16e-4 * alpha;
+      const r2 = baseR(i2) * opts.nodeScale;
+      cores[i2].clear();
+      cores[i2].circle(0, 0, r2).fill({ color: KIND_COLORS[data.nodes[i2].kind] });
+      cores[i2].stroke({ width: 1.2, color: P.coreStroke, alpha: 0.9 });
+      halos[i2].width = halos[i2].height = r2 * 7;
+      labels[i2].y = r2 + 5;
+    }
+  };
+  redrawNodes();
+  let alpha = 1;
+  const reheat = (to = 0.4) => alpha = Math.max(alpha, to);
+  function simStep() {
+    if (alpha < 0.01) return;
+    for (let i2 = 0; i2 < n2; i2++) {
+      vx2[i2] -= px[i2] * 14e-4 * alpha;
+      vy2[i2] -= py[i2] * 19e-4 * alpha;
       for (let j2 = i2 + 1; j2 < n2; j2++) {
         let dx = px[i2] - px[j2];
         let dy = py[i2] - py[j2];
@@ -44527,8 +44565,8 @@ async function createGalaxy(host2, data, cb) {
           dy = (seed(`${j2}-${i2}`) - 0.5) * 2;
           d2 = 1;
         }
-        if (d2 > 9e4) continue;
-        const f2 = rep / d2 * alpha;
+        if (d2 > 12e4) continue;
+        const f2 = opts.repel / d2 * alpha;
         const d3 = Math.sqrt(d2);
         const fx = dx / d3 * f2;
         const fy = dy / d3 * f2;
@@ -44542,7 +44580,7 @@ async function createGalaxy(host2, data, cb) {
       const dx = px[e2.b] - px[e2.a];
       const dy = py[e2.b] - py[e2.a];
       const d2 = Math.hypot(dx, dy) || 1;
-      const k2 = spring * (e2.weak ? 0.35 : 1) * (d2 - rest) * alpha;
+      const k2 = 0.028 * (e2.weak ? 0.35 : 1) * (d2 - opts.linkDistance) * alpha;
       const fx = dx / d2 * k2;
       const fy = dy / d2 * k2;
       vx2[e2.a] += fx;
@@ -44556,13 +44594,15 @@ async function createGalaxy(host2, data, cb) {
         vy2[i2] = 0;
         continue;
       }
-      vx2[i2] *= 0.82;
-      vy2[i2] *= 0.82;
+      vx2[i2] = Math.max(-14, Math.min(14, vx2[i2] * 0.8));
+      vy2[i2] = Math.max(-14, Math.min(14, vy2[i2] * 0.8));
       px[i2] += vx2[i2];
       py[i2] += vy2[i2];
     }
-    alpha *= 0.985;
+    alpha *= 0.982;
   }
+  for (let k2 = 0; k2 < 220 && alpha > 0.01; k2++) simStep();
+  alpha = 0;
   let scale = 1;
   let panning = false;
   let dragMoved = false;
@@ -44586,20 +44626,18 @@ async function createGalaxy(host2, data, cb) {
       px[dragIdx] = (s2.sx - world.x) / scale;
       py[dragIdx] = (s2.sy - world.y) / scale;
       dragMoved = true;
-      reheat(0.25);
+      reheat(0.22);
     } else if (panning) {
       world.x += s2.sx - lastSX;
       world.y += s2.sy - lastSY;
-      bg.x += (s2.sx - lastSX) * 0.06;
-      bg.y += (s2.sy - lastSY) * 0.06;
+      bg.x += (s2.sx - lastSX) * 0.05;
+      bg.y += (s2.sy - lastSY) * 0.05;
     }
     lastSX = s2.sx;
     lastSY = s2.sy;
   });
   const endPointer = () => {
-    if (dragIdx >= 0 && !dragMoved) {
-      cb.navigate(data.nodes[dragIdx].route);
-    }
+    if (dragIdx >= 0 && !dragMoved) cb.navigate(data.nodes[dragIdx].route);
     dragIdx = -1;
     panning = false;
   };
@@ -44609,7 +44647,7 @@ async function createGalaxy(host2, data, cb) {
     e2.preventDefault();
     const s2 = toScreen(e2.clientX, e2.clientY);
     const factor = Math.pow(1.0016, -e2.deltaY);
-    const next = Math.min(2.6, Math.max(0.45, scale * factor));
+    const next = Math.min(2.8, Math.max(0.4, scale * factor));
     const k2 = next / scale;
     world.x = s2.sx - (s2.sx - world.x) * k2;
     world.y = s2.sy - (s2.sy - world.y) * k2;
@@ -44622,10 +44660,8 @@ async function createGalaxy(host2, data, cb) {
   const tick = () => {
     elapsed += app.ticker.deltaMS;
     simStep();
-    for (const f2 of farStars) f2.s.alpha = 0.22 + 0.5 * (0.5 + 0.5 * Math.sin(elapsed * 1e-3 + f2.ph));
-    nebulae.forEach((nb, i2) => {
-      nb.s.alpha = (i2 === 0 ? 0.1 : i2 === 1 ? 0.08 : 0.07) * (0.8 + 0.25 * Math.sin(elapsed * 18e-5 + nb.ph));
-    });
+    redrawNodes();
+    for (const f2 of dust) f2.s.alpha = (opts.light ? 0.22 : 0.3) + (opts.light ? 0.2 : 0.4) * (0.5 + 0.5 * Math.sin(elapsed * 9e-4 + f2.ph));
     edgesG.clear();
     const focus = hovered >= 0;
     for (const e2 of data.edges) {
@@ -44633,27 +44669,34 @@ async function createGalaxy(host2, data, cb) {
       const dim = focus && !lit;
       edgesG.moveTo(px[e2.a], py[e2.a]).lineTo(px[e2.b], py[e2.b]);
       edgesG.stroke({
-        width: lit ? 1.6 / scale : (e2.weak ? 0.7 : 1) / scale,
-        color: lit ? 14673151 : 9080760,
-        alpha: lit ? 0.85 : dim ? 0.05 : e2.weak ? 0.1 : 0.16
+        width: (lit ? 1.7 : e2.weak ? 0.7 : 1) * opts.linkWidth / scale,
+        color: lit ? P.edgeLit : P.edge,
+        alpha: lit ? 0.9 : dim ? 0.05 : e2.weak ? P.edgeWeakAlpha : P.edgeAlpha
       });
     }
-    const labelZoom = Math.min(1, Math.max(0, (scale - 1.15) * 1.8));
+    const labelBase = Math.min(1, Math.max(0, (scale - (1.8 - opts.labelFade)) * 2));
     for (let i2 = 0; i2 < n2; i2++) {
       const c2 = nodeC[i2];
       c2.position.set(px[i2], py[i2]);
       const lit = focus && isNeighbor(i2);
-      c2.alpha = focus ? lit ? 1 : 0.16 : 1;
-      halos[i2].alpha = (focus && lit ? 0.95 : 0.5) + 0.12 * Math.sin(elapsed * 12e-4 + i2);
-      const lblTarget = hovered === i2 ? 1 : lit ? Math.max(0.85, labelZoom) : labelZoom * 0.8;
-      labels[i2].alpha += (lblTarget - labels[i2].alpha) * 0.18;
+      c2.alpha = focus ? lit ? 1 : opts.light ? 0.22 : 0.16 : 1;
+      halos[i2].alpha = (focus && lit ? Math.min(1, P.haloAlpha * 1.8) : P.haloAlpha) + 0.06 * Math.sin(elapsed * 12e-4 + i2);
+      const target = hovered === i2 ? 1 : lit ? Math.max(0.85, labelBase) : labelBase * 0.85;
+      labels[i2].alpha += (target - labels[i2].alpha) * 0.18;
       labels[i2].scale.set(1 / Math.max(0.7, scale));
     }
   };
   app.ticker.add(tick);
-  return () => {
-    app.canvas.removeEventListener("wheel", onWheel);
-    app.destroy(true, { children: true, texture: true });
+  return {
+    set: (patch) => {
+      const physics = patch.repel !== void 0 || patch.linkDistance !== void 0;
+      Object.assign(opts, patch);
+      if (physics) reheat(0.5);
+    },
+    destroy: () => {
+      app.canvas.removeEventListener("wheel", onWheel);
+      app.destroy(true, { children: true, texture: true });
+    }
   };
 }
 
@@ -44693,10 +44736,15 @@ function mock() {
   };
 }
 var host = document.getElementById("host");
-createGalaxy(host, mock(), {
-  navigate: (to) => console.log("NAVIGATE", to),
-  tip: () => void 0
-}).then(() => console.log("WORLD_OK")).catch((err) => {
+createGalaxy(
+  host,
+  mock(),
+  {
+    navigate: (to) => console.log("NAVIGATE", to),
+    tip: () => void 0
+  },
+  { light: false, nodeScale: 1, linkWidth: 1, linkDistance: 85, repel: 1300, labelFade: 0.9 }
+).then(() => console.log("WORLD_OK")).catch((err) => {
   console.error("WORLD_ERR", err?.stack ?? String(err));
   const pre = document.createElement("pre");
   pre.style.color = "red";

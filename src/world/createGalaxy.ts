@@ -4,9 +4,9 @@ import { Application, Container, Graphics, Sprite, Text, Texture } from 'pixi.js
 import type { MemoryKind } from '../types/models'
 
 /**
- * My World — a galaxy of connections (Obsidian graph, reimagined as deep space).
- * Star nodes = titles / notes / moments / journal days; filaments = real links.
- * Force-directed layout, pan/zoom, hover focuses the constellation.
+ * My World — an Obsidian-style connection graph drawn as a quiet galaxy.
+ * Theme-aware (light/dark), pre-settled force layout, Obsidian controls:
+ * node size / link width / link distance / repel / label fade — all live.
  */
 
 export const KIND_COLORS: Record<MemoryKind, number> = {
@@ -49,6 +49,28 @@ export interface GalaxyData {
   kindNames: Record<MemoryKind, string>
 }
 
+export interface GalaxyOptions {
+  light: boolean
+  nodeScale: number // 0.5..2
+  linkWidth: number // 0.5..2.5
+  linkDistance: number // 40..200
+  repel: number // 300..3000
+  labelFade: number // 0..2 (2 = always show)
+}
+
+export const DEFAULT_GALAXY_OPTIONS: Omit<GalaxyOptions, 'light'> = {
+  nodeScale: 1,
+  linkWidth: 1,
+  linkDistance: 85,
+  repel: 1300,
+  labelFade: 0.9,
+}
+
+export interface GalaxyHandle {
+  set: (patch: Partial<GalaxyOptions>) => void
+  destroy: () => void
+}
+
 export interface GalaxyCallbacks {
   navigate: (to: string) => void
   tip: (t: WorldTip | null) => void
@@ -85,13 +107,49 @@ function linearTex(w: number, h: number, stops: Array<[number, string]>): Textur
   return Texture.from(c)
 }
 
-export async function createGalaxy(host: HTMLDivElement, data: GalaxyData, cb: GalaxyCallbacks): Promise<() => void> {
+export async function createGalaxy(
+  host: HTMLDivElement,
+  data: GalaxyData,
+  cb: GalaxyCallbacks,
+  initial: GalaxyOptions
+): Promise<GalaxyHandle> {
+  const opts: GalaxyOptions = { ...initial }
+
+  const P = opts.light
+    ? {
+        bgTop: '#f7f7fb',
+        bgBot: '#ecedf4',
+        dust: 0xb9bdcf,
+        edge: 0x7d8298,
+        edgeLit: 0x3d4258,
+        label: 0x4a4f63,
+        coreStroke: 0xffffff,
+        vignette: 'rgba(40,40,80,0.10)',
+        haloBlend: 'normal' as const,
+        haloAlpha: 0.32,
+        edgeAlpha: 0.32,
+        edgeWeakAlpha: 0.2,
+      }
+    : {
+        bgTop: '#0a0916',
+        bgBot: '#100d22',
+        dust: 0xcfd6ff,
+        edge: 0x8a8fb8,
+        edgeLit: 0xdfe4ff,
+        label: 0xb8bdd9,
+        coreStroke: 0x0a0916,
+        vignette: 'rgba(0,0,0,0.4)',
+        haloBlend: 'add' as const,
+        haloAlpha: 0.55,
+        edgeAlpha: 0.18,
+        edgeWeakAlpha: 0.1,
+      }
+
   const app = new Application()
   await app.init({
     width: W,
     height: H,
-    backgroundAlpha: 1,
-    background: 0x07060f,
+    backgroundAlpha: 0,
     antialias: true,
     resolution: Math.min(2, window.devicePixelRatio || 1),
     autoDensity: true,
@@ -104,46 +162,44 @@ export async function createGalaxy(host: HTMLDivElement, data: GalaxyData, cb: G
 
   const glowSoft = radialTex(256, [[0, 'rgba(255,255,255,0.9)'], [0.3, 'rgba(255,255,255,0.32)'], [1, 'rgba(255,255,255,0)']])
   const glowHard = radialTex(128, [[0, 'rgba(255,255,255,1)'], [0.25, 'rgba(255,255,255,0.9)'], [1, 'rgba(255,255,255,0)']])
-  const mkGlow = (tint: number, size: number, alpha = 1, hard = false) => {
-    const s = new Sprite(hard ? glowHard : glowSoft)
-    s.anchor.set(0.5)
-    s.tint = tint
-    s.width = s.height = size
-    s.alpha = alpha
-    s.blendMode = 'add'
-    return s
-  }
 
-  // ---------- backdrop: deep space ----------
+  // ---------- backdrop ----------
   const bg = new Container()
   app.stage.addChild(bg)
-  const skyG = new Sprite(linearTex(32, H, [[0, '#07060f'], [0.5, '#0a0918'], [1, '#0d0a1e']]))
-  skyG.width = W
-  skyG.height = H
-  bg.addChild(skyG)
+  const sky = new Sprite(linearTex(32, H, [[0, P.bgTop], [1, P.bgBot]]))
+  sky.width = W
+  sky.height = H
+  bg.addChild(sky)
 
-  // nebula breaths — barely-there color fields
-  const nebulae: Array<{ s: Sprite; ph: number }> = [
-    { s: mkGlow(0x4a3a8a, 900, 0.10), ph: 0 },
-    { s: mkGlow(0x2a5a7a, 760, 0.08), ph: 2.4 },
-    { s: mkGlow(0x6a3a6a, 680, 0.07), ph: 4.1 },
-  ]
-  nebulae[0].s.position.set(420, 300)
-  nebulae[1].s.position.set(880, 480)
-  nebulae[2].s.position.set(640, 180)
-  for (const n of nebulae) bg.addChild(n.s)
-
-  // far static stars (do not pan with the graph — depth)
-  const farStars: Array<{ s: Sprite; ph: number }> = []
-  for (let i = 0; i < 160; i++) {
-    const s = mkGlow(0xcfd6ff, seed(`fs${i}`) > 0.93 ? 5 : 2.6, 0.7, true)
+  const dust: Array<{ s: Sprite; ph: number }> = []
+  for (let i = 0; i < 130; i++) {
+    const s = new Sprite(glowHard)
+    s.anchor.set(0.5)
+    s.tint = P.dust
+    s.width = s.height = seed(`fs${i}`) > 0.92 ? 4.5 : 2.4
+    s.alpha = opts.light ? 0.35 : 0.6
+    if (!opts.light) s.blendMode = 'add'
     s.x = seed(`fx${i}`) * W
     s.y = seed(`fy${i}`) * H
     bg.addChild(s)
-    farStars.push({ s, ph: seed(`fp${i}`) * 6 })
+    dust.push({ s, ph: seed(`fp${i}`) * 6 })
   }
 
-  // ---------- world (pans & zooms) ----------
+  if (!opts.light) {
+    const nebTints = [0x4a3a8a, 0x2a5a7a]
+    nebTints.forEach((tint, i) => {
+      const nb = new Sprite(glowSoft)
+      nb.anchor.set(0.5)
+      nb.tint = tint
+      nb.width = nb.height = 820 - i * 160
+      nb.alpha = 0.08
+      nb.blendMode = 'add'
+      nb.position.set(i === 0 ? 420 : 860, i === 0 ? 300 : 470)
+      bg.addChild(nb)
+    })
+  }
+
+  // ---------- world ----------
   const world = new Container()
   app.stage.addChild(world)
   world.position.set(W / 2, H / 2)
@@ -151,15 +207,14 @@ export async function createGalaxy(host: HTMLDivElement, data: GalaxyData, cb: G
   const edgesG = new Graphics()
   world.addChild(edgesG)
 
-  // vignette on top
-  const vig = new Sprite(radialTex(512, [[0, 'rgba(0,0,0,0)'], [0.7, 'rgba(0,0,0,0)'], [1, 'rgba(0,0,0,0.45)']]))
+  const vig = new Sprite(radialTex(512, [[0, 'rgba(0,0,0,0)'], [0.72, 'rgba(0,0,0,0)'], [1, P.vignette]]))
   vig.anchor.set(0.5)
   vig.position.set(W / 2, H / 2)
   vig.width = W * 1.2
   vig.height = H * 1.2
   app.stage.addChild(vig)
 
-  // ---------- layout state ----------
+  // ---------- graph state ----------
   const n = data.nodes.length
   const px = new Float32Array(n)
   const py = new Float32Array(n)
@@ -170,64 +225,63 @@ export async function createGalaxy(host: HTMLDivElement, data: GalaxyData, cb: G
     degree[e.a]++
     degree[e.b]++
   }
-
-  // initial layout: golden-angle spiral → instantly galaxy-like
-  const shuffled = data.nodes.map((_, i) => i).sort((a, b) => seed(`sh${data.nodes[a].id}`) - seed(`sh${data.nodes[b].id}`))
-  shuffled.forEach((idx, order) => {
-    const t = order / Math.max(1, n - 1)
-    const r = 26 + 300 * Math.sqrt(t)
-    const theta = order * 2.39996 + seed(data.nodes[idx].id) * 0.6
-    px[idx] = Math.cos(theta) * r
-    py[idx] = Math.sin(theta) * r * 0.82 // slight ellipse
-  })
-
   const adj: number[][] = Array.from({ length: n }, () => [])
   data.edges.forEach((e) => {
     adj[e.a].push(e.b)
     adj[e.b].push(e.a)
   })
 
-  // ---------- node sprites ----------
+  // compact spiral sized to the graph — small graphs stay cozy
+  const maxR = Math.min(330, 26 + 26 * Math.sqrt(n))
+  const order = data.nodes.map((_, i) => i).sort((a, b) => seed(`sh${data.nodes[a].id}`) - seed(`sh${data.nodes[b].id}`))
+  order.forEach((idx, k) => {
+    const t = n === 1 ? 0 : k / (n - 1)
+    const r = 14 + maxR * Math.sqrt(t)
+    const theta = k * 2.39996 + seed(data.nodes[idx].id) * 0.6
+    px[idx] = Math.cos(theta) * r
+    py[idx] = Math.sin(theta) * r * 0.85
+  })
+
+  // ---------- sprites ----------
   let hovered = -1
   let dragIdx = -1
   const nodeC: Container[] = []
   const labels: Text[] = []
   const halos: Sprite[] = []
-
-  const radiusOf = (i: number) =>
-    (data.nodes[i].kind === 'title' || data.nodes[i].kind === 'book' ? 4.6 : 3.6) + Math.min(5, degree[i] * 1.1)
+  const cores: Graphics[] = []
+  const baseR = (i: number) =>
+    (data.nodes[i].kind === 'title' || data.nodes[i].kind === 'book' ? 4.4 : 3.5) + Math.min(5, degree[i] * 1.05)
 
   data.nodes.forEach((node, i) => {
     const c = new Container()
-    const r = radiusOf(i)
-    const halo = mkGlow(KIND_COLORS[node.kind], r * 7, 0.55)
-    const core = new Graphics().circle(0, 0, r).fill({ color: KIND_COLORS[node.kind] })
-    core.stroke({ width: 1.2, color: 0x07060f, alpha: 0.9 })
-    const hl = new Graphics().circle(-r * 0.3, -r * 0.3, r * 0.32).fill({ color: 0xffffff, alpha: 0.85 })
+    const halo = new Sprite(glowSoft)
+    halo.anchor.set(0.5)
+    halo.tint = KIND_COLORS[node.kind]
+    halo.blendMode = P.haloBlend
+    halo.alpha = P.haloAlpha
+    const core = new Graphics()
+    const hl = new Graphics()
     c.addChild(halo, core, hl)
     halos.push(halo)
+    cores.push(core)
 
     const label = new Text({
       text: node.label.length > 26 ? node.label.slice(0, 25) + '…' : node.label,
-      style: { fontFamily: 'Inter, sans-serif', fontSize: 11, fill: 0xb8bdd9 },
+      style: { fontFamily: 'Inter, sans-serif', fontSize: 11, fill: P.label },
     })
     label.anchor.set(0.5, 0)
-    label.y = r + 5
     label.alpha = 0
     c.addChild(label)
     labels.push(label)
 
     c.eventMode = 'static'
     c.cursor = 'pointer'
-    c.on('pointerover', () => {
-      hovered = i
-      reheat(0.06)
-    })
+    c.on('pointerover', () => (hovered = i))
     c.on('pointerout', () => {
       if (hovered === i) hovered = -1
       cb.tip(null)
     })
-    c.on('pointermove', (e) => {
+    c.on('pointermove', (e) =>
       cb.tip({
         clientX: e.clientX,
         clientY: e.clientY,
@@ -236,7 +290,7 @@ export async function createGalaxy(host: HTMLDivElement, data: GalaxyData, cb: G
         label: node.label,
         sub: node.sub,
       })
-    })
+    )
     c.on('pointerdown', (e) => {
       dragIdx = i
       dragMoved = false
@@ -246,22 +300,31 @@ export async function createGalaxy(host: HTMLDivElement, data: GalaxyData, cb: G
     nodeC.push(c)
   })
 
+  // (re)draw node bodies — called when nodeScale changes
+  let drawnScale = -1
+  const redrawNodes = () => {
+    if (drawnScale === opts.nodeScale) return
+    drawnScale = opts.nodeScale
+    for (let i = 0; i < n; i++) {
+      const r = baseR(i) * opts.nodeScale
+      cores[i].clear()
+      cores[i].circle(0, 0, r).fill({ color: KIND_COLORS[data.nodes[i].kind] })
+      cores[i].stroke({ width: 1.2, color: P.coreStroke, alpha: 0.9 })
+      halos[i].width = halos[i].height = r * 7
+      labels[i].y = r + 5
+    }
+  }
+  redrawNodes()
+
   // ---------- physics ----------
   let alpha = 1
-  const reheat = (to = 0.5) => {
-    alpha = Math.max(alpha, to)
-  }
+  const reheat = (to = 0.4) => (alpha = Math.max(alpha, to))
 
   function simStep() {
-    if (alpha < 0.012) return
-    const rep = 1300
-    const spring = 0.028
-    const rest = 78
+    if (alpha < 0.01) return
     for (let i = 0; i < n; i++) {
-      // centering gravity
-      vx[i] -= px[i] * 0.0012 * alpha
-      vy[i] -= py[i] * 0.0016 * alpha
-      // repulsion (n² fine for our scale)
+      vx[i] -= px[i] * 0.0014 * alpha
+      vy[i] -= py[i] * 0.0019 * alpha
       for (let j = i + 1; j < n; j++) {
         let dx = px[i] - px[j]
         let dy = py[i] - py[j]
@@ -271,8 +334,8 @@ export async function createGalaxy(host: HTMLDivElement, data: GalaxyData, cb: G
           dy = (seed(`${j}-${i}`) - 0.5) * 2
           d2 = 1
         }
-        if (d2 > 90000) continue
-        const f = (rep / d2) * alpha
+        if (d2 > 120000) continue
+        const f = (opts.repel / d2) * alpha
         const d = Math.sqrt(d2)
         const fx = (dx / d) * f
         const fy = (dy / d) * f
@@ -286,7 +349,7 @@ export async function createGalaxy(host: HTMLDivElement, data: GalaxyData, cb: G
       const dx = px[e.b] - px[e.a]
       const dy = py[e.b] - py[e.a]
       const d = Math.hypot(dx, dy) || 1
-      const k = spring * (e.weak ? 0.35 : 1) * (d - rest) * alpha
+      const k = 0.028 * (e.weak ? 0.35 : 1) * (d - opts.linkDistance) * alpha
       const fx = (dx / d) * k
       const fy = (dy / d) * k
       vx[e.a] += fx
@@ -300,15 +363,19 @@ export async function createGalaxy(host: HTMLDivElement, data: GalaxyData, cb: G
         vy[i] = 0
         continue
       }
-      vx[i] *= 0.82
-      vy[i] *= 0.82
+      vx[i] = Math.max(-14, Math.min(14, vx[i] * 0.8))
+      vy[i] = Math.max(-14, Math.min(14, vy[i] * 0.8))
       px[i] += vx[i]
       py[i] += vy[i]
     }
-    alpha *= 0.985
+    alpha *= 0.982
   }
 
-  // ---------- interaction: pan / zoom / drag ----------
+  // settle BEFORE the first frame — the graph appears already laid out
+  for (let k = 0; k < 220 && alpha > 0.01; k++) simStep()
+  alpha = 0
+
+  // ---------- interaction ----------
   let scale = 1
   let panning = false
   let dragMoved = false
@@ -334,20 +401,18 @@ export async function createGalaxy(host: HTMLDivElement, data: GalaxyData, cb: G
       px[dragIdx] = (s.sx - world.x) / scale
       py[dragIdx] = (s.sy - world.y) / scale
       dragMoved = true
-      reheat(0.25)
+      reheat(0.22)
     } else if (panning) {
       world.x += s.sx - lastSX
       world.y += s.sy - lastSY
-      bg.x += (s.sx - lastSX) * 0.06
-      bg.y += (s.sy - lastSY) * 0.06
+      bg.x += (s.sx - lastSX) * 0.05
+      bg.y += (s.sy - lastSY) * 0.05
     }
     lastSX = s.sx
     lastSY = s.sy
   })
   const endPointer = () => {
-    if (dragIdx >= 0 && !dragMoved) {
-      cb.navigate(data.nodes[dragIdx].route) // click = navigate
-    }
+    if (dragIdx >= 0 && !dragMoved) cb.navigate(data.nodes[dragIdx].route)
     dragIdx = -1
     panning = false
   }
@@ -358,7 +423,7 @@ export async function createGalaxy(host: HTMLDivElement, data: GalaxyData, cb: G
     e.preventDefault()
     const s = toScreen(e.clientX, e.clientY)
     const factor = Math.pow(1.0016, -e.deltaY)
-    const next = Math.min(2.6, Math.max(0.45, scale * factor))
+    const next = Math.min(2.8, Math.max(0.4, scale * factor))
     const k = next / scale
     world.x = s.sx - (s.sx - world.x) * k
     world.y = s.sy - (s.sy - world.y) * k
@@ -367,21 +432,17 @@ export async function createGalaxy(host: HTMLDivElement, data: GalaxyData, cb: G
   }
   app.canvas.addEventListener('wheel', onWheel, { passive: false })
 
-  // ---------- render loop ----------
+  // ---------- render ----------
   let elapsed = 0
   const isNeighbor = (i: number) => hovered === i || adj[hovered]?.includes(i)
 
   const tick = () => {
     elapsed += app.ticker.deltaMS
     simStep()
+    redrawNodes()
 
-    // backdrop life
-    for (const f of farStars) f.s.alpha = 0.22 + 0.5 * (0.5 + 0.5 * Math.sin(elapsed * 0.001 + f.ph))
-    nebulae.forEach((nb, i) => {
-      nb.s.alpha = (i === 0 ? 0.10 : i === 1 ? 0.08 : 0.07) * (0.8 + 0.25 * Math.sin(elapsed * 0.00018 + nb.ph))
-    })
+    for (const f of dust) f.s.alpha = (opts.light ? 0.22 : 0.3) + (opts.light ? 0.2 : 0.4) * (0.5 + 0.5 * Math.sin(elapsed * 0.0009 + f.ph))
 
-    // edges
     edgesG.clear()
     const focus = hovered >= 0
     for (const e of data.edges) {
@@ -389,30 +450,35 @@ export async function createGalaxy(host: HTMLDivElement, data: GalaxyData, cb: G
       const dim = focus && !lit
       edgesG.moveTo(px[e.a], py[e.a]).lineTo(px[e.b], py[e.b])
       edgesG.stroke({
-        width: lit ? 1.6 / scale : (e.weak ? 0.7 : 1) / scale,
-        color: lit ? 0xdfe4ff : 0x8a8fb8,
-        alpha: lit ? 0.85 : dim ? 0.05 : e.weak ? 0.10 : 0.16,
+        width: ((lit ? 1.7 : e.weak ? 0.7 : 1) * opts.linkWidth) / scale,
+        color: lit ? P.edgeLit : P.edge,
+        alpha: lit ? 0.9 : dim ? 0.05 : e.weak ? P.edgeWeakAlpha : P.edgeAlpha,
       })
     }
 
-    // nodes
-    const labelZoom = Math.min(1, Math.max(0, (scale - 1.15) * 1.8))
+    const labelBase = Math.min(1, Math.max(0, (scale - (1.8 - opts.labelFade)) * 2))
     for (let i = 0; i < n; i++) {
       const c = nodeC[i]
       c.position.set(px[i], py[i])
       const lit = focus && isNeighbor(i)
-      c.alpha = focus ? (lit ? 1 : 0.16) : 1
-      halos[i].alpha = (focus && lit ? 0.95 : 0.5) + 0.12 * Math.sin(elapsed * 0.0012 + i)
-      const lblTarget = hovered === i ? 1 : lit ? Math.max(0.85, labelZoom) : labelZoom * 0.8
-      labels[i].alpha += (lblTarget - labels[i].alpha) * 0.18
-      // keep labels readable while zooming
+      c.alpha = focus ? (lit ? 1 : opts.light ? 0.22 : 0.16) : 1
+      halos[i].alpha = (focus && lit ? Math.min(1, P.haloAlpha * 1.8) : P.haloAlpha) + 0.06 * Math.sin(elapsed * 0.0012 + i)
+      const target = hovered === i ? 1 : lit ? Math.max(0.85, labelBase) : labelBase * 0.85
+      labels[i].alpha += (target - labels[i].alpha) * 0.18
       labels[i].scale.set(1 / Math.max(0.7, scale))
     }
   }
   app.ticker.add(tick)
 
-  return () => {
-    app.canvas.removeEventListener('wheel', onWheel)
-    app.destroy(true, { children: true, texture: true })
+  return {
+    set: (patch) => {
+      const physics = patch.repel !== undefined || patch.linkDistance !== undefined
+      Object.assign(opts, patch)
+      if (physics) reheat(0.5)
+    },
+    destroy: () => {
+      app.canvas.removeEventListener('wheel', onWheel)
+      app.destroy(true, { children: true, texture: true })
+    },
   }
 }

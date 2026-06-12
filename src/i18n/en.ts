@@ -52,6 +52,16 @@ const en = {
   'world.kind.note': 'Notes',
   'world.kind.moment': 'Moments',
   'world.kind.journal': 'Journal',
+  'world.search': 'Filter the graph…',
+  'world.orphans': 'Orphans',
+  'world.view': 'Display',
+  'world.nodeSize': 'Node size',
+  'world.linkWidth': 'Link thickness',
+  'world.linkDist': 'Link distance',
+  'world.repel': 'Repel force',
+  'world.labels': 'Labels',
+  'world.reset': 'Reset',
+  'world.nothing': 'Nothing matches',
 
   // home / sanctuary
   'home.today': 'Today',

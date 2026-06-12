@@ -46,10 +46,15 @@ function mock(): GalaxyData {
 
 const host = document.getElementById('host') as HTMLDivElement
 
-createGalaxy(host, mock(), {
-  navigate: (to) => console.log('NAVIGATE', to),
-  tip: () => undefined,
-})
+createGalaxy(
+  host,
+  mock(),
+  {
+    navigate: (to) => console.log('NAVIGATE', to),
+    tip: () => undefined,
+  },
+  { light: false, nodeScale: 1, linkWidth: 1, linkDistance: 85, repel: 1300, labelFade: 0.9 }
+)
   .then(() => console.log('WORLD_OK'))
   .catch((err) => {
     console.error('WORLD_ERR', err?.stack ?? String(err))

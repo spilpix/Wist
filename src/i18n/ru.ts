@@ -54,6 +54,16 @@ const ru: Record<keyof typeof en, string> = {
   'world.kind.note': 'Записи',
   'world.kind.moment': 'Моменты',
   'world.kind.journal': 'Дневник',
+  'world.search': 'Фильтр по графу…',
+  'world.orphans': 'Одинокие',
+  'world.view': 'Отображение',
+  'world.nodeSize': 'Размер узлов',
+  'world.linkWidth': 'Толщина связей',
+  'world.linkDist': 'Дистанция связей',
+  'world.repel': 'Отталкивание',
+  'world.labels': 'Подписи',
+  'world.reset': 'Сбросить',
+  'world.nothing': 'Ничего не найдено',
 
   // home / sanctuary
   'home.today': 'Сегодня',
