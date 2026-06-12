@@ -165,6 +165,17 @@ export default function SettingsPage() {
       <section className="mb-8">
         <h2 className="section-title">{t('set.appearance')}</h2>
         <div className="card divide-y divide-edge/50 px-5">
+          <Row label={t('set.theme')}>
+            <select
+              className="select"
+              value={settings.theme}
+              onChange={(e) => update({ theme: e.target.value as 'dark' | 'light' | 'system' })}
+            >
+              <option value="dark">{t('set.themeDark')}</option>
+              <option value="light">{t('set.themeLight')}</option>
+              <option value="system">{t('set.themeSystem')}</option>
+            </select>
+          </Row>
           <Row label={t('set.language')}>
             <select
               className="select"
@@ -222,7 +233,7 @@ export default function SettingsPage() {
         </div>
       </section>
 
-      <div className="pb-4 text-center text-xs text-zinc-700">{t('set.footer', { version: '0.2.0' })}</div>
+      <div className="pb-4 text-center text-xs text-zinc-700">{t('set.footer', { version: '0.3.0' })}</div>
 
       {confirmClear && (
         <ConfirmDialog

@@ -54,6 +54,27 @@ const en = {
   'card.epProgress': '{w}/{t} ep',
   'card.chProgress': '{w}/{t} ch',
 
+  // greetings
+  'home.morning': 'Good morning',
+  'home.afternoon': 'Good afternoon',
+  'home.evening': 'Good evening',
+  'home.night': 'Late night session',
+
+  // command palette
+  'cmdk.placeholder': 'Search titles, notes, pages…',
+  'cmdk.searchHint': 'Search',
+  'cmdk.pages': 'Pages',
+  'cmdk.titles': 'Titles',
+  'cmdk.notes': 'Notes',
+  'cmdk.actions': 'Actions',
+  'cmdk.addTitle': 'Add title',
+  'cmdk.newNote': 'New note',
+  'cmdk.toggleTheme': 'Toggle dark / light theme',
+  'cmdk.noResults': 'Nothing found',
+  'cmdk.navigate': 'navigate',
+  'cmdk.open': 'open',
+  'cmdk.close': 'close',
+
   // home
   'home.loading': 'Loading your hub…',
   'home.emptyTitle': 'Your library is empty',
@@ -270,6 +291,10 @@ const en = {
   'set.mpvPath': 'mpv path',
   'set.mpvHint': 'Used by "Open in mpv" for files the built-in player cannot decode.',
   'set.appearance': 'Appearance',
+  'set.theme': 'Theme',
+  'set.themeDark': 'Dark',
+  'set.themeLight': 'Light',
+  'set.themeSystem': 'System',
   'set.language': 'Language',
   'set.accent': 'Accent color',
   'set.accentCustom': 'Custom color',

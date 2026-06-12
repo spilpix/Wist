@@ -2,8 +2,8 @@ import { useToastStore } from '../../store/toastStore'
 
 const KIND_STYLES = {
   info: 'border-edge bg-raised text-zinc-200',
-  success: 'border-green-500/30 bg-raised text-green-300',
-  error: 'border-red-500/30 bg-raised text-red-300',
+  success: 'border-green-500/30 bg-raised text-success',
+  error: 'border-red-500/30 bg-raised text-danger',
 }
 
 export default function Toaster() {

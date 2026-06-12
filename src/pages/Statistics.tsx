@@ -26,6 +26,16 @@ import type {
 } from '../types/models'
 import { formatHours } from '../utils/formatters'
 import { useI18n, MONTHS_SHORT } from '../i18n'
+import { useSettingsStore } from '../store/settingsStore'
+
+const CHART_TOOLTIP_STYLE = {
+  background: 'rgb(var(--raised))',
+  border: '1px solid rgb(var(--edge))',
+  borderRadius: 8,
+  fontSize: 12,
+}
+const CHART_ITEM_STYLE = { color: 'rgb(var(--ink-200))' }
+const CHART_TICK = { fill: '#8a8a96', fontSize: 11 } // neutral mid-gray, readable on both themes
 
 const PIE_COLORS = ['#a888f0', '#4ade80', '#60a5fa', '#facc15', '#f87171']
 
@@ -45,6 +55,7 @@ function OverviewCard({ icon: Icon, value, label }: { icon: typeof Tv; value: st
 
 export default function Statistics() {
   const { t, lang } = useI18n()
+  const accent = useSettingsStore((s) => s.settings?.accentColor) ?? '#7c5cbf'
   const [loading, setLoading] = useState(true)
   const [summary, setSummary] = useState<StatsSummary | null>(null)
   const [types, setTypes] = useState<TypeSlice[]>([])
@@ -117,10 +128,7 @@ export default function Statistics() {
                       <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
                     ))}
                   </Pie>
-                  <Tooltip
-                    contentStyle={{ background: '#1a1a24', border: '1px solid #232333', borderRadius: 8, fontSize: 12 }}
-                    itemStyle={{ color: '#e4e4e7' }}
-                  />
+                  <Tooltip contentStyle={CHART_TOOLTIP_STYLE} itemStyle={CHART_ITEM_STYLE} />
                 </PieChart>
               </ResponsiveContainer>
               <div className="space-y-2">
@@ -146,15 +154,15 @@ export default function Statistics() {
           {monthData.length ? (
             <ResponsiveContainer width="100%" height={200}>
               <BarChart data={monthData}>
-                <XAxis dataKey="name" tick={{ fill: '#71717a', fontSize: 11 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: '#71717a', fontSize: 11 }} axisLine={false} tickLine={false} width={32} />
+                <XAxis dataKey="name" tick={CHART_TICK} axisLine={false} tickLine={false} />
+                <YAxis tick={CHART_TICK} axisLine={false} tickLine={false} width={32} />
                 <Tooltip
-                  cursor={{ fill: 'rgba(255,255,255,0.04)' }}
-                  contentStyle={{ background: '#1a1a24', border: '1px solid #232333', borderRadius: 8, fontSize: 12 }}
-                  itemStyle={{ color: '#e4e4e7' }}
+                  cursor={{ fill: 'rgba(138,138,150,0.08)' }}
+                  contentStyle={CHART_TOOLTIP_STYLE}
+                  itemStyle={CHART_ITEM_STYLE}
                   formatter={(v: number) => [t('stats.hoursShort', { n: v }), t('stats.watchedTooltip')]}
                 />
-                <Bar dataKey="hours" fill="var(--accent)" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="hours" fill={accent} radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           ) : (
@@ -168,7 +176,7 @@ export default function Statistics() {
           <h2 className="section-title !mb-0">{t('stats.activityYear')}</h2>
           <div className="flex items-center gap-4 text-sm">
             <span className="flex items-center gap-1.5 text-zinc-400">
-              <Flame size={15} className="text-amber-400" />
+              <Flame size={15} className="text-amber-500" />
               {t('stats.current')} <span className="font-semibold text-white">{summary.currentStreak}</span>
             </span>
             <span className="text-zinc-400">
@@ -193,8 +201,8 @@ export default function Statistics() {
                 <CoverImage coverPath={title.cover_path} title={title.title} type={title.type} className="h-12 w-9 rounded" iconSize={14} />
                 <span className="min-w-0 flex-1 truncate text-sm text-zinc-200">{title.title}</span>
                 <span className="text-xs uppercase tracking-wide text-zinc-600">{t(`type.${title.type}`)}</span>
-                <span className="flex items-center gap-1 text-sm font-semibold text-amber-300">
-                  <Star size={13} className="fill-amber-300" /> {title.rating}
+                <span className="flex items-center gap-1 text-sm font-semibold text-amber-500">
+                  <Star size={13} className="fill-amber-500" /> {title.rating}
                 </span>
               </button>
             ))}

@@ -145,15 +145,15 @@ export default function MemoryTree() {
             {/* soft crown glow */}
             <defs>
               <radialGradient id="crown" cx="50%" cy="42%" r="55%">
-                <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.10" />
-                <stop offset="100%" stopColor="var(--accent)" stopOpacity="0" />
+                <stop offset="0%" style={{ stopColor: 'var(--accent)', stopOpacity: 0.1 }} />
+                <stop offset="100%" style={{ stopColor: 'var(--accent)', stopOpacity: 0 }} />
               </radialGradient>
             </defs>
             <rect width="1000" height="700" fill="url(#crown)" />
 
             {/* ground */}
             <ellipse cx="500" cy="644" rx="330" ry="13" fill="rgba(var(--accent-rgb),0.07)" />
-            <line x1="120" y1="644" x2="880" y2="644" stroke="#232333" strokeWidth="1.5" />
+            <line x1="120" y1="644" x2="880" y2="644" style={{ stroke: 'rgb(var(--edge))' }} strokeWidth="1.5" />
 
             {/* roots */}
             <path d="M 500 640 Q 470 652 420 650" stroke="#2b2440" strokeWidth="7" fill="none" strokeLinecap="round" />
@@ -192,7 +192,7 @@ export default function MemoryTree() {
                   y={b.tip.y + 4}
                   textAnchor={b.side === 1 ? 'start' : 'end'}
                   fontSize="13"
-                  fill={b.leaves.length ? '#8b8b9e' : '#494955'}
+                  style={{ fill: b.leaves.length ? 'rgb(var(--ink-500))' : 'rgb(var(--ink-700))' }}
                 >
                   {b.label}
                 </text>
@@ -214,7 +214,7 @@ export default function MemoryTree() {
                       cy={leaf.y}
                       r={leaf.r}
                       fill={KIND_COLORS[leaf.ev.kind]}
-                      stroke="#0d0d14"
+                      style={{ stroke: 'rgb(var(--surface))' }}
                       strokeWidth="1.5"
                     />
                   </g>

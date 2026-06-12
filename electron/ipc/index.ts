@@ -143,6 +143,22 @@ export function registerIpcHandlers(): void {
     return res.canceled || !res.filePaths.length ? null : res.filePaths[0]
   })
 
+  // --- window ---
+  ipcMain.handle('window:setTheme', (_e, theme: 'dark' | 'light') => {
+    const win = BrowserWindow.getAllWindows()[0]
+    if (!win) return
+    try {
+      win.setTitleBarOverlay(
+        theme === 'light'
+          ? { color: '#ffffff', symbolColor: '#5a5a68', height: 36 }
+          : { color: '#111118', symbolColor: '#a1a1aa', height: 36 }
+      )
+      win.setBackgroundColor(theme === 'light' ? '#f7f7fa' : '#0d0d14')
+    } catch {
+      /* overlay not supported on this platform */
+    }
+  })
+
   // --- shell ---
   ipcMain.handle('shell:openExternal', (_e, url: string) => {
     if (/^https?:\/\//i.test(url)) return shell.openExternal(url)

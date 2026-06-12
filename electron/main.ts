@@ -1,9 +1,10 @@
-import { app, BrowserWindow, protocol } from 'electron'
+import { app, BrowserWindow, nativeTheme, protocol } from 'electron'
 import path from 'node:path'
 import fs from 'node:fs'
 import { Readable } from 'node:stream'
 import { openDatabase } from './db/database'
 import { registerIpcHandlers } from './ipc'
+import { getSettings } from './settings'
 
 // Custom scheme that streams local media (video, covers, screenshots) into the
 // renderer with Range support — file:// is blocked by web security.
@@ -81,18 +82,23 @@ function registerMediaProtocol() {
 let mainWindow: BrowserWindow | null = null
 
 function createWindow() {
+  const themeSetting = getSettings().theme
+  const dark = themeSetting === 'system' ? nativeTheme.shouldUseDarkColors : themeSetting !== 'light'
+
   mainWindow = new BrowserWindow({
     width: 1440,
     height: 920,
     minWidth: 1080,
     minHeight: 640,
-    backgroundColor: '#0d0d14',
+    backgroundColor: dark ? '#0d0d14' : '#f7f7fa',
     autoHideMenuBar: true,
     show: false,
     title: 'Wist',
-    // frameless dark titlebar with native Windows window controls drawn on top
+    // frameless titlebar with native Windows window controls drawn on top
     titleBarStyle: 'hidden',
-    titleBarOverlay: { color: '#111118', symbolColor: '#a1a1aa', height: 36 },
+    titleBarOverlay: dark
+      ? { color: '#111118', symbolColor: '#a1a1aa', height: 36 }
+      : { color: '#ffffff', symbolColor: '#5a5a68', height: 36 },
     // packaged builds inherit the window icon from the exe resource
     ...(app.isPackaged ? {} : { icon: path.join(__dirname, '../build/icon.png') }),
     webPreferences: {

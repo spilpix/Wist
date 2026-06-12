@@ -75,14 +75,20 @@ export default function Notes() {
     load()
   }, [load])
 
-  // deep link: /notes?open=<id> (used by the memory tree)
+  // deep links: /notes?open=<id> (memory tree) and /notes?new=1 (command palette)
   useEffect(() => {
+    if (loading) return
     const openId = searchParams.get('open')
-    if (!openId || loading) return
-    const note = notes.find((n) => n.id === Number(openId))
-    if (note) openNote(note)
-    setSearchParams({}, { replace: true })
-  }, [loading]) // eslint-disable-line react-hooks/exhaustive-deps
+    const isNew = searchParams.get('new') === '1'
+    if (openId) {
+      const note = notes.find((n) => n.id === Number(openId))
+      if (note) openNote(note)
+      setSearchParams({}, { replace: true })
+    } else if (isNew) {
+      setDraft({ ...EMPTY_DRAFT })
+      setSearchParams({}, { replace: true })
+    }
+  }, [loading, searchParams]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -203,7 +209,7 @@ export default function Notes() {
               key={tag}
               onClick={() => setTagFilter(tagFilter === tag ? null : tag)}
               className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                tagFilter === tag ? 'bg-accent text-white' : 'bg-raised text-zinc-400 hover:text-zinc-200'
+                tagFilter === tag ? 'bg-accent text-[#fff]' : 'bg-raised text-zinc-400 hover:text-zinc-200'
               }`}
             >
               #{tag}

@@ -115,7 +115,7 @@ export default function YouTubeSources() {
                           title={video.watched ? t('detail.markUnwatched') : t('detail.markWatched')}
                           className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-colors ${
                             video.watched
-                              ? 'border-accent bg-accent text-white'
+                              ? 'border-accent bg-accent text-[#fff]'
                               : 'border-edge text-transparent hover:border-accent'
                           }`}
                         >

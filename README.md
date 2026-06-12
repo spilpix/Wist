@@ -30,7 +30,11 @@ npx electron scripts/smoke-db.cjs   # verify better-sqlite3 loads inside Electro
 
 The installer (`release/Wist Setup <version>.exe`) is bilingual (en/ru), lets you pick the install directory, and embeds the app icon. `build.npmRebuild` is `false` because node_modules already holds Electron-ABI prebuilds (see the `.npmrc` note below).
 
-The window uses a frameless dark title bar with native Windows controls (`titleBarOverlay`), so the app feels native on Windows 11.
+The window uses a frameless title bar with native Windows controls (`titleBarOverlay`), so the app feels native on Windows 11.
+
+**Theming:** dark and light themes (plus "system") are driven entirely by CSS variables — `tailwind.config.js` maps the `zinc` scale and `white` to `--ink-*` tokens defined in `src/index.css`. A `.force-dark` class pins dark tokens on subtrees that sit on top of imagery (player, hero cards). The resolved theme is cached in `localStorage` and applied before first paint, and the native titlebar overlay recolors via the `window:setTheme` IPC.
+
+**Command palette:** `Ctrl+K` opens a Notion-style palette (pages, actions, fuzzy search across titles and notes). Heavy routes (Statistics/recharts, Memory Tree, Player) are lazy-loaded for instant startup.
 
 > `.npmrc` pins `runtime=electron` / `target=33.2.0` so `npm install` downloads better-sqlite3's **prebuilt Electron binary** instead of compiling for your system Node. If you bump the Electron version in `package.json`, update `target` to match.
 

@@ -28,7 +28,7 @@ export default function MomentCard({ moment, onClick }: Props) {
             <ImageIcon size={28} />
           </div>
         )}
-        <span className="absolute bottom-2 right-2 rounded bg-black/75 px-1.5 py-0.5 font-mono text-[11px] text-zinc-200">
+        <span className="absolute bottom-2 right-2 rounded bg-black/75 px-1.5 py-0.5 font-mono text-[11px] text-[#e4e4e7]">
           {formatTimestamp(moment.timestamp_seconds)}
         </span>
         {moment.tag && (
@@ -44,7 +44,7 @@ export default function MomentCard({ moment, onClick }: Props) {
         <div className="truncate text-[13px] font-medium text-zinc-200">
           {moment.title_name}
           {moment.episode_number != null && (
-            <span className="text-zinc-500"> · Ep {moment.episode_number}</span>
+            <span className="text-zinc-500"> · {t('local.ep')} {moment.episode_number}</span>
           )}
         </div>
         {moment.note && <div className="mt-1 line-clamp-3 text-xs leading-relaxed text-zinc-400">{moment.note}</div>}

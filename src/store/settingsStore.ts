@@ -28,17 +28,43 @@ export function applyAccent(hex: string) {
   root.style.setProperty('--accent-bright-rgb', lighten(hex))
 }
 
+type ThemeSetting = AppSettings['theme']
+const systemDark = window.matchMedia('(prefers-color-scheme: dark)')
+let currentThemeSetting: ThemeSetting = 'dark'
+
+export function resolvedTheme(): 'dark' | 'light' {
+  return (document.documentElement.dataset.theme as 'dark' | 'light') ?? 'dark'
+}
+
+export function applyTheme(setting: ThemeSetting) {
+  currentThemeSetting = setting
+  const resolved = setting === 'system' ? (systemDark.matches ? 'dark' : 'light') : setting
+  document.documentElement.dataset.theme = resolved
+  try {
+    localStorage.setItem('wist.themeResolved', resolved) // pre-paint hint for next launch
+  } catch {
+    /* storage unavailable */
+  }
+  window.wist.window.setTheme(resolved).catch(() => undefined)
+}
+
+systemDark.addEventListener('change', () => {
+  if (currentThemeSetting === 'system') applyTheme('system')
+})
+
 export const useSettingsStore = create<SettingsState>((set, get) => ({
   settings: null,
   load: async () => {
     const settings = await window.wist.settings.get()
     applyAccent(settings.accentColor)
+    applyTheme(settings.theme ?? 'dark')
     useI18nStore.getState().setLang(settings.language === 'ru' ? 'ru' : 'en')
     set({ settings })
   },
   update: async (patch) => {
     const settings = await window.wist.settings.set(patch)
     if (patch.accentColor) applyAccent(settings.accentColor)
+    if (patch.theme) applyTheme(settings.theme)
     if (patch.language) useI18nStore.getState().setLang(settings.language)
     set({ settings })
   },

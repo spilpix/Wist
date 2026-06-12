@@ -65,7 +65,7 @@ export default function ContinueWatching() {
                       {t('home.timeLeft', { time: formatTimestamp(duration - item.watch_position_seconds) })}
                     </div>
                   )}
-                  <span className="mt-1 inline-flex h-8 w-8 items-center justify-center rounded-full bg-accent/15 text-accent-bright transition-colors group-hover:bg-accent group-hover:text-white">
+                  <span className="mt-1 inline-flex h-8 w-8 items-center justify-center rounded-full bg-accent/15 text-accent-bright transition-colors group-hover:bg-accent group-hover:text-[#fff]">
                     <Play size={14} className="ml-0.5 fill-current" />
                   </span>
                 </div>

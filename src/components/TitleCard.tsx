@@ -48,7 +48,7 @@ export default function TitleCard({ title }: { title: Title }) {
             {title.rating}
           </span>
         )}
-        <span className="absolute bottom-2 left-2 rounded bg-black/70 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-zinc-300">
+        <span className="absolute bottom-2 left-2 rounded bg-black/70 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-[#d4d4d8]">
           {t(`type.${title.type}`)}
         </span>
         {progress > 0 && progress < 1 && (

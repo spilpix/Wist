@@ -17,6 +17,7 @@ function defaults(): AppSettings {
     ytDlpPath: '',
     mpvPath: '',
     language: app.getLocale().toLowerCase().startsWith('ru') ? 'ru' : 'en',
+    theme: 'dark',
   }
 }
 

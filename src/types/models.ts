@@ -149,6 +149,7 @@ export interface AppSettings {
   ytDlpPath: string
   mpvPath: string
   language: 'en' | 'ru'
+  theme: 'dark' | 'light' | 'system'
 }
 
 export interface SubtitleTrack {

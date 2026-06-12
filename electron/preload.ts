@@ -87,6 +87,9 @@ const api = {
     set: (patch: unknown) => invoke('settings:set', patch),
     pickDirectory: () => invoke('settings:pickDirectory'),
   },
+  window: {
+    setTheme: (theme: string) => invoke('window:setTheme', theme),
+  },
   shell: {
     openExternal: (url: string) => invoke('shell:openExternal', url),
     showItemInFolder: (p: string) => invoke('shell:showItemInFolder', p),

@@ -1,6 +1,7 @@
-import { useEffect } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { HashRouter, Navigate, Route, Routes } from 'react-router-dom'
 import Layout from './components/Layout'
+import Spinner from './components/ui/Spinner'
 import Home from './pages/Home'
 import Library from './pages/Library'
 import TitleDetail from './pages/TitleDetail'
@@ -8,13 +9,15 @@ import ContinueWatching from './pages/ContinueWatching'
 import Favorites from './pages/Favorites'
 import Moments from './pages/Moments'
 import Notes from './pages/Notes'
-import MemoryTree from './pages/MemoryTree'
 import LocalFiles from './pages/LocalFiles'
 import YouTubeSources from './pages/YouTubeSources'
-import Statistics from './pages/Statistics'
 import SettingsPage from './pages/Settings'
-import Player from './pages/Player'
 import { useSettingsStore } from './store/settingsStore'
+
+// heavy pages load on demand — keeps startup instant (recharts stays out of the main chunk)
+const Statistics = lazy(() => import('./pages/Statistics'))
+const MemoryTree = lazy(() => import('./pages/MemoryTree'))
+const Player = lazy(() => import('./pages/Player'))
 
 export default function App() {
   const loadSettings = useSettingsStore((s) => s.load)
@@ -22,6 +25,9 @@ export default function App() {
   useEffect(() => {
     loadSettings()
   }, [loadSettings])
+
+  // per-route Suspense keeps the sidebar mounted while a lazy chunk loads
+  const lazyPage = (el: React.ReactNode) => <Suspense fallback={<Spinner />}>{el}</Suspense>
 
   return (
     <HashRouter>
@@ -34,13 +40,20 @@ export default function App() {
           <Route path="/favorites" element={<Favorites />} />
           <Route path="/moments" element={<Moments />} />
           <Route path="/notes" element={<Notes />} />
-          <Route path="/tree" element={<MemoryTree />} />
+          <Route path="/tree" element={lazyPage(<MemoryTree />)} />
           <Route path="/local" element={<LocalFiles />} />
           <Route path="/youtube" element={<YouTubeSources />} />
-          <Route path="/stats" element={<Statistics />} />
+          <Route path="/stats" element={lazyPage(<Statistics />)} />
           <Route path="/settings" element={<SettingsPage />} />
         </Route>
-        <Route path="/player/:episodeId" element={<Player />} />
+        <Route
+          path="/player/:episodeId"
+          element={
+            <Suspense fallback={<div className="force-dark flex h-full items-center justify-center bg-black"><Spinner /></div>}>
+              <Player />
+            </Suspense>
+          }
+        />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </HashRouter>

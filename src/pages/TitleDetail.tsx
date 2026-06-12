@@ -187,7 +187,7 @@ export default function TitleDetail() {
             </select>
             {nextEpisode && (
               <button className="btn-accent" onClick={() => navigate(`/player/${nextEpisode.id}`)}>
-                <Play size={15} className="fill-white" /> {t('detail.playEp', { n: nextEpisode.episode_number })}
+                <Play size={15} className="fill-[#fff]" /> {t('detail.playEp', { n: nextEpisode.episode_number })}
               </button>
             )}
             <button className="btn-ghost" onClick={() => setEditing(true)}>
@@ -301,7 +301,7 @@ export default function TitleDetail() {
                     title={ep.watched ? t('detail.markUnwatched') : t('detail.markWatched')}
                     className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-colors ${
                       ep.watched
-                        ? 'border-accent bg-accent text-white'
+                        ? 'border-accent bg-accent text-[#fff]'
                         : 'border-edge text-transparent hover:border-accent'
                     }`}
                   >

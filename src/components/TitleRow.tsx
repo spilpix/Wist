@@ -36,10 +36,10 @@ export default function TitleRow({ title }: { title: Title }) {
         {t(`status.${title.status}`)}
       </div>
       <div className="w-20 text-xs text-zinc-400">{progressLabel(title, t)}</div>
-      <div className="flex w-12 items-center gap-1 text-xs text-amber-300">
+      <div className="flex w-12 items-center gap-1 text-xs text-amber-500">
         {title.rating != null && (
           <>
-            <Star size={11} className="fill-amber-300" /> {title.rating}
+            <Star size={11} className="fill-amber-500" /> {title.rating}
           </>
         )}
       </div>

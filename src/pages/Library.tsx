@@ -15,8 +15,17 @@ const SORTS = ['date_added', 'title', 'rating', 'progress', 'last_watched'] as c
 export default function Library() {
   const { t } = useI18n()
   const { titles, loading, filters, view, setFilters, setView, load } = useLibraryStore()
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [showAdd, setShowAdd] = useState(false)
+
+  // command palette deep link: /library?add=1 opens the add-title modal
+  useEffect(() => {
+    if (searchParams.get('add') === '1') {
+      setShowAdd(true)
+      searchParams.delete('add')
+      setSearchParams(searchParams, { replace: true })
+    }
+  }, [searchParams, setSearchParams])
   const [genres, setGenres] = useState<string[]>([])
   const [years, setYears] = useState<number[]>([])
 

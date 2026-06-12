@@ -1,11 +1,19 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Wist</title>
+    <script>
+      // apply the last resolved theme before first paint — no flash on startup
+      try {
+        var t = localStorage.getItem('wist.themeResolved')
+        if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t
+      } catch (e) {}
+    </script>
     <style>
-      html, body { background: #0d0d14; }
+      html { background: #0d0d14; }
+      html[data-theme='light'] { background: #f7f7fa; }
     </style>
   </head>
   <body>

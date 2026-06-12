@@ -124,6 +124,9 @@ export interface WistApi {
     set(patch: Partial<AppSettings>): Promise<AppSettings>
     pickDirectory(): Promise<string | null>
   }
+  window: {
+    setTheme(theme: 'dark' | 'light'): Promise<void>
+  }
   shell: {
     openExternal(url: string): Promise<void>
     showItemInFolder(path: string): Promise<void>

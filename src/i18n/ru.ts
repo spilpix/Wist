@@ -56,6 +56,27 @@ const ru: Record<keyof typeof en, string> = {
   'card.epProgress': '{w}/{t} эп',
   'card.chProgress': '{w}/{t} гл',
 
+  // greetings
+  'home.morning': 'Доброе утро',
+  'home.afternoon': 'Добрый день',
+  'home.evening': 'Добрый вечер',
+  'home.night': 'Ночной сеанс',
+
+  // command palette
+  'cmdk.placeholder': 'Поиск: тайтлы, записи, страницы…',
+  'cmdk.searchHint': 'Поиск',
+  'cmdk.pages': 'Страницы',
+  'cmdk.titles': 'Тайтлы',
+  'cmdk.notes': 'Записи',
+  'cmdk.actions': 'Действия',
+  'cmdk.addTitle': 'Добавить тайтл',
+  'cmdk.newNote': 'Новая запись',
+  'cmdk.toggleTheme': 'Переключить тему (тёмная/светлая)',
+  'cmdk.noResults': 'Ничего не найдено',
+  'cmdk.navigate': 'навигация',
+  'cmdk.open': 'открыть',
+  'cmdk.close': 'закрыть',
+
   // home
   'home.loading': 'Загружаем ваш хаб…',
   'home.emptyTitle': 'Библиотека пуста',
@@ -272,6 +293,10 @@ const ru: Record<keyof typeof en, string> = {
   'set.mpvPath': 'Путь к mpv',
   'set.mpvHint': 'Используется кнопкой «Открыть в mpv» для файлов, которые не играет встроенный плеер.',
   'set.appearance': 'Внешний вид',
+  'set.theme': 'Тема',
+  'set.themeDark': 'Тёмная',
+  'set.themeLight': 'Светлая',
+  'set.themeSystem': 'Системная',
   'set.language': 'Язык интерфейса',
   'set.accent': 'Акцентный цвет',
   'set.accentCustom': 'Свой цвет',

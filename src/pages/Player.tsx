@@ -445,7 +445,7 @@ export default function Player() {
   // ---- render ----
   if (error) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-4 bg-black">
+      <div className="force-dark flex h-full flex-col items-center justify-center gap-4 bg-black">
         <div className="text-zinc-400">{error}</div>
         <button className="btn-ghost" onClick={() => navigate(-1)}>
           <ArrowLeft size={15} /> {t('player.goBack')}
@@ -459,7 +459,7 @@ export default function Player() {
   return (
     <div
       ref={containerRef}
-      className="relative flex h-full select-none items-center justify-center overflow-hidden bg-black"
+      className="force-dark relative flex h-full select-none items-center justify-center overflow-hidden bg-black"
       onMouseMove={pokeControls}
       onClick={(e) => {
         if (e.target === videoRef.current) togglePlay()
@@ -503,7 +503,7 @@ export default function Player() {
 
       {/* top bar */}
       <div
-        className={`absolute inset-x-0 top-0 flex items-center gap-3 bg-gradient-to-b from-black/85 to-transparent px-5 pb-10 pt-4 transition-opacity duration-300 ${overlayClass}`}
+        className={`absolute inset-x-0 top-0 flex items-center gap-3 bg-gradient-to-b from-black/85 to-transparent py-2 pb-10 pl-5 pr-[150px] pt-4 transition-opacity duration-300 ${overlayClass}`}
       >
         <button
           onClick={() => navigate(-1)}

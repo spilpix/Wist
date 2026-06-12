@@ -85,7 +85,7 @@ export default function Moments() {
           <button
             onClick={() => setTagFilter(null)}
             className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-              !tagFilter ? 'bg-accent text-white' : 'bg-raised text-zinc-400 hover:text-zinc-200'
+              !tagFilter ? 'bg-accent text-[#fff]' : 'bg-raised text-zinc-400 hover:text-zinc-200'
             }`}
           >
             {t('common.all')}
@@ -131,7 +131,7 @@ export default function Moments() {
 
       {selected && (
         <Modal
-          title={`${selected.title_name ?? 'Moment'}${selected.episode_number != null ? ` · Ep ${selected.episode_number}` : ''}`}
+          title={`${selected.title_name ?? ''}${selected.episode_number != null ? ` · ${t('local.ep')} ${selected.episode_number}` : ''}`}
           onClose={() => setSelected(null)}
           width="max-w-3xl"
         >
@@ -168,7 +168,7 @@ export default function Moments() {
                   navigate(`/player/${selected.episode_id}?t=${Math.floor(selected.timestamp_seconds)}`)
                 }
               >
-                <Play size={15} className="fill-white" /> {t('mom.jump')}
+                <Play size={15} className="fill-[#fff]" /> {t('mom.jump')}
               </button>
             )}
           </div>
