@@ -39,5 +39,12 @@ export function memories(): MemoryEvent[] {
     events.push({ key: `n${n.id}`, kind: 'note', date: n.date, label: n.label, sublabel: null, ref_id: n.id })
   }
 
+  const journal = db()
+    .prepare(`SELECT id, day, substr(content, 1, 60) AS label FROM journal_entries WHERE day >= ? AND content <> ''`)
+    .all(cutoff.slice(0, 10)) as any[]
+  for (const j of journal) {
+    events.push({ key: `j${j.id}`, kind: 'journal', date: `${j.day} 12:00:00`, label: j.day, sublabel: j.label, ref_id: j.id })
+  }
+
   return events.sort((a, b) => a.date.localeCompare(b.date))
 }

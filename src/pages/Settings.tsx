@@ -29,7 +29,7 @@ function Row({ label, hint, children }: { label: string; hint?: string; children
 
 export default function SettingsPage() {
   const { t } = useI18n()
-  const { settings, update } = useSettingsStore()
+  const { settings, update, load } = useSettingsStore()
   const [confirmClear, setConfirmClear] = useState(false)
   const [confirmImport, setConfirmImport] = useState(false)
 
@@ -211,6 +211,69 @@ export default function SettingsPage() {
         </div>
       </section>
 
+      {/* agent API */}
+      <section className="mb-8">
+        <h2 className="section-title">{t('set.api')}</h2>
+        <div className="card divide-y divide-edge/50 px-5">
+          <Row label={t('set.apiEnabled')} hint={t('set.apiHint')}>
+            <input
+              type="checkbox"
+              className="h-4 w-4 accent-[var(--accent)]"
+              checked={settings.apiEnabled}
+              onChange={(e) => update({ apiEnabled: e.target.checked })}
+            />
+          </Row>
+          {settings.apiEnabled && (
+            <>
+              <Row label={t('set.apiPort')}>
+                <input
+                  type="number"
+                  className="input !w-28"
+                  defaultValue={settings.apiPort}
+                  onBlur={(e) => {
+                    const port = parseInt(e.target.value, 10)
+                    if (port > 1024 && port < 65536) update({ apiPort: port })
+                  }}
+                />
+              </Row>
+              <Row label={t('set.apiToken')} hint={t('set.apiTokenHint')}>
+                <div className="flex items-center gap-2">
+                  <code className="max-w-[220px] truncate rounded-lg bg-raised px-2 py-1.5 font-mono text-xs text-zinc-400">
+                    {settings.apiToken}
+                  </code>
+                  <button
+                    className="btn-ghost !py-1.5 text-xs"
+                    onClick={() => {
+                      navigator.clipboard.writeText(settings.apiToken)
+                      toast(tGlobal('set.apiCopied'), 'success')
+                    }}
+                  >
+                    {t('set.apiCopy')}
+                  </button>
+                  <button
+                    className="btn-ghost !py-1.5 text-xs"
+                    onClick={async () => {
+                      await window.wist.settings.regenerateApiToken()
+                      load()
+                    }}
+                  >
+                    {t('set.apiRegenerate')}
+                  </button>
+                </div>
+              </Row>
+              <div className="py-3.5">
+                <div className="mb-1.5 text-xs text-zinc-500">{t('set.apiExample')}</div>
+                <code className="block overflow-x-auto whitespace-pre rounded-lg bg-raised px-3 py-2 font-mono text-[11px] leading-relaxed text-zinc-400">
+{`POST http://127.0.0.1:${settings.apiPort}/api/tasks
+Authorization: Bearer <token>
+{"title": "Deploy finished", "source": "claude"}`}
+                </code>
+              </div>
+            </>
+          )}
+        </div>
+      </section>
+
       {/* data */}
       <section className="mb-8">
         <h2 className="section-title">{t('set.data')}</h2>
@@ -233,7 +296,7 @@ export default function SettingsPage() {
         </div>
       </section>
 
-      <div className="pb-4 text-center text-xs text-zinc-700">{t('set.footer', { version: '0.3.0' })}</div>
+      <div className="pb-4 text-center text-xs text-zinc-700">{t('set.footer', { version: '0.4.0' })}</div>
 
       {confirmClear && (
         <ConfirmDialog

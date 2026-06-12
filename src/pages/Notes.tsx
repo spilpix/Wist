@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Pin, PenLine, Plus, Search, Trash2, X } from 'lucide-react'
+import { Bot, Check, Pin, PenLine, Plus, Search, Trash2, X } from 'lucide-react'
 import ChipsInput from '../components/ui/ChipsInput'
 import ConfirmDialog from '../components/ui/ConfirmDialog'
 import EmptyState from '../components/ui/EmptyState'
@@ -73,6 +73,10 @@ export default function Notes() {
 
   useEffect(() => {
     load()
+    // live refresh when an AI agent posts a note through the local API
+    return window.wist.events.onDataChanged((kind) => {
+      if (kind === 'notes') load()
+    })
   }, [load])
 
   // deep links: /notes?open=<id> (memory tree) and /notes?new=1 (command palette)
@@ -112,21 +116,53 @@ export default function Notes() {
       pinned: !!n.pinned,
     })
 
-  const closeEditor = async (save = true) => {
-    if (!draft) return
-    if (save && (draft.title.trim() || draft.content.trim())) {
-      const payload = {
-        title: draft.title.trim(),
-        content: draft.content,
-        tags: draft.tags,
-        linked_title_id: draft.linked_title_id,
-        pinned: (draft.pinned ? 1 : 0) as 0 | 1,
-      }
-      if (draft.id != null) await window.wist.notes.update(draft.id, payload)
-      else await window.wist.notes.create(payload)
-      load()
+  // --- reliable saving: debounce-autosave while typing, create on first input ---
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle')
+  const draftRef = useRef<Draft | null>(null)
+  draftRef.current = draft
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const creating = useRef(false)
+
+  const persistDraft = useCallback(async () => {
+    const d = draftRef.current
+    if (!d || (!d.title.trim() && !d.content.trim())) return
+    setSaveState('saving')
+    const payload = {
+      title: d.title.trim(),
+      content: d.content,
+      tags: d.tags,
+      linked_title_id: d.linked_title_id,
+      pinned: (d.pinned ? 1 : 0) as 0 | 1,
     }
+    if (d.id != null) {
+      await window.wist.notes.update(d.id, payload)
+    } else {
+      if (creating.current) return
+      creating.current = true
+      try {
+        const created = await window.wist.notes.create(payload)
+        setDraft((prev) => (prev && prev.id == null ? { ...prev, id: created.id } : prev))
+      } finally {
+        creating.current = false
+      }
+    }
+    setSaveState('saved')
+    load()
+  }, [load])
+
+  const updateDraft = (patch: Partial<Draft>) => {
+    setDraft((d) => (d ? { ...d, ...patch } : d))
+    setSaveState('saving')
+    if (saveTimer.current) clearTimeout(saveTimer.current)
+    saveTimer.current = setTimeout(persistDraft, 800)
+  }
+
+  const closeEditor = async () => {
+    if (!draft) return
+    if (saveTimer.current) clearTimeout(saveTimer.current)
+    await persistDraft()
     setDraft(null)
+    setSaveState('idle')
   }
 
   const deleteNote = async () => {
@@ -169,6 +205,11 @@ export default function Notes() {
         </p>
       )}
       <div className="mt-3 flex flex-wrap items-center gap-1.5">
+        {note.source !== 'user' && (
+          <span className="flex items-center gap-1 rounded-md bg-accent/15 px-1.5 py-0.5 text-[10px] font-semibold text-accent-bright">
+            <Bot size={10} /> {note.source}
+          </span>
+        )}
         {note.linked_title_name && (
           <span className="rounded-md bg-accent/15 px-1.5 py-0.5 text-[11px] text-accent-bright">
             {note.linked_title_name}
@@ -259,7 +300,13 @@ export default function Notes() {
             <div className="flex items-center gap-2 border-b border-edge/60 px-5 py-3">
               <PenLine size={15} className="text-accent-bright" />
               <span className="text-xs text-zinc-500">
-                {draft.id != null ? t('notes.editedRel', { rel: formatRelative(notes.find((n) => n.id === draft.id)?.updated_at) }) : t('notes.new')}
+                {saveState === 'saving'
+                  ? t('notes.saving')
+                  : saveState === 'saved'
+                    ? t('notes.savedNow')
+                    : draft.id != null
+                      ? t('notes.editedRel', { rel: formatRelative(notes.find((n) => n.id === draft.id)?.updated_at) })
+                      : t('notes.new')}
               </span>
               <div className="ml-auto flex items-center gap-1">
                 <button
@@ -267,7 +314,7 @@ export default function Notes() {
                     draft.pinned ? 'text-accent-bright' : 'text-zinc-500 hover:text-zinc-300'
                   }`}
                   title={draft.pinned ? t('notes.unpin') : t('notes.pin')}
-                  onClick={() => setDraft({ ...draft, pinned: !draft.pinned })}
+                  onClick={() => updateDraft({ pinned: !draft.pinned })}
                 >
                   <Pin size={15} className={draft.pinned ? 'fill-current' : ''} />
                 </button>
@@ -295,26 +342,27 @@ export default function Notes() {
                 className="w-full bg-transparent text-xl font-semibold text-white outline-none placeholder:text-zinc-700"
                 placeholder={t('notes.titlePlaceholder')}
                 value={draft.title}
-                onChange={(e) => setDraft({ ...draft, title: e.target.value })}
+                onChange={(e) => updateDraft({ title: e.target.value })}
               />
               <textarea
                 className="min-h-[260px] flex-1 resize-none bg-transparent text-sm leading-relaxed text-zinc-300 outline-none placeholder:text-zinc-700"
                 placeholder={t('notes.contentPlaceholder')}
                 value={draft.content}
-                onChange={(e) => setDraft({ ...draft, content: e.target.value })}
+                onChange={(e) => updateDraft({ content: e.target.value })}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) closeEditor()
+                  if (e.key === 'Escape') closeEditor()
                 }}
               />
               <div className="space-y-3 border-t border-edge/50 pt-4">
-                <ChipsInput value={draft.tags} onChange={(tags) => setDraft({ ...draft, tags })} placeholder={t('notes.tagsPlaceholder')} />
+                <ChipsInput value={draft.tags} onChange={(tags) => updateDraft({ tags })} placeholder={t('notes.tagsPlaceholder')} />
                 <div>
                   <label className="mb-1 block text-xs font-medium text-zinc-500">{t('notes.linkedTitle')}</label>
                   <select
                     className="select w-full"
                     value={draft.linked_title_id ?? ''}
                     onChange={(e) =>
-                      setDraft({ ...draft, linked_title_id: e.target.value ? Number(e.target.value) : null })
+                      updateDraft({ linked_title_id: e.target.value ? Number(e.target.value) : null })
                     }
                   >
                     <option value="">{t('notes.noLink')}</option>
@@ -324,6 +372,12 @@ export default function Notes() {
                   </select>
                 </div>
               </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 border-t border-edge/60 px-5 py-3">
+              <button className="btn-accent" onClick={() => closeEditor()}>
+                <Check size={15} /> {t('notes.saveClose')}
+              </button>
             </div>
           </div>
         </>

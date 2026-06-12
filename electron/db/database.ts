@@ -134,6 +134,54 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX idx_notes_updated ON notes(updated_at);
   `,
+
+  // 003 — second brain: journal, tasks, playlists, vault files, note sources
+  `
+  CREATE TABLE journal_entries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    day TEXT NOT NULL UNIQUE,
+    mood INTEGER CHECK (mood BETWEEN 1 AND 5),
+    content TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+  );
+
+  CREATE TABLE tasks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    note TEXT,
+    done INTEGER NOT NULL DEFAULT 0,
+    priority TEXT NOT NULL DEFAULT 'none' CHECK (priority IN ('none','low','high')),
+    due_date TEXT,
+    tags TEXT NOT NULL DEFAULT '[]',
+    source TEXT NOT NULL DEFAULT 'user',
+    created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    completed_at TEXT
+  );
+  CREATE INDEX idx_tasks_done ON tasks(done, created_at);
+
+  CREATE TABLE playlists (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    url TEXT NOT NULL,
+    service TEXT NOT NULL DEFAULT 'other',
+    cover_path TEXT,
+    notes TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+  );
+
+  CREATE TABLE vault_files (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    path TEXT NOT NULL,
+    size INTEGER NOT NULL DEFAULT 0,
+    kind TEXT NOT NULL DEFAULT 'other',
+    tags TEXT NOT NULL DEFAULT '[]',
+    created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+  );
+
+  ALTER TABLE notes ADD COLUMN source TEXT NOT NULL DEFAULT 'user';
+  `,
 ]
 
 function migrate(d: Database.Database) {

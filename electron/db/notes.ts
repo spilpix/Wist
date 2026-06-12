@@ -44,13 +44,14 @@ export function getNote(id: number): Note | null {
 
 export function createNote(data: Partial<Note>): Note {
   const info = db()
-    .prepare('INSERT INTO notes (title, content, tags, linked_title_id, pinned) VALUES (?, ?, ?, ?, ?)')
+    .prepare('INSERT INTO notes (title, content, tags, linked_title_id, pinned, source) VALUES (?, ?, ?, ?, ?, ?)')
     .run(
       data.title ?? '',
       data.content ?? '',
       JSON.stringify(Array.isArray(data.tags) ? data.tags : []),
       data.linked_title_id ?? null,
-      data.pinned ? 1 : 0
+      data.pinned ? 1 : 0,
+      typeof data.source === 'string' && data.source ? data.source.slice(0, 64) : 'user'
     )
   return getNote(Number(info.lastInsertRowid))!
 }

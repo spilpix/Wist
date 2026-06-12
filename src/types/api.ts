@@ -4,16 +4,22 @@ import type {
   Episode,
   HeatmapDay,
   ImportGroup,
+  JournalEntry,
   MemoryEvent,
+  MetaCandidate,
   Moment,
   MomentTag,
   MonthBar,
   Note,
+  Playlist,
   StatsSummary,
   SubtitleTrack,
+  Task,
   Title,
   TitleFilters,
+  TitleType,
   TypeSlice,
+  VaultFile,
   YoutubeSource,
   YoutubeVideo,
 } from './models'
@@ -25,6 +31,41 @@ export interface EpisodeBundle {
 }
 
 export interface WistApi {
+  events: {
+    onDataChanged(cb: (kind: string) => void): () => void
+  }
+  journal: {
+    list(): Promise<JournalEntry[]>
+    get(day: string): Promise<JournalEntry | null>
+    upsert(day: string, patch: { mood?: number | null; content?: string }): Promise<JournalEntry>
+    remove(day: string): Promise<void>
+    streak(): Promise<number>
+  }
+  tasks: {
+    list(filters?: { done?: boolean }): Promise<Task[]>
+    create(data: Partial<Task>): Promise<Task>
+    update(id: number, patch: Partial<Task>): Promise<Task>
+    remove(id: number): Promise<void>
+    clearCompleted(): Promise<number>
+  }
+  playlists: {
+    list(): Promise<Playlist[]>
+    create(data: Partial<Playlist>): Promise<Playlist>
+    update(id: number, patch: Partial<Playlist>): Promise<void>
+    remove(id: number): Promise<void>
+  }
+  vault: {
+    list(): Promise<VaultFile[]>
+    addPaths(paths: string[]): Promise<number>
+    pickAndAdd(): Promise<number>
+    remove(id: number): Promise<void>
+    open(path: string): Promise<string>
+  }
+  meta: {
+    searchTitles(type: TitleType, query: string): Promise<MetaCandidate[]>
+    coverFromUrl(url: string): Promise<string>
+    oembed(url: string): Promise<{ title: string | null; thumbnail: string | null }>
+  }
   titles: {
     list(filters?: TitleFilters): Promise<Title[]>
     get(id: number): Promise<Title | null>
@@ -123,6 +164,7 @@ export interface WistApi {
     get(): Promise<AppSettings>
     set(patch: Partial<AppSettings>): Promise<AppSettings>
     pickDirectory(): Promise<string | null>
+    regenerateApiToken(): Promise<string>
   }
   window: {
     setTheme(theme: 'dark' | 'light'): Promise<void>

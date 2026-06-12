@@ -9,6 +9,10 @@ import ContinueWatching from './pages/ContinueWatching'
 import Favorites from './pages/Favorites'
 import Moments from './pages/Moments'
 import Notes from './pages/Notes'
+import Journal from './pages/Journal'
+import Tasks from './pages/Tasks'
+import Music from './pages/Music'
+import Vault from './pages/Vault'
 import LocalFiles from './pages/LocalFiles'
 import YouTubeSources from './pages/YouTubeSources'
 import SettingsPage from './pages/Settings'
@@ -40,6 +44,10 @@ export default function App() {
           <Route path="/favorites" element={<Favorites />} />
           <Route path="/moments" element={<Moments />} />
           <Route path="/notes" element={<Notes />} />
+          <Route path="/journal" element={<Journal />} />
+          <Route path="/tasks" element={<Tasks />} />
+          <Route path="/music" element={<Music />} />
+          <Route path="/vault" element={<Vault />} />
           <Route path="/tree" element={lazyPage(<MemoryTree />)} />
           <Route path="/local" element={<LocalFiles />} />
           <Route path="/youtube" element={<YouTubeSources />} />

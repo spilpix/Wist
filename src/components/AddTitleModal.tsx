@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import { ImagePlus, Trash2 } from 'lucide-react'
+import { ImagePlus, Loader2, Sparkles, Trash2 } from 'lucide-react'
 import Modal from './ui/Modal'
 import ChipsInput from './ui/ChipsInput'
 import { toast } from '../store/toastStore'
 import {
   TITLE_STATUSES,
   TITLE_TYPES,
+  type MetaCandidate,
   type Title,
   type TitleStatus,
   type TitleType,
@@ -33,7 +34,45 @@ export default function AddTitleModal({ existing, onSaved, onClose }: Props) {
   const [coverPath, setCoverPath] = useState<string | null>(existing?.cover_path ?? null)
   const [saving, setSaving] = useState(false)
   const [dragOver, setDragOver] = useState(false)
+  const [metaLoading, setMetaLoading] = useState(false)
+  const [metaResults, setMetaResults] = useState<MetaCandidate[] | null>(null)
   const titleRef = useRef<HTMLInputElement>(null)
+
+  const fetchMeta = async () => {
+    if (!title.trim()) {
+      toast(tGlobal('modal.titleRequired'), 'error')
+      return
+    }
+    setMetaLoading(true)
+    setMetaResults(null)
+    try {
+      const results = await window.wist.meta.searchTitles(type, title.trim())
+      setMetaResults(results)
+      if (!results.length) toast(tGlobal('meta.nothing'))
+    } catch (err: any) {
+      toast(tGlobal('meta.failed') + ': ' + String(err?.message ?? err), 'error')
+    } finally {
+      setMetaLoading(false)
+    }
+  }
+
+  const applyCandidate = async (c: MetaCandidate) => {
+    setMetaResults(null)
+    setTitle(c.title)
+    if (c.original_title) setOriginalTitle(c.original_title)
+    if (c.year) setYear(String(c.year))
+    if (c.episodes && type !== 'movie') setTotalEpisodes(c.episodes)
+    if (c.genres.length) setGenres(c.genres.slice(0, 6))
+    if (c.description && !notes.trim()) setNotes(c.description)
+    if (c.imageUrl) {
+      try {
+        setCoverPath(await window.wist.meta.coverFromUrl(c.imageUrl))
+      } catch {
+        toast(tGlobal('meta.coverFailed'), 'error')
+      }
+    }
+    toast(tGlobal('meta.applied', { source: c.source }), 'success')
+  }
 
   useEffect(() => {
     titleRef.current?.focus()
@@ -133,7 +172,46 @@ export default function AddTitleModal({ existing, onSaved, onClose }: Props) {
         <div className="space-y-3.5">
           <div>
             <label className="mb-1 block text-xs font-medium text-zinc-500">{t('modal.title')}</label>
-            <input ref={titleRef} className="input" value={title} onChange={(e) => setTitle(e.target.value)} />
+            <div className="flex gap-2">
+              <input
+                ref={titleRef}
+                className="input"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && fetchMeta()}
+              />
+              <button
+                className="btn-ghost shrink-0 !px-3 text-accent-bright"
+                title={t('meta.fetch')}
+                onClick={fetchMeta}
+                disabled={metaLoading}
+              >
+                {metaLoading ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />}
+              </button>
+            </div>
+            {metaResults && metaResults.length > 0 && (
+              <div className="mt-2 max-h-56 space-y-1 overflow-y-auto rounded-xl border border-edge bg-raised p-1.5">
+                {metaResults.map((c, i) => (
+                  <button
+                    key={i}
+                    onClick={() => applyCandidate(c)}
+                    className="flex w-full items-center gap-3 rounded-lg p-1.5 text-left transition-colors hover:bg-surface"
+                  >
+                    {c.imageUrl ? (
+                      <img src={c.imageUrl} alt="" className="h-14 w-10 shrink-0 rounded object-cover" loading="lazy" />
+                    ) : (
+                      <span className="h-14 w-10 shrink-0 rounded bg-surface" />
+                    )}
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm text-zinc-200">{c.title}</span>
+                      <span className="block truncate text-xs text-zinc-500">
+                        {[c.year, c.episodes ? `${c.episodes} ep` : null, c.source].filter(Boolean).join(' · ')}
+                      </span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-zinc-500">{t('modal.originalTitle')}</label>

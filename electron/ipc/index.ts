@@ -5,6 +5,10 @@ import * as titles from '../db/titles'
 import * as episodes from '../db/episodes'
 import * as moments from '../db/moments'
 import * as notes from '../db/notes'
+import * as journal from '../db/journal'
+import * as tasks from '../db/tasks'
+import * as playlists from '../db/playlists'
+import * as vault from '../db/vault'
 import * as sessions from '../db/sessions'
 import * as stats from '../db/stats'
 import * as youtube from '../db/youtube'
@@ -13,8 +17,10 @@ import * as files from './files'
 import * as data from './data'
 import { detectSubtitles } from './subtitles'
 import { fetchVideos } from './ytdlp'
-import { getSettings, setSettings, screenshotsDir } from '../settings'
-import type { MomentTag } from '../../src/types/models'
+import { searchTitleMeta, downloadCover, fetchOembed } from './metadata'
+import { getSettings, setSettings, regenerateApiToken, screenshotsDir } from '../settings'
+import { restartApiServer } from '../apiServer'
+import type { MomentTag, TitleType } from '../../src/types/models'
 
 export function registerIpcHandlers(): void {
   // --- titles ---
@@ -82,6 +88,44 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('notes:remove', (_e, id: number) => notes.deleteNote(id))
   ipcMain.handle('notes:tags', () => notes.distinctNoteTags())
 
+  // --- journal ---
+  ipcMain.handle('journal:list', () => journal.listEntries())
+  ipcMain.handle('journal:get', (_e, day: string) => journal.getEntry(day))
+  ipcMain.handle('journal:upsert', (_e, day: string, patch) => journal.upsertEntry(day, patch ?? {}))
+  ipcMain.handle('journal:remove', (_e, day: string) => journal.deleteEntry(day))
+  ipcMain.handle('journal:streak', () => journal.streak())
+
+  // --- tasks ---
+  ipcMain.handle('tasks:list', (_e, filters) => tasks.listTasks(filters ?? {}))
+  ipcMain.handle('tasks:create', (_e, payload) => tasks.createTask(payload ?? {}))
+  ipcMain.handle('tasks:update', (_e, id: number, patch) => tasks.updateTask(id, patch ?? {}))
+  ipcMain.handle('tasks:remove', (_e, id: number) => tasks.deleteTask(id))
+  ipcMain.handle('tasks:clearCompleted', () => tasks.clearCompleted())
+
+  // --- playlists ---
+  ipcMain.handle('playlists:list', () => playlists.listPlaylists())
+  ipcMain.handle('playlists:create', (_e, payload) => playlists.createPlaylist(payload ?? {}))
+  ipcMain.handle('playlists:update', (_e, id: number, patch) => playlists.updatePlaylist(id, patch ?? {}))
+  ipcMain.handle('playlists:remove', (_e, id: number) => playlists.deletePlaylist(id))
+
+  // --- vault ---
+  ipcMain.handle('vault:list', () => vault.listVaultFiles())
+  ipcMain.handle('vault:addPaths', (_e, paths: string[]) => vault.addVaultFiles(paths ?? []))
+  ipcMain.handle('vault:pickAndAdd', async () => {
+    const res = await dialog.showOpenDialog(BrowserWindow.getAllWindows()[0]!, {
+      properties: ['openFile', 'multiSelections'],
+    })
+    if (res.canceled || !res.filePaths.length) return 0
+    return vault.addVaultFiles(res.filePaths)
+  })
+  ipcMain.handle('vault:remove', (_e, id: number) => vault.removeVaultFile(id))
+  ipcMain.handle('vault:open', (_e, p: string) => shell.openPath(p))
+
+  // --- metadata from the internet ---
+  ipcMain.handle('meta:searchTitles', (_e, type: TitleType, query: string) => searchTitleMeta(type, query))
+  ipcMain.handle('meta:coverFromUrl', (_e, url: string) => downloadCover(url))
+  ipcMain.handle('meta:oembed', (_e, url: string) => fetchOembed(url))
+
   // --- youtube ---
   ipcMain.handle('youtube:sources', (_e, titleId?: number) => youtube.listSources(titleId))
   ipcMain.handle('youtube:addSource', (_e, titleId: number, url: string) => youtube.addSource(titleId, url))
@@ -135,7 +179,16 @@ export function registerIpcHandlers(): void {
 
   // --- settings ---
   ipcMain.handle('settings:get', () => getSettings())
-  ipcMain.handle('settings:set', (_e, patch) => setSettings(patch))
+  ipcMain.handle('settings:set', (_e, patch) => {
+    const next = setSettings(patch)
+    if (patch && ('apiEnabled' in patch || 'apiPort' in patch)) restartApiServer()
+    return next
+  })
+  ipcMain.handle('settings:regenerateApiToken', () => {
+    const token = regenerateApiToken()
+    restartApiServer()
+    return token
+  })
   ipcMain.handle('settings:pickDirectory', async () => {
     const res = await dialog.showOpenDialog(BrowserWindow.getAllWindows()[0]!, {
       properties: ['openDirectory', 'createDirectory'],

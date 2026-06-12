@@ -143,6 +143,49 @@ video::-webkit-media-controls {
   display: none !important;
 }
 
+/* memory tree: living lo-fi animations */
+.tree-leaf {
+  animation: leafSway 5s ease-in-out infinite alternate;
+}
+.tree-star {
+  animation: starTwinkle 3.5s ease-in-out infinite alternate;
+}
+.tree-firefly {
+  animation: fireflyFloat 9s ease-in-out infinite alternate;
+}
+@keyframes leafSway {
+  from {
+    transform: translate(0, 0);
+  }
+  to {
+    transform: translate(1.5px, -2px);
+  }
+}
+@keyframes starTwinkle {
+  0% {
+    opacity: 0.15;
+  }
+  100% {
+    opacity: 0.75;
+  }
+}
+@keyframes fireflyFloat {
+  0% {
+    transform: translate(0, 0);
+    opacity: 0.1;
+  }
+  35% {
+    opacity: 0.9;
+  }
+  65% {
+    opacity: 0.25;
+  }
+  100% {
+    transform: translate(26px, -34px);
+    opacity: 0.8;
+  }
+}
+
 @layer components {
   .btn {
     @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40;

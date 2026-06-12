@@ -1,8 +1,10 @@
 import { NavLink, useSearchParams } from 'react-router-dom'
 import {
+  Archive,
   BarChart3,
   Bookmark,
   BookOpen,
+  CalendarDays,
   CheckCircle2,
   CircleDot,
   Clock,
@@ -10,6 +12,8 @@ import {
   Heart,
   Home,
   Library,
+  ListTodo,
+  Music,
   PauseCircle,
   PenLine,
   Settings,
@@ -31,7 +35,14 @@ const mainLinks: Array<{ to: string; key: TKey; icon: typeof Home }> = [
 const memoryLinks: Array<{ to: string; key: TKey; icon: typeof Bookmark }> = [
   { to: '/moments', key: 'nav.moments', icon: Bookmark },
   { to: '/notes', key: 'nav.notes', icon: PenLine },
+  { to: '/journal', key: 'nav.journal', icon: CalendarDays },
   { to: '/tree', key: 'nav.tree', icon: TreePine },
+]
+
+const toolLinks: Array<{ to: string; key: TKey; icon: typeof ListTodo }> = [
+  { to: '/tasks', key: 'nav.tasks', icon: ListTodo },
+  { to: '/vault', key: 'nav.vault', icon: Archive },
+  { to: '/music', key: 'nav.music', icon: Music },
 ]
 
 const listLinks: Array<{ status: TitleStatus; icon: typeof CircleDot }> = [
@@ -93,6 +104,20 @@ export default function Sidebar() {
           </div>
           <div className="space-y-0.5">
             {memoryLinks.map(({ to, key, icon: Icon }) => (
+              <NavLink key={to} to={to} className={({ isActive }) => linkClass(isActive)}>
+                <Icon size={15} />
+                {t(key)}
+              </NavLink>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <div className="mb-1.5 px-3 text-[10px] font-semibold uppercase tracking-widest text-zinc-600">
+            {t('nav.tools')}
+          </div>
+          <div className="space-y-0.5">
+            {toolLinks.map(({ to, key, icon: Icon }) => (
               <NavLink key={to} to={to} className={({ isActive }) => linkClass(isActive)}>
                 <Icon size={15} />
                 {t(key)}

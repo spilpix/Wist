@@ -62,13 +62,73 @@ export interface Note {
   tags: string[]
   linked_title_id: number | null
   pinned: 0 | 1
+  source: string // 'user' or an agent name
   created_at: string
   updated_at: string
   // derived
   linked_title_name?: string | null
 }
 
-export type MemoryKind = 'moment' | 'title' | 'book' | 'note'
+export interface JournalEntry {
+  id: number
+  day: string // YYYY-MM-DD
+  mood: number | null // 1..5
+  content: string
+  created_at: string
+  updated_at: string
+}
+
+export type TaskPriority = 'none' | 'low' | 'high'
+
+export interface Task {
+  id: number
+  title: string
+  note: string | null
+  done: 0 | 1
+  priority: TaskPriority
+  due_date: string | null
+  tags: string[]
+  source: string // 'user' or an agent name
+  created_at: string
+  completed_at: string | null
+}
+
+export type MusicService = 'spotify' | 'youtube' | 'yandex' | 'soundcloud' | 'apple' | 'other'
+
+export interface Playlist {
+  id: number
+  title: string
+  url: string
+  service: MusicService
+  cover_path: string | null
+  notes: string | null
+  created_at: string
+}
+
+export type VaultKind = 'image' | 'video' | 'audio' | 'doc' | 'archive' | 'other'
+
+export interface VaultFile {
+  id: number
+  name: string
+  path: string
+  size: number
+  kind: VaultKind
+  tags: string[]
+  created_at: string
+}
+
+export interface MetaCandidate {
+  title: string
+  original_title: string | null
+  year: number | null
+  episodes: number | null
+  genres: string[]
+  description: string
+  imageUrl: string | null
+  source: string
+}
+
+export type MemoryKind = 'moment' | 'title' | 'book' | 'note' | 'journal'
 
 export interface MemoryEvent {
   key: string
@@ -150,6 +210,9 @@ export interface AppSettings {
   mpvPath: string
   language: 'en' | 'ru'
   theme: 'dark' | 'light' | 'system'
+  apiEnabled: boolean
+  apiPort: number
+  apiToken: string
 }
 
 export interface SubtitleTrack {

@@ -3,6 +3,45 @@ import { contextBridge, ipcRenderer } from 'electron'
 const invoke = (channel: string, ...args: unknown[]) => ipcRenderer.invoke(channel, ...args)
 
 const api = {
+  events: {
+    onDataChanged: (cb: (kind: string) => void) => {
+      const listener = (_e: unknown, kind: string) => cb(kind)
+      ipcRenderer.on('wist:data-changed', listener)
+      return () => ipcRenderer.removeListener('wist:data-changed', listener)
+    },
+  },
+  journal: {
+    list: () => invoke('journal:list'),
+    get: (day: string) => invoke('journal:get', day),
+    upsert: (day: string, patch: unknown) => invoke('journal:upsert', day, patch),
+    remove: (day: string) => invoke('journal:remove', day),
+    streak: () => invoke('journal:streak'),
+  },
+  tasks: {
+    list: (filters?: unknown) => invoke('tasks:list', filters),
+    create: (data: unknown) => invoke('tasks:create', data),
+    update: (id: number, patch: unknown) => invoke('tasks:update', id, patch),
+    remove: (id: number) => invoke('tasks:remove', id),
+    clearCompleted: () => invoke('tasks:clearCompleted'),
+  },
+  playlists: {
+    list: () => invoke('playlists:list'),
+    create: (data: unknown) => invoke('playlists:create', data),
+    update: (id: number, patch: unknown) => invoke('playlists:update', id, patch),
+    remove: (id: number) => invoke('playlists:remove', id),
+  },
+  vault: {
+    list: () => invoke('vault:list'),
+    addPaths: (paths: string[]) => invoke('vault:addPaths', paths),
+    pickAndAdd: () => invoke('vault:pickAndAdd'),
+    remove: (id: number) => invoke('vault:remove', id),
+    open: (p: string) => invoke('vault:open', p),
+  },
+  meta: {
+    searchTitles: (type: string, query: string) => invoke('meta:searchTitles', type, query),
+    coverFromUrl: (url: string) => invoke('meta:coverFromUrl', url),
+    oembed: (url: string) => invoke('meta:oembed', url),
+  },
   titles: {
     list: (filters?: unknown) => invoke('titles:list', filters),
     get: (id: number) => invoke('titles:get', id),
@@ -86,6 +125,7 @@ const api = {
     get: () => invoke('settings:get'),
     set: (patch: unknown) => invoke('settings:set', patch),
     pickDirectory: () => invoke('settings:pickDirectory'),
+    regenerateApiToken: () => invoke('settings:regenerateApiToken'),
   },
   window: {
     setTheme: (theme: string) => invoke('window:setTheme', theme),

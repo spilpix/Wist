@@ -5,6 +5,7 @@ import { Readable } from 'node:stream'
 import { openDatabase } from './db/database'
 import { registerIpcHandlers } from './ipc'
 import { getSettings } from './settings'
+import { restartApiServer, setApiNotifier } from './apiServer'
 
 // Custom scheme that streams local media (video, covers, screenshots) into the
 // renderer with Range support — file:// is blocked by web security.
@@ -124,6 +125,10 @@ app.whenReady().then(() => {
   openDatabase()
   registerIpcHandlers()
   createWindow()
+
+  // local HTTP API for AI agents (off by default; Settings → API)
+  setApiNotifier((kind) => mainWindow?.webContents.send('wist:data-changed', kind))
+  restartApiServer()
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
