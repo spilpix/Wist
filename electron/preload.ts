@@ -34,6 +34,7 @@ const api = {
     list: () => invoke('vault:list'),
     addPaths: (paths: string[]) => invoke('vault:addPaths', paths),
     pickAndAdd: () => invoke('vault:pickAndAdd'),
+    addFolder: () => invoke('vault:addFolder'),
     remove: (id: number) => invoke('vault:remove', id),
     open: (p: string) => invoke('vault:open', p),
   },

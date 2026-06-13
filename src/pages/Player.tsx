@@ -16,6 +16,7 @@ import {
   Rewind,
   SkipForward,
   Subtitles,
+  Volume1,
   Volume2,
   VolumeX,
 } from 'lucide-react'
@@ -78,6 +79,17 @@ export default function Player() {
   const [draft, setDraft] = useState<MomentDraft | null>(null)
   const [nextCountdown, setNextCountdown] = useState<number | null>(null)
   const [autoPlayNext, setAutoPlayNext] = useState(true)
+  // YouTube-style player UI state
+  const [buffered, setBuffered] = useState(0)
+  const [scrubbing, setScrubbing] = useState(false)
+  const [scrubTime, setScrubTime] = useState<number | null>(null)
+  const [hover, setHover] = useState<{ t: number; x: number } | null>(null)
+  const [pulse, setPulse] = useState<{ kind: 'play' | 'pause'; id: number } | null>(null)
+  const [ripple, setRipple] = useState<{ dir: 'back' | 'fwd'; secs: number; id: number } | null>(null)
+  const [volExpanded, setVolExpanded] = useState(false)
+  const [waiting, setWaiting] = useState(false)
+  const timelineRef = useRef<HTMLDivElement>(null)
+  const pulseId = useRef(0)
 
   const { episode, title, episodes } = bundle ?? { episode: null, title: null, episodes: [] }
 
@@ -109,6 +121,10 @@ export default function Player() {
     setSubtitleTracks([])
     setNextCountdown(null)
     setDraft(null)
+    setBuffered(0)
+    setWaiting(false)
+    setCurrentTime(0)
+    setScrubTime(null)
 
     window.wist.episodes.get(epId).then(async (b) => {
       if (!b) {
@@ -230,6 +246,23 @@ export default function Player() {
     }
   }
 
+  const onProgress = () => {
+    const v = videoRef.current
+    if (!v || !v.buffered.length) return
+    try {
+      // the buffered range covering the playhead — YouTube's gray load bar
+      for (let i = 0; i < v.buffered.length; i++) {
+        if (v.buffered.start(i) <= v.currentTime && v.currentTime <= v.buffered.end(i)) {
+          setBuffered(v.buffered.end(i))
+          return
+        }
+      }
+      setBuffered(v.buffered.end(v.buffered.length - 1))
+    } catch {
+      /* buffered access can throw mid-seek */
+    }
+  }
+
   const onEnded = () => {
     if (!watchedMarked.current && episode) {
       watchedMarked.current = true
@@ -254,8 +287,10 @@ export default function Player() {
   const togglePlay = useCallback(() => {
     const v = videoRef.current
     if (!v) return
-    if (v.paused) v.play().catch(() => undefined)
+    const willPlay = v.paused
+    if (willPlay) v.play().catch(() => undefined)
     else v.pause()
+    setPulse({ kind: willPlay ? 'play' : 'pause', id: ++pulseId.current })
   }, [])
 
   const seekBy = useCallback((delta: number) => {
@@ -263,14 +298,44 @@ export default function Player() {
     if (!v) return
     v.currentTime = clamp(v.currentTime + delta, 0, v.duration || 0)
     lastTime.current = v.currentTime
+    setRipple({ dir: delta < 0 ? 'back' : 'fwd', secs: Math.abs(delta), id: ++pulseId.current })
   }, [])
 
   const seekTo = useCallback((t: number) => {
     const v = videoRef.current
     if (!v) return
-    v.currentTime = clamp(t, 0, v.duration || 0)
-    lastTime.current = v.currentTime
+    const clamped = clamp(t, 0, v.duration || 0)
+    v.currentTime = clamped
+    lastTime.current = clamped
+    setCurrentTime(clamped) // optimistic — avoids the bar snapping back before the next timeupdate
   }, [])
+
+  // map a screen X over the timeline to a media time
+  const timeFromClientX = useCallback((clientX: number): number => {
+    const rect = timelineRef.current?.getBoundingClientRect()
+    if (!rect || !duration) return 0
+    const frac = clamp((clientX - rect.left) / rect.width, 0, 1)
+    return frac * duration
+  }, [duration])
+
+  const onTimelinePointerDown = (e: React.PointerEvent) => {
+    e.preventDefault()
+    timelineRef.current?.setPointerCapture(e.pointerId)
+    setScrubbing(true)
+    setScrubTime(timeFromClientX(e.clientX))
+  }
+  const onTimelinePointerMove = (e: React.PointerEvent) => {
+    const t = timeFromClientX(e.clientX)
+    setHover({ t, x: e.clientX })
+    if (scrubbing) setScrubTime(t)
+  }
+  const onTimelinePointerUp = (e: React.PointerEvent) => {
+    if (!scrubbing) return
+    timelineRef.current?.releasePointerCapture(e.pointerId)
+    seekTo(timeFromClientX(e.clientX))
+    setScrubbing(false)
+    setScrubTime(null)
+  }
 
   const setVol = (val: number) => {
     const v = clamp(val, 0, 1)
@@ -309,6 +374,18 @@ export default function Player() {
     document.addEventListener('fullscreenchange', onFs)
     return () => document.removeEventListener('fullscreenchange', onFs)
   }, [])
+
+  // clear one-shot feedback animations after they play
+  useEffect(() => {
+    if (!pulse) return
+    const id = setTimeout(() => setPulse(null), 520)
+    return () => clearTimeout(id)
+  }, [pulse])
+  useEffect(() => {
+    if (!ripple) return
+    const id = setTimeout(() => setRipple(null), 560)
+    return () => clearTimeout(id)
+  }, [ripple])
 
   const captureFrame = useCallback((): string | null => {
     const v = videoRef.current
@@ -401,10 +478,22 @@ export default function Player() {
           togglePlay()
           break
         case 'ArrowLeft':
-          seekBy(-10)
+          seekBy(-5)
           break
         case 'ArrowRight':
+          seekBy(5)
+          break
+        case 'j':
+          seekBy(-10)
+          break
+        case 'l':
           seekBy(10)
+          break
+        case ',':
+          setSpeed(clamp(rate - 0.25, 0.25, 2))
+          break
+        case '.':
+          setSpeed(clamp(rate + 0.25, 0.25, 2))
           break
         case 'ArrowUp':
           e.preventDefault()
@@ -435,12 +524,17 @@ export default function Player() {
         case 'Escape':
           if (!document.fullscreenElement) navigate(-1)
           break
+        default:
+          // 0-9 → jump to that decile of the video (YouTube behaviour)
+          if (/^[0-9]$/.test(e.key) && videoRef.current?.duration) {
+            seekTo((Number(e.key) / 10) * videoRef.current.duration)
+          }
       }
       pokeControls()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [draft, togglePlay, seekBy, toggleFullscreen, toggleMute, takeScreenshot, openMomentPanel, navigate, nextEp, prevEp, volume, pokeControls])
+  }, [draft, togglePlay, seekBy, seekTo, toggleFullscreen, toggleMute, takeScreenshot, openMomentPanel, navigate, nextEp, prevEp, volume, rate, pokeControls])
 
   // ---- render ----
   if (error) {
@@ -455,6 +549,9 @@ export default function Player() {
   }
 
   const overlayClass = controlsVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'
+  const displayTime = scrubTime ?? currentTime
+  const progressPct = duration ? (displayTime / duration) * 100 : 0
+  const bufferedPct = duration ? Math.min(100, (buffered / duration) * 100) : 0
 
   return (
     <div
@@ -462,10 +559,17 @@ export default function Player() {
       className="force-dark relative flex h-full select-none items-center justify-center overflow-hidden bg-black"
       onMouseMove={pokeControls}
       onClick={(e) => {
-        if (e.target === videoRef.current) togglePlay()
+        // e.detail === 1 → genuine single click; suppresses the two clicks of a double-click
+        if (e.target === videoRef.current && e.detail === 1) togglePlay()
       }}
       onDoubleClick={(e) => {
-        if (e.target === videoRef.current) toggleFullscreen()
+        if (e.target !== videoRef.current) return
+        const rect = containerRef.current?.getBoundingClientRect()
+        if (!rect) return
+        const frac = (e.clientX - rect.left) / rect.width
+        if (frac < 0.35) seekBy(-10)
+        else if (frac > 0.65) seekBy(10)
+        else toggleFullscreen()
       }}
       style={{ cursor: controlsVisible ? 'default' : 'none' }}
     >
@@ -478,6 +582,10 @@ export default function Player() {
           className="h-full w-full object-contain"
           onLoadedMetadata={onLoadedMetadata}
           onTimeUpdate={onTimeUpdate}
+          onProgress={onProgress}
+          onWaiting={() => setWaiting(true)}
+          onPlaying={() => setWaiting(false)}
+          onCanPlay={() => setWaiting(false)}
           onPlay={() => {
             setPlaying(true)
             pokeControls()
@@ -495,10 +603,48 @@ export default function Player() {
         </video>
       )}
 
-      {!bundle && !error && (
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="h-10 w-10 animate-spin rounded-full border-2 border-zinc-700 border-t-accent" />
+      {(!bundle || waiting) && !error && (
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+          <div className="h-12 w-12 animate-spin rounded-full border-[3px] border-white/20 border-t-white" />
         </div>
+      )}
+
+      {/* center play/pause pulse */}
+      {pulse && (
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+          <span key={pulse.id} className="player-pulse flex h-20 w-20 items-center justify-center rounded-full bg-black/55">
+            {pulse.kind === 'play' ? (
+              <Play size={34} className="ml-1 fill-white text-white" />
+            ) : (
+              <Pause size={34} className="fill-white text-white" />
+            )}
+          </span>
+        </div>
+      )}
+
+      {/* double-tap skip ripples */}
+      {ripple && (
+        <div
+          key={ripple.id}
+          className={`player-ripple pointer-events-none absolute inset-y-0 flex w-1/3 items-center justify-center ${
+            ripple.dir === 'back' ? 'left-0' : 'right-0'
+          }`}
+        >
+          <span className="flex flex-col items-center gap-1 rounded-full bg-black/45 px-7 py-5 text-white">
+            {ripple.dir === 'back' ? <Rewind size={26} className="fill-white" /> : <FastForward size={26} className="fill-white" />}
+            <span className="text-xs font-semibold">{ripple.secs}</span>
+          </span>
+        </div>
+      )}
+
+      {/* big center play button when paused */}
+      {bundle && !playing && !waiting && !draft && (
+        <button
+          onClick={togglePlay}
+          className={`absolute left-1/2 top-1/2 flex h-16 w-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur-sm transition-all hover:scale-105 hover:bg-accent ${overlayClass}`}
+        >
+          <Play size={28} className="ml-1 fill-white" />
+        </button>
       )}
 
       {/* top bar */}
@@ -553,37 +699,63 @@ export default function Player() {
       <div
         className={`absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent px-5 pb-4 pt-12 transition-opacity duration-300 ${overlayClass}`}
       >
-        {/* timeline */}
+        {/* timeline — YouTube-style scrubber */}
         <div
-          className="group/timeline relative mb-3 h-4 cursor-pointer"
-          onClick={(e) => {
-            const rect = e.currentTarget.getBoundingClientRect()
-            seekTo(((e.clientX - rect.left) / rect.width) * duration)
-          }}
+          ref={timelineRef}
+          className="group/timeline relative mb-2 flex h-4 cursor-pointer items-center"
+          onPointerDown={onTimelinePointerDown}
+          onPointerMove={onTimelinePointerMove}
+          onPointerUp={onTimelinePointerUp}
+          onPointerLeave={() => !scrubbing && setHover(null)}
         >
-          <div className="absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 rounded-full bg-white/20 transition-all group-hover/timeline:h-1.5">
+          {/* track */}
+          <div className={`relative w-full overflow-visible rounded-full bg-white/25 transition-all ${scrubbing ? 'h-1.5' : 'h-1 group-hover/timeline:h-1.5'}`}>
+            {/* buffered */}
+            <div className="absolute inset-y-0 left-0 rounded-full bg-white/35" style={{ width: `${bufferedPct}%` }} />
+            {/* hover scrub preview track */}
+            {hover && duration > 0 && (
+              <div className="absolute inset-y-0 left-0 rounded-full bg-white/25" style={{ width: `${(hover.t / duration) * 100}%` }} />
+            )}
+            {/* played */}
+            <div className="absolute inset-y-0 left-0 rounded-full bg-accent" style={{ width: `${progressPct}%` }} />
+            {/* scrubber thumb */}
             <div
-              className="h-full rounded-full bg-accent"
-              style={{ width: duration ? `${(currentTime / duration) * 100}%` : 0 }}
+              className={`absolute top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent shadow-none transition-transform ${
+                scrubbing ? 'scale-110' : 'scale-0 group-hover/timeline:scale-100'
+              }`}
+              style={{ left: `${progressPct}%` }}
             />
           </div>
-          {/* moment dots */}
+
+          {/* moment markers */}
           {duration > 0 &&
             moments.map((m) => (
               <button
                 key={m.id}
                 title={`${formatTimestamp(m.timestamp_seconds)}${m.note ? ` — ${m.note}` : ''}`}
-                onClick={(e) => {
+                onPointerDown={(e) => {
                   e.stopPropagation()
                   seekTo(m.timestamp_seconds)
                 }}
-                className="absolute top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full ring-2 ring-black/60 transition-transform hover:scale-150"
+                className="absolute top-1/2 h-2.5 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full ring-1 ring-black/50 transition-transform hover:scale-y-150"
                 style={{
                   left: `${(m.timestamp_seconds / duration) * 100}%`,
                   backgroundColor: m.tag ? MOMENT_TAG_COLORS[m.tag] : '#a888f0',
                 }}
               />
             ))}
+
+          {/* hover time tooltip */}
+          {hover && duration > 0 && (
+            <div
+              className="pointer-events-none absolute bottom-5 -translate-x-1/2 rounded bg-black/85 px-1.5 py-0.5 font-mono text-[11px] text-white"
+              style={{
+                left: `${clamp((hover.t / duration) * 100, 4, 96)}%`,
+              }}
+            >
+              {formatTimestamp(hover.t)}
+            </div>
+          )}
         </div>
 
         <div className="flex items-center gap-1.5">
@@ -626,7 +798,7 @@ export default function Player() {
           </button>
 
           <span className="ml-2 font-mono text-xs tabular-nums text-zinc-300">
-            {formatTimestamp(currentTime)} <span className="text-zinc-600">/</span> {formatTimestamp(duration)}
+            {formatTimestamp(displayTime)} <span className="text-zinc-600">/</span> {formatTimestamp(duration)}
           </span>
 
           <div className="flex-1" />
@@ -739,23 +911,29 @@ export default function Player() {
             )}
           </div>
 
-          {/* volume */}
-          <button
-            className="rounded-lg p-2 text-zinc-300 hover:bg-white/10 hover:text-white"
-            title={t('player.mute')}
-            onClick={toggleMute}
+          {/* volume — slider expands on hover, like YouTube */}
+          <div
+            className="flex items-center"
+            onMouseEnter={() => setVolExpanded(true)}
+            onMouseLeave={() => setVolExpanded(false)}
           >
-            {muted || volume === 0 ? <VolumeX size={16} /> : <Volume2 size={16} />}
-          </button>
-          <input
-            type="range"
-            min={0}
-            max={1}
-            step={0.02}
-            value={muted ? 0 : volume}
-            onChange={(e) => setVol(Number(e.target.value))}
-            className="w-20"
-          />
+            <button
+              className="rounded-lg p-2 text-zinc-300 hover:bg-white/10 hover:text-white"
+              title={t('player.mute')}
+              onClick={toggleMute}
+            >
+              {muted || volume === 0 ? <VolumeX size={16} /> : volume < 0.5 ? <Volume1 size={16} /> : <Volume2 size={16} />}
+            </button>
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.02}
+              value={muted ? 0 : volume}
+              onChange={(e) => setVol(Number(e.target.value))}
+              className={`transition-all duration-200 ${volExpanded ? 'w-20 opacity-100' : 'w-0 opacity-0'}`}
+            />
+          </div>
 
           {/* open in mpv */}
           <button

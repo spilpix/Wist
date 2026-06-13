@@ -7,7 +7,7 @@ import TitleRow from '../components/TitleRow'
 import EmptyState from '../components/ui/EmptyState'
 import Spinner from '../components/ui/Spinner'
 import { useLibraryStore } from '../store/libraryStore'
-import { TITLE_STATUSES, TITLE_TYPES, type TitleStatus, type TitleType } from '../types/models'
+import { STATUS_COLORS, TITLE_STATUSES, TITLE_TYPES, type TitleStatus, type TitleType } from '../types/models'
 import { useI18n } from '../i18n'
 
 const SORTS = ['date_added', 'title', 'rating', 'progress', 'last_watched'] as const
@@ -56,6 +56,34 @@ export default function Library() {
         </button>
       </div>
 
+      {/* status chips — the sidebar "My Lists" moved here */}
+      <div className="mb-4 flex flex-wrap items-center gap-1.5">
+        <button
+          onClick={() => setFilters({ status: 'all' })}
+          className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+            !filters.status || filters.status === 'all'
+              ? 'border-accent/50 bg-accent/15 text-accent-bright'
+              : 'border-edge bg-surface text-zinc-400 hover:text-zinc-200'
+          }`}
+        >
+          {t('common.all')}
+        </button>
+        {TITLE_STATUSES.map((s) => (
+          <button
+            key={s}
+            onClick={() => setFilters({ status: filters.status === s ? 'all' : s })}
+            className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+              filters.status === s
+                ? 'border-accent/50 bg-accent/15 text-accent-bright'
+                : 'border-edge bg-surface text-zinc-400 hover:text-zinc-200'
+            }`}
+          >
+            <span className="h-2 w-2 rounded-full" style={{ backgroundColor: STATUS_COLORS[s] }} />
+            {t(`status.${s}`)}
+          </button>
+        ))}
+      </div>
+
       {/* filter bar */}
       <div className="mb-6 flex flex-wrap items-center gap-2">
         <div className="relative">
@@ -71,12 +99,6 @@ export default function Library() {
           <option value="all">{t('lib.allTypes')}</option>
           {TITLE_TYPES.map((v) => (
             <option key={v} value={v}>{t(`type.${v}`)}</option>
-          ))}
-        </select>
-        <select className="select" value={filters.status ?? 'all'} onChange={(e) => setFilters({ status: e.target.value as TitleStatus | 'all' })}>
-          <option value="all">{t('lib.allStatuses')}</option>
-          {TITLE_STATUSES.map((v) => (
-            <option key={v} value={v}>{t(`status.${v}`)}</option>
           ))}
         </select>
         <select className="select" value={filters.genre ?? ''} onChange={(e) => setFilters({ genre: e.target.value || undefined })}>

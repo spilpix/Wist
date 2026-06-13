@@ -119,6 +119,39 @@ export function registerIpcHandlers(): void {
     if (res.canceled || !res.filePaths.length) return 0
     return vault.addVaultFiles(res.filePaths)
   })
+  ipcMain.handle('vault:addFolder', async () => {
+    const res = await dialog.showOpenDialog(BrowserWindow.getAllWindows()[0]!, {
+      properties: ['openDirectory'],
+    })
+    if (res.canceled || !res.filePaths.length) return 0
+    // async breadth-first walk so the main process never blocks the UI; hard caps on
+    // files AND directories keep a stray pick of C:\ or a huge tree from hanging.
+    const MAX_FILES = 5000
+    const MAX_DIRS = 20000
+    const SKIP = new Set(['node_modules', 'dist', 'build', '$RECYCLE.BIN', 'System Volume Information'])
+    const files: string[] = []
+    const queue: Array<{ dir: string; depth: number }> = [{ dir: res.filePaths[0], depth: 0 }]
+    let dirsVisited = 0
+    while (queue.length && files.length < MAX_FILES && dirsVisited < MAX_DIRS) {
+      const { dir, depth } = queue.shift()!
+      dirsVisited++
+      if (depth > 12) continue
+      let entries: import('node:fs').Dirent[]
+      try {
+        entries = await fs.promises.readdir(dir, { withFileTypes: true })
+      } catch {
+        continue
+      }
+      for (const ent of entries) {
+        if (files.length >= MAX_FILES) break
+        if (ent.name.startsWith('.') || SKIP.has(ent.name)) continue
+        const p = path.join(dir, ent.name)
+        if (ent.isDirectory()) queue.push({ dir: p, depth: depth + 1 })
+        else if (ent.isFile()) files.push(p)
+      }
+    }
+    return vault.addVaultFiles(files)
+  })
   ipcMain.handle('vault:remove', (_e, id: number) => vault.removeVaultFile(id))
   ipcMain.handle('vault:open', (_e, p: string) => shell.openPath(p))
 

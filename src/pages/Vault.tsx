@@ -55,6 +55,14 @@ export default function Vault() {
     load()
   }, [load])
 
+  const pickFolder = async () => {
+    const added = await window.wist.vault.addFolder()
+    if (added > 0) {
+      toast(tnGlobal('count.files', added) + ' ✓', 'success')
+      load()
+    }
+  }
+
   const pick = async () => {
     const added = await window.wist.vault.pickAndAdd()
     if (added > 0) {
@@ -96,9 +104,14 @@ export default function Vault() {
     >
       <div className="mb-6 flex items-center justify-between">
         <h1 className="page-title !mb-0">{t('nav.vault')}</h1>
-        <button className="btn-accent" onClick={pick}>
-          <Plus size={16} /> {t('vault.add')}
-        </button>
+        <div className="flex gap-2">
+          <button className="btn-accent" onClick={pick}>
+            <Plus size={16} /> {t('vault.add')}
+          </button>
+          <button className="btn-ghost" onClick={pickFolder}>
+            <FolderOpen size={15} /> {t('vault.addFolder')}
+          </button>
+        </div>
       </div>
       <p className="-mt-3 mb-6 max-w-2xl text-sm text-zinc-500">{t('vault.intro')}</p>
 

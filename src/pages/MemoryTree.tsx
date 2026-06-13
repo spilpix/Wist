@@ -34,6 +34,7 @@ interface SourceData {
 }
 
 interface ViewOpts {
+  colorful: boolean
   nodeScale: number
   linkWidth: number
   linkDistance: number
@@ -157,6 +158,8 @@ export default function MemoryTree() {
 
   const themeSetting = useSettingsStore((s) => s.settings?.theme)
   const light = (themeSetting === 'system' ? resolvedTheme() : themeSetting ?? 'dark') === 'light'
+  const accentHex = useSettingsStore((s) => s.settings?.accentColor) ?? '#7c5cbf'
+  const accent = parseInt(accentHex.replace('#', ''), 16) || 0x7c5cbf
 
   const [src, setSrc] = useState<SourceData | null>(null)
   const [hidden, setHidden] = useState<Set<MemoryKind>>(new Set())
@@ -220,7 +223,7 @@ export default function MemoryTree() {
           if (rect) setTip({ ...wt, x: wt.clientX - rect.left, y: wt.clientY - rect.top })
         },
       },
-      { light, ...view }
+      { light, accent, ...view }
     )
       .then((h) => {
         if (cancelled) h.destroy()
@@ -236,10 +239,11 @@ export default function MemoryTree() {
       handleRef.current?.destroy()
       handleRef.current = null
       host.innerHTML = ''
+      setTip(null) // a destroyed graph can't emit pointerout — clear any stranded tooltip
     }
     // view is applied live through handle.set — not a rebuild dependency
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [src, hidden, query, showOrphans, light, kindNames])
+  }, [src, hidden, query, showOrphans, light, accent, kindNames])
 
   const setViewLive = (patch: Partial<ViewOpts>) => {
     setView((v) => ({ ...v, ...patch }))
@@ -258,7 +262,8 @@ export default function MemoryTree() {
     )
   }
 
-  const slider = (labelKey: TKey, key: keyof ViewOpts, min: number, max: number, step: number) => (
+  type NumKey = 'nodeScale' | 'linkWidth' | 'linkDistance' | 'repel' | 'labelFade'
+  const slider = (labelKey: TKey, key: NumKey, min: number, max: number, step: number) => (
     <label className="block">
       <span className="mb-1 flex items-center justify-between text-[11px] text-zinc-500">
         {t(labelKey)}
@@ -269,7 +274,7 @@ export default function MemoryTree() {
         max={max}
         step={step}
         value={view[key]}
-        onChange={(e) => setViewLive({ [key]: Number(e.target.value) } as Partial<ViewOpts>)}
+        onChange={(e) => setViewLive({ [key]: Number(e.target.value) })}
         className="w-full"
       />
     </label>
@@ -353,6 +358,15 @@ export default function MemoryTree() {
                 <RotateCcw size={11} /> {t('world.reset')}
               </button>
             </div>
+            <label className="flex cursor-pointer items-center justify-between text-[11px] text-zinc-500">
+              {t('world.colors')}
+              <input
+                type="checkbox"
+                checked={view.colorful}
+                onChange={(e) => setViewLive({ colorful: e.target.checked })}
+                className="h-3.5 w-3.5 accent-[var(--accent)]"
+              />
+            </label>
             {slider('world.nodeSize', 'nodeScale', 0.5, 2, 0.05)}
             {slider('world.linkWidth', 'linkWidth', 0.4, 2.5, 0.05)}
             {slider('world.linkDist', 'linkDistance', 40, 200, 5)}

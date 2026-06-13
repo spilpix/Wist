@@ -63,6 +63,7 @@ const ru: Record<keyof typeof en, string> = {
   'world.repel': 'Отталкивание',
   'world.labels': 'Подписи',
   'world.reset': 'Сбросить',
+  'world.colors': 'Цвета типов',
   'world.nothing': 'Ничего не найдено',
 
   // home / sanctuary
@@ -242,6 +243,9 @@ const ru: Record<keyof typeof en, string> = {
   'notes.saving': 'Сохраняю…',
   'notes.savedNow': 'Сохранено ✓',
   'notes.saveClose': 'Сохранить и закрыть',
+  'notes.selectPrompt': 'Выберите запись или создайте новую',
+  'notes.outgoing': 'Ссылки',
+  'notes.backlinks': 'Ссылаются сюда',
 
   // memory tree
   'tree.subtitle': 'Галактика всего, что вы проживаете. Каждая звезда — тайтл, запись, момент или день; каждая нить — настоящая связь: [[вики-ссылки]], привязки, цепочка дневника. Наведите на звезду — загорится её созвездие.',
@@ -293,6 +297,7 @@ const ru: Record<keyof typeof en, string> = {
 
   // vault
   'vault.add': 'Добавить файлы',
+  'vault.addFolder': 'Добавить папку',
   'vault.intro': 'Хранилище для всего важного: документы, архивы, картинки. Файлы остаются на своих местах — Wist ведёт упорядоченный каталог. Drag & drop работает.',
   'vault.search': 'Поиск по файлам…',
   'vault.dropHere': 'Отпустите, чтобы добавить',
@@ -441,9 +446,9 @@ const ru: Record<keyof typeof en, string> = {
   'player.skipIntro': 'Пропустить заставку ⏵',
   'player.nextIn': 'Следующий эпизод через {n} с',
   'player.prevEp': 'Предыдущий эпизод (P)',
-  'player.back10': 'Назад на 10 с (←)',
+  'player.back10': 'Назад на 10 с (J)',
   'player.playPause': 'Пауза / воспроизведение (Пробел)',
-  'player.fwd10': 'Вперёд на 10 с (→)',
+  'player.fwd10': 'Вперёд на 10 с (L)',
   'player.nextEp': 'Следующий эпизод (N)',
   'player.auto': 'АВТО',
   'player.autoTooltip': 'Автовоспроизведение следующего эпизода',

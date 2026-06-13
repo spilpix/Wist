@@ -61,6 +61,7 @@ const en = {
   'world.repel': 'Repel force',
   'world.labels': 'Labels',
   'world.reset': 'Reset',
+  'world.colors': 'Type colors',
   'world.nothing': 'Nothing matches',
 
   // home / sanctuary
@@ -240,6 +241,9 @@ const en = {
   'notes.saving': 'Saving…',
   'notes.savedNow': 'Saved ✓',
   'notes.saveClose': 'Save & close',
+  'notes.selectPrompt': 'Select a note or create one',
+  'notes.outgoing': 'Links',
+  'notes.backlinks': 'Linked from',
 
   // memory tree
   'tree.subtitle': 'A galaxy of everything you live through. Every star is a title, a note, a moment or a day; every filament a real connection — [[wiki links]], attachments, the thread of your journal. Hover a star to light up its constellation.',
@@ -291,6 +295,7 @@ const en = {
 
   // vault
   'vault.add': 'Add files',
+  'vault.addFolder': 'Add folder',
   'vault.intro': 'A vault for anything that matters: documents, archives, pictures. Files stay where they are — Wist keeps an organized index. Drag & drop works.',
   'vault.search': 'Search files…',
   'vault.dropHere': 'Drop to add',
@@ -439,9 +444,9 @@ const en = {
   'player.skipIntro': 'Skip intro ⏵',
   'player.nextIn': 'Next episode in {n}s',
   'player.prevEp': 'Previous episode (P)',
-  'player.back10': 'Back 10s (←)',
+  'player.back10': 'Back 10s (J)',
   'player.playPause': 'Play/Pause (Space)',
-  'player.fwd10': 'Forward 10s (→)',
+  'player.fwd10': 'Forward 10s (L)',
   'player.nextEp': 'Next episode (N)',
   'player.auto': 'AUTO',
   'player.autoTooltip': 'Auto-play next episode',

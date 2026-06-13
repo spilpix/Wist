@@ -58,6 +58,7 @@ export interface WistApi {
     list(): Promise<VaultFile[]>
     addPaths(paths: string[]): Promise<number>
     pickAndAdd(): Promise<number>
+    addFolder(): Promise<number>
     remove(id: number): Promise<void>
     open(path: string): Promise<string>
   }

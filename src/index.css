@@ -169,6 +169,32 @@ video::-webkit-media-controls {
     opacity: 0.75;
   }
 }
+/* ---------- player (YouTube-style feedback) ---------- */
+.player-pulse {
+  animation: playerPulse 0.5s ease-out forwards;
+}
+@keyframes playerPulse {
+  0% {
+    transform: scale(0.7);
+    opacity: 0.55;
+  }
+  100% {
+    transform: scale(1.25);
+    opacity: 0;
+  }
+}
+.player-ripple {
+  animation: playerRipple 0.55s ease-out forwards;
+}
+@keyframes playerRipple {
+  0% {
+    opacity: 0.4;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
 @keyframes fireflyFloat {
   0% {
     transform: translate(0, 0);

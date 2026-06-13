@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { NavLink, useSearchParams } from 'react-router-dom'
 import {
   Archive,
@@ -5,8 +6,7 @@ import {
   Bookmark,
   BookOpen,
   CalendarDays,
-  CheckCircle2,
-  CircleDot,
+  ChevronDown,
   Clock,
   FolderOpen,
   Heart,
@@ -14,17 +14,20 @@ import {
   Library,
   ListTodo,
   Music,
-  PauseCircle,
   PenLine,
   Settings,
   TreePine,
-  XCircle,
   Youtube,
 } from 'lucide-react'
-import { STATUS_COLORS, type TitleStatus } from '../types/models'
 import { useI18n, type TKey } from '../i18n'
 
-const mainLinks: Array<{ to: string; key: TKey; icon: typeof Home }> = [
+interface Link {
+  to: string
+  key: TKey
+  icon: typeof Home
+}
+
+const mainLinks: Link[] = [
   { to: '/', key: 'nav.home', icon: Home },
   { to: '/library', key: 'nav.library', icon: Library },
   { to: '/library?type=book', key: 'nav.books', icon: BookOpen },
@@ -32,33 +35,37 @@ const mainLinks: Array<{ to: string; key: TKey; icon: typeof Home }> = [
   { to: '/favorites', key: 'nav.favorites', icon: Heart },
 ]
 
-const memoryLinks: Array<{ to: string; key: TKey; icon: typeof Bookmark }> = [
-  { to: '/moments', key: 'nav.moments', icon: Bookmark },
-  { to: '/notes', key: 'nav.notes', icon: PenLine },
-  { to: '/journal', key: 'nav.journal', icon: CalendarDays },
-  { to: '/tree', key: 'nav.tree', icon: TreePine },
+const GROUPS: Array<{ key: TKey; id: string; links: Link[] }> = [
+  {
+    key: 'nav.memory',
+    id: 'memory',
+    links: [
+      { to: '/notes', key: 'nav.notes', icon: PenLine },
+      { to: '/journal', key: 'nav.journal', icon: CalendarDays },
+      { to: '/moments', key: 'nav.moments', icon: Bookmark },
+      { to: '/tree', key: 'nav.tree', icon: TreePine },
+    ],
+  },
+  {
+    key: 'nav.tools',
+    id: 'tools',
+    links: [
+      { to: '/tasks', key: 'nav.tasks', icon: ListTodo },
+      { to: '/vault', key: 'nav.vault', icon: Archive },
+      { to: '/music', key: 'nav.music', icon: Music },
+    ],
+  },
+  {
+    key: 'nav.sources',
+    id: 'sources',
+    links: [
+      { to: '/local', key: 'nav.localFiles', icon: FolderOpen },
+      { to: '/youtube', key: 'nav.youtube', icon: Youtube },
+    ],
+  },
 ]
 
-const toolLinks: Array<{ to: string; key: TKey; icon: typeof ListTodo }> = [
-  { to: '/tasks', key: 'nav.tasks', icon: ListTodo },
-  { to: '/vault', key: 'nav.vault', icon: Archive },
-  { to: '/music', key: 'nav.music', icon: Music },
-]
-
-const listLinks: Array<{ status: TitleStatus; icon: typeof CircleDot }> = [
-  { status: 'watching', icon: CircleDot },
-  { status: 'completed', icon: CheckCircle2 },
-  { status: 'planned', icon: Clock },
-  { status: 'on_hold', icon: PauseCircle },
-  { status: 'dropped', icon: XCircle },
-]
-
-const sourceLinks: Array<{ to: string; key: TKey; icon: typeof FolderOpen }> = [
-  { to: '/local', key: 'nav.localFiles', icon: FolderOpen },
-  { to: '/youtube', key: 'nav.youtube', icon: Youtube },
-]
-
-const bottomLinks: Array<{ to: string; key: TKey; icon: typeof BarChart3 }> = [
+const bottomLinks: Link[] = [
   { to: '/stats', key: 'nav.statistics', icon: BarChart3 },
   { to: '/settings', key: 'nav.settings', icon: Settings },
 ]
@@ -70,16 +77,36 @@ function linkClass(isActive: boolean): string {
   ].join(' ')
 }
 
+function loadCollapsed(): Set<string> {
+  try {
+    return new Set(JSON.parse(localStorage.getItem('wist.sidebarCollapsed') ?? '[]'))
+  } catch {
+    return new Set()
+  }
+}
+
 export default function Sidebar() {
   const [searchParams] = useSearchParams()
-  const activeStatus = searchParams.get('status')
   const activeType = searchParams.get('type')
   const { t } = useI18n()
   const onLibrary = location.hash.split('?')[0].endsWith('/library')
+  const [collapsed, setCollapsed] = useState<Set<string>>(loadCollapsed)
+
+  const toggleGroup = (id: string) => {
+    const next = new Set(collapsed)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    setCollapsed(next)
+    try {
+      localStorage.setItem('wist.sidebarCollapsed', JSON.stringify([...next]))
+    } catch {
+      /* storage unavailable */
+    }
+  }
 
   return (
     <aside className="flex h-full w-[200px] shrink-0 flex-col border-r border-edge/60 bg-surface">
-      <nav className="flex-1 space-y-5 overflow-y-auto px-3 pb-4 pt-4">
+      <nav className="flex-1 space-y-4 overflow-y-auto px-3 pb-4 pt-4">
         <div className="space-y-0.5">
           {mainLinks.map(({ to, key, icon: Icon }) => (
             <NavLink
@@ -98,70 +125,30 @@ export default function Sidebar() {
           ))}
         </div>
 
-        <div>
-          <div className="mb-1.5 px-3 text-[10px] font-semibold uppercase tracking-widest text-zinc-600">
-            {t('nav.memory')}
-          </div>
-          <div className="space-y-0.5">
-            {memoryLinks.map(({ to, key, icon: Icon }) => (
-              <NavLink key={to} to={to} className={({ isActive }) => linkClass(isActive)}>
-                <Icon size={15} />
-                {t(key)}
-              </NavLink>
-            ))}
-          </div>
-        </div>
-
-        <div>
-          <div className="mb-1.5 px-3 text-[10px] font-semibold uppercase tracking-widest text-zinc-600">
-            {t('nav.tools')}
-          </div>
-          <div className="space-y-0.5">
-            {toolLinks.map(({ to, key, icon: Icon }) => (
-              <NavLink key={to} to={to} className={({ isActive }) => linkClass(isActive)}>
-                <Icon size={15} />
-                {t(key)}
-              </NavLink>
-            ))}
-          </div>
-        </div>
-
-        <div>
-          <div className="mb-1.5 px-3 text-[10px] font-semibold uppercase tracking-widest text-zinc-600">
-            {t('nav.myLists')}
-          </div>
-          <div className="space-y-0.5">
-            {listLinks.map(({ status }) => (
-              <NavLink
-                key={status}
-                to={`/library?status=${status}`}
-                className={() =>
-                  linkClass(location.hash.includes('/library') && activeStatus === status)
-                }
+        {GROUPS.map((group) => {
+          const isCollapsed = collapsed.has(group.id)
+          return (
+            <div key={group.id}>
+              <button
+                onClick={() => toggleGroup(group.id)}
+                className="mb-1 flex w-full items-center justify-between rounded-md px-3 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-zinc-600 transition-colors hover:text-zinc-400"
               >
-                <span
-                  className="ml-0.5 h-2 w-2 rounded-full"
-                  style={{ backgroundColor: STATUS_COLORS[status] }}
-                />
-                <span className="ml-1">{t(`status.${status}`)}</span>
-              </NavLink>
-            ))}
-          </div>
-        </div>
-
-        <div>
-          <div className="mb-1.5 px-3 text-[10px] font-semibold uppercase tracking-widest text-zinc-600">
-            {t('nav.sources')}
-          </div>
-          <div className="space-y-0.5">
-            {sourceLinks.map(({ to, key, icon: Icon }) => (
-              <NavLink key={to} to={to} className={({ isActive }) => linkClass(isActive)}>
-                <Icon size={15} />
-                {t(key)}
-              </NavLink>
-            ))}
-          </div>
-        </div>
+                {t(group.key)}
+                <ChevronDown size={11} className={`transition-transform ${isCollapsed ? '-rotate-90' : ''}`} />
+              </button>
+              {!isCollapsed && (
+                <div className="space-y-0.5">
+                  {group.links.map(({ to, key, icon: Icon }) => (
+                    <NavLink key={to} to={to} className={({ isActive }) => linkClass(isActive)}>
+                      <Icon size={15} />
+                      {t(key)}
+                    </NavLink>
+                  ))}
+                </div>
+              )}
+            </div>
+          )
+        })}
       </nav>
 
       <div className="space-y-0.5 border-t border-edge/60 px-3 py-3">

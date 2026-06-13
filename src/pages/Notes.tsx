@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Bot, Check, Pin, PenLine, Plus, Search, Trash2, X } from 'lucide-react'
+import { Link2, PenLine, Pin, Plus, Search, Trash2 } from 'lucide-react'
 import ChipsInput from '../components/ui/ChipsInput'
 import ConfirmDialog from '../components/ui/ConfirmDialog'
 import EmptyState from '../components/ui/EmptyState'
@@ -10,30 +10,10 @@ import type { Note, Title } from '../types/models'
 import { formatRelative } from '../utils/formatters'
 import { useI18n, t as tGlobal } from '../i18n'
 
-/** Renders text with [[wiki links]] highlighted; clicking a link resolves to a title or note. */
-function WikiText({ text, onLink }: { text: string; onLink: (name: string) => void }) {
-  const parts = text.split(/(\[\[[^\]]+\]\])/g)
-  return (
-    <>
-      {parts.map((part, i) => {
-        const m = /^\[\[([^\]]+)\]\]$/.exec(part)
-        if (!m) return <span key={i}>{part}</span>
-        return (
-          <button
-            key={i}
-            className="font-medium text-accent-bright hover:underline"
-            onClick={(e) => {
-              e.stopPropagation()
-              onLink(m[1])
-            }}
-          >
-            {m[1]}
-          </button>
-        )
-      })}
-    </>
-  )
-}
+/**
+ * Notes — Obsidian-style two-pane: searchable list on the left, a permanent
+ * editor on the right with [[wiki-link]] autocomplete and a backlinks panel.
+ */
 
 interface Draft {
   id: number | null
@@ -42,128 +22,154 @@ interface Draft {
   tags: string[]
   linked_title_id: number | null
   pinned: boolean
+  token: number // stable per editing session — binds autosaves to one note, even before its DB id exists
 }
 
-const EMPTY_DRAFT: Draft = { id: null, title: '', content: '', tags: [], linked_title_id: null, pinned: false }
+let draftToken = 0
+const emptyDraft = (): Draft => ({
+  id: null,
+  title: '',
+  content: '',
+  tags: [],
+  linked_title_id: null,
+  pinned: false,
+  token: ++draftToken,
+})
+
+type SaveState = 'idle' | 'saving' | 'saved'
 
 export default function Notes() {
   const { t } = useI18n()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
-  const [notes, setNotes] = useState<Note[]>([])
+  const [notes, setNotes] = useState<Note[] | null>(null)
   const [titles, setTitles] = useState<Title[]>([])
-  const [allTags, setAllTags] = useState<string[]>([])
-  const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
-  const [tagFilter, setTagFilter] = useState<string | null>(null)
   const [draft, setDraft] = useState<Draft | null>(null)
+  const [saveState, setSaveState] = useState<SaveState>('idle')
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [suggest, setSuggest] = useState<{ query: string; items: Array<{ name: string; kind: 'title' | 'note' }> } | null>(null)
+  const [suggestIdx, setSuggestIdx] = useState(0)
+
+  const draftRef = useRef<Draft | null>(null)
+  draftRef.current = draft
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const contentRef = useRef<HTMLTextAreaElement>(null)
+  // serialize saves so a slow create can't race a second create; token→dbId remembers
+  // what each editing session created so repeats become updates, not duplicate rows.
+  const saveChain = useRef<Promise<unknown>>(Promise.resolve())
+  const createdByToken = useRef<Map<number, number>>(new Map())
 
   const load = useCallback(async () => {
-    const [ns, ts, tags] = await Promise.all([
-      window.wist.notes.list({}),
-      window.wist.titles.list({}),
-      window.wist.notes.tags(),
-    ])
+    const [ns, ts] = await Promise.all([window.wist.notes.list({}), window.wist.titles.list({})])
     setNotes(ns)
     setTitles(ts)
-    setAllTags(tags)
-    setLoading(false)
+    return ns
   }, [])
 
   useEffect(() => {
     load()
-    // live refresh when an AI agent posts a note through the local API
-    return window.wist.events.onDataChanged((kind) => {
-      if (kind === 'notes') load()
-    })
   }, [load])
 
-  // deep links: /notes?open=<id> (memory tree) and /notes?new=1 (command palette)
-  useEffect(() => {
-    if (loading) return
-    const openId = searchParams.get('open')
-    const isNew = searchParams.get('new') === '1'
-    if (openId) {
-      const note = notes.find((n) => n.id === Number(openId))
-      if (note) openNote(note)
-      setSearchParams({}, { replace: true })
-    } else if (isNew) {
-      setDraft({ ...EMPTY_DRAFT })
-      setSearchParams({}, { replace: true })
-    }
-  }, [loading, searchParams]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  const visible = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    return notes.filter(
-      (n) =>
-        (!q || n.title.toLowerCase().includes(q) || n.content.toLowerCase().includes(q)) &&
-        (!tagFilter || n.tags.includes(tagFilter))
-    )
-  }, [notes, search, tagFilter])
-
-  const pinned = visible.filter((n) => n.pinned)
-  const rest = visible.filter((n) => !n.pinned)
-
-  const openNote = (n: Note) =>
-    setDraft({
-      id: n.id,
-      title: n.title,
-      content: n.content,
-      tags: n.tags,
-      linked_title_id: n.linked_title_id,
-      pinned: !!n.pinned,
-    })
-
-  // --- reliable saving: debounce-autosave while typing, create on first input ---
-  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle')
-  const draftRef = useRef<Draft | null>(null)
-  draftRef.current = draft
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const creating = useRef(false)
-
-  const persistDraft = useCallback(async () => {
-    const d = draftRef.current
-    if (!d || (!d.title.trim() && !d.content.trim())) return
-    setSaveState('saving')
-    const payload = {
-      title: d.title.trim(),
-      content: d.content,
-      tags: d.tags,
-      linked_title_id: d.linked_title_id,
-      pinned: (d.pinned ? 1 : 0) as 0 | 1,
-    }
-    if (d.id != null) {
-      await window.wist.notes.update(d.id, payload)
-    } else {
-      if (creating.current) return
-      creating.current = true
-      try {
-        const created = await window.wist.notes.create(payload)
-        setDraft((prev) => (prev && prev.id == null ? { ...prev, id: created.id } : prev))
-      } finally {
-        creating.current = false
+  // ---------- saving ----------
+  const persist = useCallback((d: Draft): Promise<number | null> => {
+    const run = saveChain.current.then(async (): Promise<number | null> => {
+      // resolve this session's row id: explicit id, or one a prior queued save created
+      const existingId = d.id ?? createdByToken.current.get(d.token) ?? null
+      // never create empty rows for a brand-new note; an existing note may be emptied
+      if (existingId == null && !d.title.trim() && !d.content.trim()) return null
+      setSaveState('saving')
+      const payload = {
+        title: d.title.trim(),
+        content: d.content,
+        tags: d.tags,
+        linked_title_id: d.linked_title_id,
+        pinned: (d.pinned ? 1 : 0) as 0 | 1,
       }
-    }
-    setSaveState('saved')
-    load()
+      let savedId: number
+      if (existingId != null) {
+        savedId = (await window.wist.notes.update(existingId, payload)).id
+      } else {
+        savedId = (await window.wist.notes.create(payload)).id
+        createdByToken.current.set(d.token, savedId)
+      }
+      setSaveState('saved')
+      await load()
+      return savedId
+    })
+    saveChain.current = run.catch(() => undefined)
+    return run
   }, [load])
 
-  const updateDraft = (patch: Partial<Draft>) => {
-    setDraft((d) => (d ? { ...d, ...patch } : d))
-    setSaveState('saving')
+  const scheduleSave = useCallback(() => {
     if (saveTimer.current) clearTimeout(saveTimer.current)
-    saveTimer.current = setTimeout(persistDraft, 800)
+    saveTimer.current = setTimeout(async () => {
+      const d = draftRef.current
+      if (!d) return
+      const id = await persist(d)
+      // attach the new id only if we're still editing the same session
+      if (id != null && draftRef.current && draftRef.current.id == null && draftRef.current.token === d.token) {
+        setDraft((cur) => (cur ? { ...cur, id } : cur))
+      }
+    }, 700)
+  }, [persist])
+
+  // flush on unmount
+  useEffect(
+    () => () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current)
+      const d = draftRef.current
+      if (d && (d.title.trim() || d.content.trim())) persist(d)
+    },
+    [persist]
+  )
+
+  const patchDraft = (patch: Partial<Draft>) => {
+    setDraft((d) => (d ? { ...d, ...patch } : d))
+    setSaveState('idle')
+    scheduleSave()
   }
 
-  const closeEditor = async () => {
-    if (!draft) return
+  const openNote = useCallback((nt: Note) => {
     if (saveTimer.current) clearTimeout(saveTimer.current)
-    await persistDraft()
-    setDraft(null)
+    const prev = draftRef.current
+    if (prev && prev.id !== nt.id && (prev.title.trim() || prev.content.trim())) persist(prev)
+    setDraft({
+      id: nt.id,
+      title: nt.title,
+      content: nt.content,
+      tags: nt.tags,
+      linked_title_id: nt.linked_title_id,
+      pinned: !!nt.pinned,
+      token: ++draftToken,
+    })
+    setSaveState('saved')
+    setSuggest(null)
+  }, [persist])
+
+  const newNote = useCallback(() => {
+    if (saveTimer.current) clearTimeout(saveTimer.current)
+    const prev = draftRef.current
+    if (prev && (prev.title.trim() || prev.content.trim())) persist(prev)
+    setDraft(emptyDraft())
     setSaveState('idle')
-  }
+    setSuggest(null)
+  }, [persist])
+
+  // deep links: ?open=<id> и ?new=1
+  useEffect(() => {
+    if (!notes) return
+    const openId = searchParams.get('open')
+    if (openId) {
+      const nt = notes.find((x) => x.id === Number(openId))
+      if (nt) openNote(nt)
+      setSearchParams({}, { replace: true })
+    } else if (searchParams.get('new') === '1') {
+      newNote() // flushes any dirty draft before clearing
+      setSearchParams({}, { replace: true })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [notes === null, searchParams])
 
   const deleteNote = async () => {
     if (draft?.id == null) return
@@ -174,213 +180,274 @@ export default function Notes() {
     load()
   }
 
-  /** [[Name]] → open matching note, otherwise navigate to matching title. */
-  const resolveLink = (name: string) => {
-    const q = name.trim().toLowerCase()
-    const note = notes.find((n) => n.title.trim().toLowerCase() === q)
-    if (note) {
-      openNote(note)
+  // ---------- [[autocomplete]] ----------
+  const linkCandidates = useMemo(() => {
+    const out: Array<{ name: string; kind: 'title' | 'note' }> = []
+    for (const ti of titles) out.push({ name: ti.title, kind: 'title' })
+    for (const nt of notes ?? []) if (nt.title && nt.id !== draft?.id) out.push({ name: nt.title, kind: 'note' })
+    return out
+  }, [titles, notes, draft?.id])
+
+  const refreshSuggest = (value: string, caret: number) => {
+    const upto = value.slice(0, caret)
+    const m = /\[\[([^\][]*)$/.exec(upto)
+    if (!m) {
+      setSuggest(null)
       return
     }
-    const title = titles.find(
-      (ti) => ti.title.trim().toLowerCase() === q || ti.original_title?.trim().toLowerCase() === q
-    )
-    if (title) navigate(`/title/${title.id}`)
+    const q = m[1].toLowerCase()
+    const items = linkCandidates.filter((c) => c.name.toLowerCase().includes(q)).slice(0, 6)
+    setSuggest(items.length ? { query: m[1], items } : null)
+    setSuggestIdx(0)
   }
 
-  const NoteCard = ({ note }: { note: Note }) => (
-    <button
-      onClick={() => openNote(note)}
-      className={`mb-4 block w-full break-inside-avoid rounded-xl bg-surface p-4 text-left transition-all duration-150 hover:-translate-y-0.5 hover:bg-raised ${
-        note.pinned ? 'ring-1 ring-accent/40' : ''
-      }`}
-    >
-      <div className="flex items-start justify-between gap-2">
-        {note.title && <div className="text-sm font-semibold text-zinc-100">{note.title}</div>}
-        {!!note.pinned && <Pin size={12} className="mt-0.5 shrink-0 fill-accent-bright text-accent-bright" />}
-      </div>
-      {note.content && (
-        <p className="mt-1.5 line-clamp-6 whitespace-pre-wrap text-[13px] leading-relaxed text-zinc-400">
-          <WikiText text={note.content} onLink={resolveLink} />
-        </p>
-      )}
-      <div className="mt-3 flex flex-wrap items-center gap-1.5">
-        {note.source !== 'user' && (
-          <span className="flex items-center gap-1 rounded-md bg-accent/15 px-1.5 py-0.5 text-[10px] font-semibold text-accent-bright">
-            <Bot size={10} /> {note.source}
-          </span>
-        )}
-        {note.linked_title_name && (
-          <span className="rounded-md bg-accent/15 px-1.5 py-0.5 text-[11px] text-accent-bright">
-            {note.linked_title_name}
-          </span>
-        )}
-        {note.tags.map((tag) => (
-          <span key={tag} className="rounded-md bg-raised px-1.5 py-0.5 text-[11px] text-zinc-500">#{tag}</span>
-        ))}
-        <span className="ml-auto text-[11px] text-zinc-600">{formatRelative(note.updated_at)}</span>
-      </div>
-    </button>
-  )
+  const applySuggestion = (name: string) => {
+    const ta = contentRef.current
+    const d = draftRef.current
+    if (!ta || !d) return
+    const caret = ta.selectionStart
+    const upto = d.content.slice(0, caret).replace(/\[\[([^\][]*)$/, `[[${name}]]`)
+    const next = upto + d.content.slice(caret)
+    patchDraft({ content: next })
+    setSuggest(null)
+    requestAnimationFrame(() => {
+      ta.focus()
+      ta.selectionStart = ta.selectionEnd = upto.length
+    })
+  }
 
-  if (loading) return <Spinner />
+  // ---------- backlinks / outgoing ----------
+  const backlinks = useMemo(() => {
+    if (!draft?.title?.trim() || !notes) return []
+    const needle = `[[${draft.title.trim().toLowerCase()}]]`
+    return notes.filter((nt) => nt.id !== draft.id && nt.content.toLowerCase().includes(needle))
+  }, [notes, draft?.title, draft?.id])
+
+  const outgoing = useMemo(() => {
+    if (!draft) return []
+    const out: Array<{ name: string; go: () => void }> = []
+    const seen = new Set<string>()
+    for (const m of draft.content.matchAll(/\[\[([^\]]+)\]\]/g)) {
+      const key = m[1].trim().toLowerCase()
+      if (seen.has(key)) continue
+      seen.add(key)
+      const note = (notes ?? []).find((x) => x.title.trim().toLowerCase() === key)
+      if (note) {
+        out.push({ name: m[1], go: () => openNote(note) })
+        continue
+      }
+      const title = titles.find(
+        (x) => x.title.trim().toLowerCase() === key || x.original_title?.trim().toLowerCase() === key
+      )
+      if (title) out.push({ name: m[1], go: () => navigate(`/title/${title.id}`) })
+    }
+    return out
+  }, [draft, notes, titles, navigate, openNote])
+
+  // ---------- list ----------
+  const visible = useMemo(() => {
+    if (!notes) return []
+    const q = search.trim().toLowerCase()
+    return notes.filter((nt) => !q || nt.title.toLowerCase().includes(q) || nt.content.toLowerCase().includes(q))
+  }, [notes, search])
+
+  if (!notes) return <Spinner />
 
   return (
-    <div className="page">
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="page-title !mb-0">{t('nav.notes')}</h1>
-        <button className="btn-accent" onClick={() => setDraft({ ...EMPTY_DRAFT })}>
-          <Plus size={16} /> {t('notes.new')}
-        </button>
-      </div>
-
-      {notes.length > 0 && (
-        <div className="mb-6 flex flex-wrap items-center gap-2">
-          <div className="relative">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600" />
-            <input
-              className="input !w-64 !pl-8"
-              placeholder={t('notes.search')}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
+    <div className="flex h-full">
+      {/* left pane: list */}
+      <div className="flex w-72 shrink-0 flex-col border-r border-edge/60 bg-surface/50">
+        <div className="space-y-2 p-3">
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-600" />
+              <input
+                className="input !py-1.5 !pl-7 text-xs"
+                placeholder={t('notes.search')}
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+            <button className="btn-accent !px-2.5 !py-1.5" title={t('notes.new')} onClick={newNote}>
+              <Plus size={14} />
+            </button>
           </div>
-          {allTags.map((tag) => (
+        </div>
+        <div className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-2 pb-3">
+          {visible.length === 0 && (
+            <div className="px-3 py-8 text-center text-xs text-zinc-600">
+              {notes.length ? t('notes.emptyFiltered') : t('notes.emptyTitle')}
+            </div>
+          )}
+          {visible.map((nt) => (
             <button
-              key={tag}
-              onClick={() => setTagFilter(tagFilter === tag ? null : tag)}
-              className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                tagFilter === tag ? 'bg-accent text-[#fff]' : 'bg-raised text-zinc-400 hover:text-zinc-200'
+              key={nt.id}
+              onClick={() => openNote(nt)}
+              className={`block w-full rounded-lg px-3 py-2 text-left transition-colors ${
+                draft?.id === nt.id ? 'bg-accent/15' : 'hover:bg-raised'
               }`}
             >
-              #{tag}
+              <span className="flex items-center gap-1.5">
+                {!!nt.pinned && <Pin size={10} className="shrink-0 fill-accent-bright text-accent-bright" />}
+                <span className={`truncate text-[13px] font-medium ${draft?.id === nt.id ? 'text-accent-bright' : 'text-zinc-200'}`}>
+                  {nt.title || nt.content.slice(0, 30) || '…'}
+                </span>
+              </span>
+              <span className="mt-0.5 block truncate text-[11px] text-zinc-600">
+                {formatRelative(nt.updated_at)}
+                {nt.tags.length > 0 && <span> · #{nt.tags.join(' #')}</span>}
+              </span>
             </button>
           ))}
         </div>
-      )}
+      </div>
 
-      {!visible.length ? (
-        <EmptyState
-          icon={PenLine}
-          title={notes.length ? t('notes.emptyFiltered') : t('notes.emptyTitle')}
-          subtitle={notes.length ? t('notes.emptyFilteredSubtitle') : t('notes.emptySubtitle')}
-          action={
-            !notes.length ? (
-              <button className="btn-accent" onClick={() => setDraft({ ...EMPTY_DRAFT })}>
+      {/* right pane: editor */}
+      {!draft ? (
+        <div className="flex min-w-0 flex-1 items-center justify-center">
+          <EmptyState
+            icon={PenLine}
+            title={t('notes.selectPrompt')}
+            subtitle={t('notes.emptySubtitle')}
+            action={
+              <button className="btn-accent" onClick={newNote}>
                 <Plus size={16} /> {t('notes.new')}
               </button>
-            ) : undefined
-          }
-        />
+            }
+          />
+        </div>
       ) : (
-        <>
-          {pinned.length > 0 && (
-            <>
-              <h2 className="section-title">{t('notes.pinned')}</h2>
-              <div className="mb-6 columns-2 gap-4 lg:columns-3 xl:columns-4">
-                {pinned.map((n) => (
-                  <NoteCard key={n.id} note={n} />
+        <div className="flex min-w-0 flex-1 flex-col">
+          {/* toolbar */}
+          <div className="flex items-center gap-2 border-b border-edge/60 px-5 py-2.5">
+            <span className="text-[11px] text-zinc-600">
+              {saveState === 'saving' ? t('notes.saving') : saveState === 'saved' ? t('notes.savedNow') : ' '}
+            </span>
+            <div className="ml-auto flex items-center gap-1">
+              <select
+                className="select !py-1 text-xs"
+                value={draft.linked_title_id ?? ''}
+                onChange={(e) => patchDraft({ linked_title_id: e.target.value ? Number(e.target.value) : null })}
+                title={t('notes.linkedTitle')}
+              >
+                <option value="">{t('notes.noLink')}</option>
+                {titles.map((ti) => (
+                  <option key={ti.id} value={ti.id}>{ti.title}</option>
                 ))}
-              </div>
-            </>
-          )}
-          <div className="columns-2 gap-4 lg:columns-3 xl:columns-4">
-            {rest.map((n) => (
-              <NoteCard key={n.id} note={n} />
-            ))}
-          </div>
-        </>
-      )}
-
-      {/* slide-over editor */}
-      {draft && (
-        <>
-          <div className="fixed inset-0 z-30 bg-black/50 animate-fade-in" onClick={() => closeEditor()} />
-          <div className="fixed bottom-0 right-0 top-9 z-40 flex w-[540px] max-w-full flex-col border-l border-edge bg-surface animate-slide-up">
-            <div className="flex items-center gap-2 border-b border-edge/60 px-5 py-3">
-              <PenLine size={15} className="text-accent-bright" />
-              <span className="text-xs text-zinc-500">
-                {saveState === 'saving'
-                  ? t('notes.saving')
-                  : saveState === 'saved'
-                    ? t('notes.savedNow')
-                    : draft.id != null
-                      ? t('notes.editedRel', { rel: formatRelative(notes.find((n) => n.id === draft.id)?.updated_at) })
-                      : t('notes.new')}
-              </span>
-              <div className="ml-auto flex items-center gap-1">
+              </select>
+              <button
+                className={`rounded-lg p-2 transition-colors ${draft.pinned ? 'text-accent-bright' : 'text-zinc-500 hover:text-zinc-300'}`}
+                title={draft.pinned ? t('notes.unpin') : t('notes.pin')}
+                onClick={() => patchDraft({ pinned: !draft.pinned })}
+              >
+                <Pin size={15} className={draft.pinned ? 'fill-current' : ''} />
+              </button>
+              {draft.id != null && (
                 <button
-                  className={`rounded-lg p-2 transition-colors ${
-                    draft.pinned ? 'text-accent-bright' : 'text-zinc-500 hover:text-zinc-300'
-                  }`}
-                  title={draft.pinned ? t('notes.unpin') : t('notes.pin')}
-                  onClick={() => updateDraft({ pinned: !draft.pinned })}
+                  className="rounded-lg p-2 text-zinc-500 transition-colors hover:text-red-400"
+                  title={t('common.delete')}
+                  onClick={() => setConfirmDelete(true)}
                 >
-                  <Pin size={15} className={draft.pinned ? 'fill-current' : ''} />
+                  <Trash2 size={15} />
                 </button>
-                {draft.id != null && (
-                  <button
-                    className="rounded-lg p-2 text-zinc-500 transition-colors hover:text-red-400"
-                    title={t('common.delete')}
-                    onClick={() => setConfirmDelete(true)}
-                  >
-                    <Trash2 size={15} />
-                  </button>
-                )}
-                <button
-                  className="rounded-lg p-2 text-zinc-500 transition-colors hover:text-white"
-                  onClick={() => closeEditor()}
-                >
-                  <X size={16} />
-                </button>
-              </div>
+              )}
             </div>
+          </div>
 
-            <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-5">
-              <input
-                autoFocus
-                className="w-full bg-transparent text-xl font-semibold text-white outline-none placeholder:text-zinc-700"
-                placeholder={t('notes.titlePlaceholder')}
-                value={draft.title}
-                onChange={(e) => updateDraft({ title: e.target.value })}
-              />
+          {/* editor body */}
+          <div className="relative flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-6 py-4">
+            <input
+              className="w-full bg-transparent text-2xl font-semibold text-white outline-none placeholder:text-zinc-700"
+              placeholder={t('notes.titlePlaceholder')}
+              value={draft.title}
+              onChange={(e) => patchDraft({ title: e.target.value })}
+            />
+            <ChipsInput value={draft.tags} onChange={(tags) => patchDraft({ tags })} placeholder={t('notes.tagsPlaceholder')} />
+            <div className="relative min-h-[260px] flex-1">
               <textarea
-                className="min-h-[260px] flex-1 resize-none bg-transparent text-sm leading-relaxed text-zinc-300 outline-none placeholder:text-zinc-700"
+                ref={contentRef}
+                className="h-full min-h-[260px] w-full resize-none bg-transparent text-sm leading-relaxed text-zinc-300 outline-none placeholder:text-zinc-700"
                 placeholder={t('notes.contentPlaceholder')}
                 value={draft.content}
-                onChange={(e) => updateDraft({ content: e.target.value })}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) closeEditor()
-                  if (e.key === 'Escape') closeEditor()
+                onChange={(e) => {
+                  patchDraft({ content: e.target.value })
+                  refreshSuggest(e.target.value, e.target.selectionStart)
                 }}
-              />
-              <div className="space-y-3 border-t border-edge/50 pt-4">
-                <ChipsInput value={draft.tags} onChange={(tags) => updateDraft({ tags })} placeholder={t('notes.tagsPlaceholder')} />
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-zinc-500">{t('notes.linkedTitle')}</label>
-                  <select
-                    className="select w-full"
-                    value={draft.linked_title_id ?? ''}
-                    onChange={(e) =>
-                      updateDraft({ linked_title_id: e.target.value ? Number(e.target.value) : null })
+                onKeyDown={(e) => {
+                  if (suggest) {
+                    if (e.key === 'ArrowDown') {
+                      e.preventDefault()
+                      setSuggestIdx((i) => Math.min(i + 1, suggest.items.length - 1))
+                    } else if (e.key === 'ArrowUp') {
+                      e.preventDefault()
+                      setSuggestIdx((i) => Math.max(i - 1, 0))
+                    } else if (e.key === 'Enter' || e.key === 'Tab') {
+                      e.preventDefault()
+                      applySuggestion(suggest.items[suggestIdx].name)
+                    } else if (e.key === 'Escape') {
+                      setSuggest(null)
                     }
-                  >
-                    <option value="">{t('notes.noLink')}</option>
-                    {titles.map((ti) => (
-                      <option key={ti.id} value={ti.id}>{ti.title}</option>
-                    ))}
-                  </select>
+                  }
+                }}
+                onClick={(e) => refreshSuggest(draft.content, e.currentTarget.selectionStart)}
+              />
+              {suggest && (
+                <div className="absolute left-0 top-0 z-10 w-72 -translate-y-1 rounded-lg border border-edge bg-surface p-1 shadow-none">
+                  {suggest.items.map((item, i) => (
+                    <button
+                      key={`${item.kind}-${item.name}`}
+                      onMouseMove={() => setSuggestIdx(i)}
+                      onClick={() => applySuggestion(item.name)}
+                      className={`flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-xs ${
+                        i === suggestIdx ? 'bg-accent/15 text-accent-bright' : 'text-zinc-300'
+                      }`}
+                    >
+                      <Link2 size={11} className="shrink-0 text-zinc-600" />
+                      <span className="truncate">{item.name}</span>
+                      <span className="ml-auto text-[10px] uppercase text-zinc-600">
+                        {item.kind === 'title' ? t('world.kind.title') : t('world.kind.note')}
+                      </span>
+                    </button>
+                  ))}
                 </div>
-              </div>
+              )}
             </div>
 
-            <div className="flex items-center justify-end gap-2 border-t border-edge/60 px-5 py-3">
-              <button className="btn-accent" onClick={() => closeEditor()}>
-                <Check size={15} /> {t('notes.saveClose')}
-              </button>
-            </div>
+            {/* connections: outgoing links + backlinks */}
+            {(outgoing.length > 0 || backlinks.length > 0) && (
+              <div className="border-t border-edge/50 pt-3">
+                {outgoing.length > 0 && (
+                  <div className="mb-2 flex flex-wrap items-center gap-1.5">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-zinc-600">{t('notes.outgoing')}</span>
+                    {outgoing.map((o) => (
+                      <button
+                        key={o.name}
+                        onClick={o.go}
+                        className="rounded-md bg-accent/10 px-2 py-0.5 text-xs text-accent-bright hover:bg-accent/20"
+                      >
+                        [[{o.name}]]
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {backlinks.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-zinc-600">{t('notes.backlinks')}</span>
+                    {backlinks.map((nt) => (
+                      <button
+                        key={nt.id}
+                        onClick={() => openNote(nt)}
+                        className="rounded-md bg-raised px-2 py-0.5 text-xs text-zinc-300 hover:bg-edge"
+                      >
+                        {nt.title || nt.content.slice(0, 24)}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
-        </>
+        </div>
       )}
 
       {confirmDelete && (

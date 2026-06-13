@@ -51,6 +51,8 @@ export interface GalaxyData {
 
 export interface GalaxyOptions {
   light: boolean
+  accent: number // highlight color (the app accent)
+  colorful: boolean // false = Obsidian monochrome, true = color by type
   nodeScale: number // 0.5..2
   linkWidth: number // 0.5..2.5
   linkDistance: number // 40..200
@@ -58,12 +60,13 @@ export interface GalaxyOptions {
   labelFade: number // 0..2 (2 = always show)
 }
 
-export const DEFAULT_GALAXY_OPTIONS: Omit<GalaxyOptions, 'light'> = {
+export const DEFAULT_GALAXY_OPTIONS: Omit<GalaxyOptions, 'light' | 'accent'> = {
+  colorful: false,
   nodeScale: 1,
   linkWidth: 1,
   linkDistance: 85,
   repel: 1300,
-  labelFade: 0.9,
+  labelFade: 1.45,
 }
 
 export interface GalaxyHandle {
@@ -120,29 +123,29 @@ export async function createGalaxy(
         bgTop: '#f7f7fb',
         bgBot: '#ecedf4',
         dust: 0xb9bdcf,
-        edge: 0x7d8298,
-        edgeLit: 0x3d4258,
+        edge: 0x9b9fae,
         label: 0x4a4f63,
+        nodeGray: 0x8e92a0,
         coreStroke: 0xffffff,
-        vignette: 'rgba(40,40,80,0.10)',
+        vignette: 'rgba(40,40,80,0.08)',
         haloBlend: 'normal' as const,
-        haloAlpha: 0.32,
-        edgeAlpha: 0.32,
-        edgeWeakAlpha: 0.2,
+        haloAlpha: 0.18,
+        edgeAlpha: 0.4,
+        edgeWeakAlpha: 0.22,
       }
     : {
         bgTop: '#0a0916',
         bgBot: '#100d22',
         dust: 0xcfd6ff,
-        edge: 0x8a8fb8,
-        edgeLit: 0xdfe4ff,
+        edge: 0x6f7494,
         label: 0xb8bdd9,
+        nodeGray: 0xa3a8c4,
         coreStroke: 0x0a0916,
         vignette: 'rgba(0,0,0,0.4)',
         haloBlend: 'add' as const,
-        haloAlpha: 0.55,
-        edgeAlpha: 0.18,
-        edgeWeakAlpha: 0.1,
+        haloAlpha: 0.3,
+        edgeAlpha: 0.25,
+        edgeWeakAlpha: 0.13,
       }
 
   const app = new Application()
@@ -256,12 +259,10 @@ export async function createGalaxy(
     const c = new Container()
     const halo = new Sprite(glowSoft)
     halo.anchor.set(0.5)
-    halo.tint = KIND_COLORS[node.kind]
     halo.blendMode = P.haloBlend
     halo.alpha = P.haloAlpha
     const core = new Graphics()
-    const hl = new Graphics()
-    c.addChild(halo, core, hl)
+    c.addChild(halo, core)
     halos.push(halo)
     cores.push(core)
 
@@ -300,19 +301,28 @@ export async function createGalaxy(
     nodeC.push(c)
   })
 
-  // (re)draw node bodies — called when nodeScale changes
+  // node body colors: Obsidian-monochrome by default, accent on hover
+  const nodeColor = (i: number, hot: boolean) =>
+    hot ? opts.accent : opts.colorful ? KIND_COLORS[data.nodes[i].kind] : P.nodeGray
+
+  const redrawNode = (i: number, hot: boolean) => {
+    const r = baseR(i) * opts.nodeScale
+    cores[i].clear()
+    cores[i].circle(0, 0, r).fill({ color: nodeColor(i, hot) })
+    cores[i].stroke({ width: 1.2, color: P.coreStroke, alpha: 0.9 })
+    halos[i].tint = nodeColor(i, hot)
+    halos[i].width = halos[i].height = r * (hot ? 9 : 6)
+    labels[i].y = r + 5
+  }
+
   let drawnScale = -1
+  let drawnColorful: boolean | null = null
+  let lastHot = -1
   const redrawNodes = () => {
-    if (drawnScale === opts.nodeScale) return
+    if (drawnScale === opts.nodeScale && drawnColorful === opts.colorful) return
     drawnScale = opts.nodeScale
-    for (let i = 0; i < n; i++) {
-      const r = baseR(i) * opts.nodeScale
-      cores[i].clear()
-      cores[i].circle(0, 0, r).fill({ color: KIND_COLORS[data.nodes[i].kind] })
-      cores[i].stroke({ width: 1.2, color: P.coreStroke, alpha: 0.9 })
-      halos[i].width = halos[i].height = r * 7
-      labels[i].y = r + 5
-    }
+    drawnColorful = opts.colorful
+    for (let i = 0; i < n; i++) redrawNode(i, i === lastHot)
   }
   redrawNodes()
 
@@ -443,6 +453,13 @@ export async function createGalaxy(
 
     for (const f of dust) f.s.alpha = (opts.light ? 0.22 : 0.3) + (opts.light ? 0.2 : 0.4) * (0.5 + 0.5 * Math.sin(elapsed * 0.0009 + f.ph))
 
+    // hover transition: only the hot node gets the accent (like Obsidian)
+    if (lastHot !== hovered) {
+      if (lastHot >= 0 && lastHot < n) redrawNode(lastHot, false)
+      if (hovered >= 0) redrawNode(hovered, true)
+      lastHot = hovered
+    }
+
     edgesG.clear()
     const focus = hovered >= 0
     for (const e of data.edges) {
@@ -451,8 +468,8 @@ export async function createGalaxy(
       edgesG.moveTo(px[e.a], py[e.a]).lineTo(px[e.b], py[e.b])
       edgesG.stroke({
         width: ((lit ? 1.7 : e.weak ? 0.7 : 1) * opts.linkWidth) / scale,
-        color: lit ? P.edgeLit : P.edge,
-        alpha: lit ? 0.9 : dim ? 0.05 : e.weak ? P.edgeWeakAlpha : P.edgeAlpha,
+        color: lit ? opts.accent : P.edge,
+        alpha: lit ? 0.95 : dim ? 0.06 : e.weak ? P.edgeWeakAlpha : P.edgeAlpha,
       })
     }
 
@@ -461,8 +478,8 @@ export async function createGalaxy(
       const c = nodeC[i]
       c.position.set(px[i], py[i])
       const lit = focus && isNeighbor(i)
-      c.alpha = focus ? (lit ? 1 : opts.light ? 0.22 : 0.16) : 1
-      halos[i].alpha = (focus && lit ? Math.min(1, P.haloAlpha * 1.8) : P.haloAlpha) + 0.06 * Math.sin(elapsed * 0.0012 + i)
+      c.alpha = focus ? (lit ? 1 : opts.light ? 0.25 : 0.18) : 1
+      halos[i].alpha = (focus && lit ? Math.min(1, P.haloAlpha * 2.2) : P.haloAlpha) + 0.04 * Math.sin(elapsed * 0.0012 + i)
       const target = hovered === i ? 1 : lit ? Math.max(0.85, labelBase) : labelBase * 0.85
       labels[i].alpha += (target - labels[i].alpha) * 0.18
       labels[i].scale.set(1 / Math.max(0.7, scale))

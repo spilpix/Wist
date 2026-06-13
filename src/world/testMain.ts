@@ -53,7 +53,7 @@ createGalaxy(
     navigate: (to) => console.log('NAVIGATE', to),
     tip: () => undefined,
   },
-  { light: false, nodeScale: 1, linkWidth: 1, linkDistance: 85, repel: 1300, labelFade: 0.9 }
+  { light: false, accent: 0x7c5cbf, colorful: false, nodeScale: 1, linkWidth: 1, linkDistance: 85, repel: 1300, labelFade: 1.45 }
 )
   .then(() => console.log('WORLD_OK'))
   .catch((err) => {

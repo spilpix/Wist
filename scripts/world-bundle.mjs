@@ -44376,28 +44376,28 @@ async function createGalaxy(host2, data, cb, initial) {
     bgTop: "#f7f7fb",
     bgBot: "#ecedf4",
     dust: 12172751,
-    edge: 8225432,
-    edgeLit: 4014680,
+    edge: 10198958,
     label: 4869987,
+    nodeGray: 9343648,
     coreStroke: 16777215,
-    vignette: "rgba(40,40,80,0.10)",
+    vignette: "rgba(40,40,80,0.08)",
     haloBlend: "normal",
-    haloAlpha: 0.32,
-    edgeAlpha: 0.32,
-    edgeWeakAlpha: 0.2
+    haloAlpha: 0.18,
+    edgeAlpha: 0.4,
+    edgeWeakAlpha: 0.22
   } : {
     bgTop: "#0a0916",
     bgBot: "#100d22",
     dust: 13620991,
-    edge: 9080760,
-    edgeLit: 14673151,
+    edge: 7304340,
     label: 12107225,
+    nodeGray: 10725572,
     coreStroke: 657686,
     vignette: "rgba(0,0,0,0.4)",
     haloBlend: "add",
-    haloAlpha: 0.55,
-    edgeAlpha: 0.18,
-    edgeWeakAlpha: 0.1
+    haloAlpha: 0.3,
+    edgeAlpha: 0.25,
+    edgeWeakAlpha: 0.13
   };
   const app = new Application();
   await app.init({
@@ -44493,12 +44493,10 @@ async function createGalaxy(host2, data, cb, initial) {
     const c2 = new Container();
     const halo = new Sprite(glowSoft);
     halo.anchor.set(0.5);
-    halo.tint = KIND_COLORS[node.kind];
     halo.blendMode = P.haloBlend;
     halo.alpha = P.haloAlpha;
     const core = new Graphics();
-    const hl = new Graphics();
-    c2.addChild(halo, core, hl);
+    c2.addChild(halo, core);
     halos.push(halo);
     cores.push(core);
     const label = new Text({
@@ -44535,18 +44533,24 @@ async function createGalaxy(host2, data, cb, initial) {
     world.addChild(c2);
     nodeC.push(c2);
   });
+  const nodeColor = (i2, hot) => hot ? opts.accent : opts.colorful ? KIND_COLORS[data.nodes[i2].kind] : P.nodeGray;
+  const redrawNode = (i2, hot) => {
+    const r2 = baseR(i2) * opts.nodeScale;
+    cores[i2].clear();
+    cores[i2].circle(0, 0, r2).fill({ color: nodeColor(i2, hot) });
+    cores[i2].stroke({ width: 1.2, color: P.coreStroke, alpha: 0.9 });
+    halos[i2].tint = nodeColor(i2, hot);
+    halos[i2].width = halos[i2].height = r2 * (hot ? 9 : 6);
+    labels[i2].y = r2 + 5;
+  };
   let drawnScale = -1;
+  let drawnColorful = null;
+  let lastHot = -1;
   const redrawNodes = () => {
-    if (drawnScale === opts.nodeScale) return;
+    if (drawnScale === opts.nodeScale && drawnColorful === opts.colorful) return;
     drawnScale = opts.nodeScale;
-    for (let i2 = 0; i2 < n2; i2++) {
-      const r2 = baseR(i2) * opts.nodeScale;
-      cores[i2].clear();
-      cores[i2].circle(0, 0, r2).fill({ color: KIND_COLORS[data.nodes[i2].kind] });
-      cores[i2].stroke({ width: 1.2, color: P.coreStroke, alpha: 0.9 });
-      halos[i2].width = halos[i2].height = r2 * 7;
-      labels[i2].y = r2 + 5;
-    }
+    drawnColorful = opts.colorful;
+    for (let i2 = 0; i2 < n2; i2++) redrawNode(i2, i2 === lastHot);
   };
   redrawNodes();
   let alpha = 1;
@@ -44662,6 +44666,11 @@ async function createGalaxy(host2, data, cb, initial) {
     simStep();
     redrawNodes();
     for (const f2 of dust) f2.s.alpha = (opts.light ? 0.22 : 0.3) + (opts.light ? 0.2 : 0.4) * (0.5 + 0.5 * Math.sin(elapsed * 9e-4 + f2.ph));
+    if (lastHot !== hovered) {
+      if (lastHot >= 0 && lastHot < n2) redrawNode(lastHot, false);
+      if (hovered >= 0) redrawNode(hovered, true);
+      lastHot = hovered;
+    }
     edgesG.clear();
     const focus = hovered >= 0;
     for (const e2 of data.edges) {
@@ -44670,8 +44679,8 @@ async function createGalaxy(host2, data, cb, initial) {
       edgesG.moveTo(px[e2.a], py[e2.a]).lineTo(px[e2.b], py[e2.b]);
       edgesG.stroke({
         width: (lit ? 1.7 : e2.weak ? 0.7 : 1) * opts.linkWidth / scale,
-        color: lit ? P.edgeLit : P.edge,
-        alpha: lit ? 0.9 : dim ? 0.05 : e2.weak ? P.edgeWeakAlpha : P.edgeAlpha
+        color: lit ? opts.accent : P.edge,
+        alpha: lit ? 0.95 : dim ? 0.06 : e2.weak ? P.edgeWeakAlpha : P.edgeAlpha
       });
     }
     const labelBase = Math.min(1, Math.max(0, (scale - (1.8 - opts.labelFade)) * 2));
@@ -44679,8 +44688,8 @@ async function createGalaxy(host2, data, cb, initial) {
       const c2 = nodeC[i2];
       c2.position.set(px[i2], py[i2]);
       const lit = focus && isNeighbor(i2);
-      c2.alpha = focus ? lit ? 1 : opts.light ? 0.22 : 0.16 : 1;
-      halos[i2].alpha = (focus && lit ? Math.min(1, P.haloAlpha * 1.8) : P.haloAlpha) + 0.06 * Math.sin(elapsed * 12e-4 + i2);
+      c2.alpha = focus ? lit ? 1 : opts.light ? 0.25 : 0.18 : 1;
+      halos[i2].alpha = (focus && lit ? Math.min(1, P.haloAlpha * 2.2) : P.haloAlpha) + 0.04 * Math.sin(elapsed * 12e-4 + i2);
       const target = hovered === i2 ? 1 : lit ? Math.max(0.85, labelBase) : labelBase * 0.85;
       labels[i2].alpha += (target - labels[i2].alpha) * 0.18;
       labels[i2].scale.set(1 / Math.max(0.7, scale));
@@ -44743,7 +44752,7 @@ createGalaxy(
     navigate: (to) => console.log("NAVIGATE", to),
     tip: () => void 0
   },
-  { light: false, nodeScale: 1, linkWidth: 1, linkDistance: 85, repel: 1300, labelFade: 0.9 }
+  { light: false, accent: 8150207, colorful: false, nodeScale: 1, linkWidth: 1, linkDistance: 85, repel: 1300, labelFade: 1.45 }
 ).then(() => console.log("WORLD_OK")).catch((err) => {
   console.error("WORLD_ERR", err?.stack ?? String(err));
   const pre = document.createElement("pre");
