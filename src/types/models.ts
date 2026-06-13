@@ -117,6 +117,61 @@ export interface VaultFile {
   created_at: string
 }
 
+export interface LeagueRank {
+  tier: string
+  division: string
+  lp: number
+  wins: number
+  losses: number
+}
+
+export interface LeagueAbility {
+  slot: 'P' | 'Q' | 'W' | 'E' | 'R'
+  name: string
+  iconUrl: string
+}
+
+export interface LeagueBuild {
+  role: string
+  coreItems: Array<{ name: string; iconUrl: string }>
+  runes: string
+  keystone: string
+  skill: string
+  tips: string[]
+}
+
+export interface LeagueChampion {
+  id: string
+  name: string
+  title: string
+  tags: string[]
+  squareUrl: string
+  abilities: LeagueAbility[]
+  build: LeagueBuild
+}
+
+export interface LeagueLivePlayer {
+  name: string
+  champion: string
+  championSquareUrl: string
+  kills: number
+  deaths: number
+  assists: number
+  cs: number
+  level: number
+  items: string[]
+  isSelf: boolean
+}
+
+export interface LeaguePoll {
+  connected: boolean
+  phase: string // None | Lobby | ChampSelect | InProgress | …
+  summoner?: { name: string; tag: string; level: number; iconUrl: string }
+  ranked?: { solo?: LeagueRank; flex?: LeagueRank }
+  champion?: LeagueChampion
+  live?: { activePlayer: string; order: LeagueLivePlayer[]; chaos: LeagueLivePlayer[] }
+}
+
 export interface MetaCandidate {
   title: string
   original_title: string | null

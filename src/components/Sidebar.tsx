@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { NavLink, useSearchParams } from 'react-router-dom'
+import { NavLink, useLocation, useSearchParams } from 'react-router-dom'
 import {
   Archive,
   BarChart3,
@@ -9,6 +9,7 @@ import {
   ChevronDown,
   Clock,
   FolderOpen,
+  Gamepad2,
   Heart,
   Home,
   Library,
@@ -53,6 +54,7 @@ const GROUPS: Array<{ key: TKey; id: string; links: Link[] }> = [
       { to: '/tasks', key: 'nav.tasks', icon: ListTodo },
       { to: '/vault', key: 'nav.vault', icon: Archive },
       { to: '/music', key: 'nav.music', icon: Music },
+      { to: '/league', key: 'nav.league', icon: Gamepad2 },
     ],
   },
   {
@@ -70,9 +72,10 @@ const bottomLinks: Link[] = [
   { to: '/settings', key: 'nav.settings', icon: Settings },
 ]
 
-function linkClass(isActive: boolean): string {
+function linkClass(isActive: boolean, compact = false): string {
   return [
-    'flex items-center gap-2.5 rounded-lg px-3 py-[7px] text-[13px] font-medium transition-colors',
+    'flex items-center rounded-lg text-[13px] font-medium transition-colors',
+    compact ? 'justify-center px-0 py-2' : 'gap-2.5 px-3 py-[7px]',
     isActive ? 'bg-accent/15 text-accent-bright' : 'text-zinc-400 hover:bg-raised hover:text-zinc-200',
   ].join(' ')
 }
@@ -89,7 +92,10 @@ export default function Sidebar() {
   const [searchParams] = useSearchParams()
   const activeType = searchParams.get('type')
   const { t } = useI18n()
-  const onLibrary = location.hash.split('?')[0].endsWith('/library')
+  const pathname = useLocation().pathname
+  const onLibrary = pathname.split('?')[0].endsWith('/library')
+  // collapse to a compact icon rail on the graph page (Obsidian-style two-level nav)
+  const compact = pathname.startsWith('/tree')
   const [collapsed, setCollapsed] = useState<Set<string>>(loadCollapsed)
 
   const toggleGroup = (id: string) => {
@@ -104,8 +110,46 @@ export default function Sidebar() {
     }
   }
 
+  // ---- compact icon rail ----
+  if (compact) {
+    const railLink = (to: string, key: TKey, Icon: typeof Home, active?: boolean) => (
+      <NavLink
+        key={to}
+        to={to}
+        end={to === '/'}
+        title={t(key)}
+        className={({ isActive }) => linkClass(active ?? isActive, true)}
+      >
+        <Icon size={17} />
+      </NavLink>
+    )
+    return (
+      <aside className="flex h-full w-[58px] shrink-0 flex-col border-r border-edge/60 bg-surface transition-all">
+        <nav className="flex-1 space-y-1 overflow-y-auto px-2 pb-4 pt-4">
+          {mainLinks.map(({ to, key, icon }) =>
+            railLink(
+              to,
+              key,
+              icon,
+              to === '/library' ? onLibrary && activeType !== 'book' : to === '/library?type=book' ? onLibrary && activeType === 'book' : undefined
+            )
+          )}
+          {GROUPS.map((group) => (
+            <div key={group.id} className="space-y-1 border-t border-edge/50 pt-1">
+              {group.links.map(({ to, key, icon }) => railLink(to, key, icon))}
+            </div>
+          ))}
+        </nav>
+        <div className="space-y-1 border-t border-edge/60 px-2 py-3">
+          {bottomLinks.map(({ to, key, icon }) => railLink(to, key, icon))}
+        </div>
+      </aside>
+    )
+  }
+
+  // ---- full sidebar ----
   return (
-    <aside className="flex h-full w-[200px] shrink-0 flex-col border-r border-edge/60 bg-surface">
+    <aside className="flex h-full w-[200px] shrink-0 flex-col border-r border-edge/60 bg-surface transition-all">
       <nav className="flex-1 space-y-4 overflow-y-auto px-3 pb-4 pt-4">
         <div className="space-y-0.5">
           {mainLinks.map(({ to, key, icon: Icon }) => (

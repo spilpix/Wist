@@ -71,6 +71,9 @@ export const DEFAULT_GALAXY_OPTIONS: Omit<GalaxyOptions, 'light' | 'accent'> = {
 
 export interface GalaxyHandle {
   set: (patch: Partial<GalaxyOptions>) => void
+  highlight: (id: string | null) => void
+  focus: (id: string) => void
+  fit: () => void
   destroy: () => void
 }
 
@@ -233,6 +236,8 @@ export async function createGalaxy(
     adj[e.a].push(e.b)
     adj[e.b].push(e.a)
   })
+  const idToIndex = new Map<string, number>()
+  data.nodes.forEach((node, i) => idToIndex.set(node.id, i))
 
   // compact spiral sized to the graph — small graphs stay cozy
   const maxR = Math.min(330, 26 + 26 * Math.sqrt(n))
@@ -442,6 +447,38 @@ export async function createGalaxy(
   }
   app.canvas.addEventListener('wheel', onWheel, { passive: false })
 
+  // frame the whole graph in view — small graphs stop looking lost in space
+  const fitToView = () => {
+    if (!n) return
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+    for (let i = 0; i < n; i++) {
+      if (px[i] < minX) minX = px[i]
+      if (px[i] > maxX) maxX = px[i]
+      if (py[i] < minY) minY = py[i]
+      if (py[i] > maxY) maxY = py[i]
+    }
+    const pad = 110
+    const bw = maxX - minX || 1
+    const bh = maxY - minY || 1
+    scale = Math.min(2.0, Math.max(0.5, Math.min((W - pad * 2) / bw, (H - pad * 2) / bh)))
+    world.scale.set(scale)
+    const cx = (minX + maxX) / 2
+    const cy = (minY + maxY) / 2
+    world.position.set(W / 2 - cx * scale, H / 2 - cy * scale)
+  }
+  fitToView()
+
+  // smoothly pan+zoom a node to the centre (explorer click)
+  const focusNode = (id: string) => {
+    const idx = idToIndex.get(id)
+    if (idx == null) return
+    const target = Math.min(2.0, Math.max(1.1, scale))
+    scale = target
+    world.scale.set(scale)
+    world.position.set(W / 2 - px[idx] * scale, H / 2 - py[idx] * scale)
+    hovered = idx
+  }
+
   // ---------- render ----------
   let elapsed = 0
   const isNeighbor = (i: number) => hovered === i || adj[hovered]?.includes(i)
@@ -493,6 +530,11 @@ export async function createGalaxy(
       Object.assign(opts, patch)
       if (physics) reheat(0.5)
     },
+    highlight: (id) => {
+      hovered = id == null ? -1 : idToIndex.get(id) ?? -1
+    },
+    focus: (id) => focusNode(id),
+    fit: () => fitToView(),
     destroy: () => {
       app.canvas.removeEventListener('wheel', onWheel)
       app.destroy(true, { children: true, texture: true })

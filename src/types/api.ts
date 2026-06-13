@@ -5,6 +5,7 @@ import type {
   HeatmapDay,
   ImportGroup,
   JournalEntry,
+  LeaguePoll,
   MemoryEvent,
   MetaCandidate,
   Moment,
@@ -61,6 +62,10 @@ export interface WistApi {
     addFolder(): Promise<number>
     remove(id: number): Promise<void>
     open(path: string): Promise<string>
+    startDrag(path: string): void
+  }
+  league: {
+    poll(): Promise<LeaguePoll>
   }
   meta: {
     searchTitles(type: TitleType, query: string): Promise<MetaCandidate[]>

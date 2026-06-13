@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { RotateCcw, Search, Settings2, TreePine } from 'lucide-react'
+import { Maximize2, RotateCcw, Search, Settings2, TreePine } from 'lucide-react'
 import EmptyState from '../components/ui/EmptyState'
 import Spinner from '../components/ui/Spinner'
 import {
@@ -169,7 +169,6 @@ export default function MemoryTree() {
   const [view, setView] = useState<ViewOpts>({ ...DEFAULT_GALAXY_OPTIONS })
   const [tip, setTip] = useState<(WorldTip & { x: number; y: number }) | null>(null)
   const [worldError, setWorldError] = useState<string | null>(null)
-  const [counts, setCounts] = useState<{ nodes: number; edges: number }>({ nodes: 0, edges: 0 })
 
   useEffect(() => {
     Promise.all([
@@ -202,11 +201,15 @@ export default function MemoryTree() {
     }
   }, [src])
 
+  // single source of truth: the graph the explorer and the canvas both render
+  const graph = useMemo(
+    () => (src ? buildGraph(src, hidden, query, showOrphans, kindNames) : { nodes: [], edges: [], kindNames }),
+    [src, hidden, query, showOrphans, kindNames]
+  )
+
   useEffect(() => {
     if (!src || !hostRef.current) return
     const host = hostRef.current
-    const graph = buildGraph(src, hidden, query, showOrphans, kindNames)
-    setCounts({ nodes: graph.nodes.length, edges: graph.edges.length })
     let cancelled = false
 
     createGalaxy(
@@ -243,12 +246,18 @@ export default function MemoryTree() {
     }
     // view is applied live through handle.set — not a rebuild dependency
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [src, hidden, query, showOrphans, light, accent, kindNames])
+  }, [graph, light, accent])
 
   const setViewLive = (patch: Partial<ViewOpts>) => {
     setView((v) => ({ ...v, ...patch }))
     handleRef.current?.set(patch)
   }
+
+  // explorer mirrors the graph exactly — every listed row is a node that exists on the canvas
+  const explorerGroups = useMemo(
+    () => KIND_ORDER.map((kind) => ({ kind, items: graph.nodes.filter((node) => node.kind === kind) })).filter((g) => g.items.length),
+    [graph]
+  )
 
   if (!src) return <Spinner />
 
@@ -281,119 +290,166 @@ export default function MemoryTree() {
   )
 
   return (
-    <div className="page">
-      <div className="mb-1 flex items-baseline justify-between">
-        <h1 className="page-title !mb-0">{t('nav.tree')}</h1>
-        <span className="text-xs text-zinc-600">{t('world.counts', { n: counts.nodes, m: counts.edges })}</span>
-      </div>
-      <p className="mb-4 max-w-3xl text-sm text-zinc-500">{t('tree.subtitle')}</p>
-
-      <div className="mb-3 flex flex-wrap items-center gap-1.5">
-        <div className="relative">
-          <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-600" />
-          <input
-            className="input !w-48 !py-1.5 !pl-7 text-xs"
-            placeholder={t('world.search')}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-        </div>
-        {KIND_ORDER.map((kind) => {
-          const off = hidden.has(kind)
-          return (
-            <button
-              key={kind}
-              onClick={() => {
-                const next = new Set(hidden)
-                if (off) next.delete(kind)
-                else next.add(kind)
-                setHidden(next)
-              }}
-              className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-all ${
-                off ? 'border-edge bg-raised text-zinc-600 opacity-50' : 'border-edge bg-surface text-zinc-300'
-              }`}
-            >
-              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: off ? '#555' : KIND_HEX[kind] }} />
-              {kindNames[kind]}
-              <span className="text-zinc-600">{kindCounts[kind] ?? 0}</span>
-            </button>
-          )
-        })}
-        <label className="flex cursor-pointer items-center gap-1.5 rounded-full border border-edge bg-surface px-2.5 py-1 text-xs text-zinc-400">
-          <input
-            type="checkbox"
-            checked={showOrphans}
-            onChange={(e) => setShowOrphans(e.target.checked)}
-            className="h-3 w-3 accent-[var(--accent)]"
-          />
-          {t('world.orphans')}
-        </label>
-        <span className="ml-auto hidden text-[11px] text-zinc-600 xl:block">{t('world.galaxyHint')}</span>
+    <div className="flex h-full flex-col animate-fade-in">
+      {/* slim header */}
+      <div className="flex items-baseline justify-between px-6 pb-2.5 pt-4">
+        <h1 className="text-xl font-semibold text-white">{t('nav.tree')}</h1>
+        <span className="text-xs text-zinc-600">{t('world.counts', { n: graph.nodes.length, m: graph.edges.length })}</span>
       </div>
 
-      <div ref={containerRef} className="relative overflow-hidden rounded-2xl border border-edge/50">
-        <div ref={hostRef} />
-
-        {/* graph display controls (Obsidian-style) */}
-        <button
-          onClick={() => setPanelOpen((v) => !v)}
-          title={t('world.view')}
-          className={`absolute right-3 top-3 rounded-lg border border-edge p-2 transition-colors ${
-            panelOpen ? 'bg-accent text-[#fff]' : 'bg-surface/90 text-zinc-400 hover:text-zinc-200'
-          }`}
-        >
-          <Settings2 size={14} />
-        </button>
-        {panelOpen && (
-          <div className="absolute right-3 top-12 w-56 space-y-2.5 rounded-xl border border-edge bg-surface/95 p-3.5 backdrop-blur">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-zinc-300">{t('world.view')}</span>
-              <button
-                className="flex items-center gap-1 text-[11px] text-zinc-500 hover:text-zinc-300"
-                onClick={() => {
-                  setView({ ...DEFAULT_GALAXY_OPTIONS })
-                  handleRef.current?.set({ ...DEFAULT_GALAXY_OPTIONS })
-                }}
-              >
-                <RotateCcw size={11} /> {t('world.reset')}
-              </button>
+      <div className="flex min-h-0 flex-1 border-t border-edge/60">
+        {/* second-level nav: the explorer (Obsidian file list) */}
+        <aside className="flex w-64 shrink-0 flex-col border-r border-edge/60 bg-surface/40">
+          <div className="space-y-2 p-3">
+            <div className="relative">
+              <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-600" />
+              <input
+                className="input !py-1.5 !pl-7 text-xs"
+                placeholder={t('world.search')}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
             </div>
-            <label className="flex cursor-pointer items-center justify-between text-[11px] text-zinc-500">
-              {t('world.colors')}
+            <div className="flex flex-wrap gap-1">
+              {KIND_ORDER.map((kind) => {
+                const off = hidden.has(kind)
+                return (
+                  <button
+                    key={kind}
+                    title={kindNames[kind]}
+                    onClick={() => {
+                      const next = new Set(hidden)
+                      if (off) next.delete(kind)
+                      else next.add(kind)
+                      setHidden(next)
+                    }}
+                    className={`flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11px] transition-all ${
+                      off ? 'border-edge bg-raised text-zinc-600 opacity-50' : 'border-edge bg-surface text-zinc-300'
+                    }`}
+                  >
+                    <span className="h-2 w-2 rounded-full" style={{ backgroundColor: off ? '#555' : KIND_HEX[kind] }} />
+                    {kindCounts[kind] ?? 0}
+                  </button>
+                )
+              })}
+            </div>
+            <label className="flex cursor-pointer items-center gap-1.5 text-[11px] text-zinc-500">
               <input
                 type="checkbox"
-                checked={view.colorful}
-                onChange={(e) => setViewLive({ colorful: e.target.checked })}
-                className="h-3.5 w-3.5 accent-[var(--accent)]"
+                checked={showOrphans}
+                onChange={(e) => setShowOrphans(e.target.checked)}
+                className="h-3 w-3 accent-[var(--accent)]"
               />
+              {t('world.orphans')}
             </label>
-            {slider('world.nodeSize', 'nodeScale', 0.5, 2, 0.05)}
-            {slider('world.linkWidth', 'linkWidth', 0.4, 2.5, 0.05)}
-            {slider('world.linkDist', 'linkDistance', 40, 200, 5)}
-            {slider('world.repel', 'repel', 300, 3200, 50)}
-            {slider('world.labels', 'labelFade', 0, 2, 0.05)}
           </div>
-        )}
 
-        {counts.nodes === 0 && (
-          <div className="absolute inset-0 flex items-center justify-center text-sm text-zinc-600">
-            {t('world.nothing')}
+          <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
+            {explorerGroups.length === 0 && (
+              <div className="px-3 py-8 text-center text-xs text-zinc-600">{t('world.nothing')}</div>
+            )}
+            {explorerGroups.map((group) => (
+              <div key={group.kind} className="mb-2">
+                <div className="flex items-center gap-1.5 px-2 py-1 text-[10px] font-semibold uppercase tracking-widest text-zinc-600">
+                  <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: KIND_HEX[group.kind] }} />
+                  {kindNames[group.kind]}
+                  <span className="text-zinc-700">{group.items.length}</span>
+                </div>
+                {group.items.map((it) => (
+                  <button
+                    key={it.id}
+                    onMouseEnter={() => handleRef.current?.highlight(it.id)}
+                    onMouseLeave={() => handleRef.current?.highlight(null)}
+                    onClick={() => handleRef.current?.focus(it.id)}
+                    onDoubleClick={() => navigate(it.route)}
+                    title={it.label}
+                    className="block w-full truncate rounded-md px-2 py-1 text-left text-[13px] text-zinc-300 transition-colors hover:bg-raised hover:text-white"
+                  >
+                    {it.label}
+                  </button>
+                ))}
+              </div>
+            ))}
           </div>
-        )}
-        {worldError && <div className="p-6 text-sm text-red-400">{worldError}</div>}
-        {tip && (
-          <div
-            className="pointer-events-none absolute z-10 max-w-xs rounded-lg border border-edge bg-raised px-3 py-2"
-            style={{ left: Math.min(tip.x + 14, (containerRef.current?.clientWidth ?? 600) - 240), top: tip.y - 8 }}
-          >
-            <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide" style={{ color: tip.color }}>
-              <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: tip.color }} />
-              {tip.head}
+          <div className="border-t border-edge/50 px-3 py-2 text-[10px] leading-relaxed text-zinc-600">
+            {t('world.explorerHint')}
+          </div>
+        </aside>
+
+        {/* graph */}
+        <div ref={containerRef} className="relative min-w-0 flex-1 overflow-hidden bg-[var(--graph-bg,transparent)]">
+          <div ref={hostRef} className="flex h-full items-center" />
+
+          <div className="absolute right-3 top-3 flex gap-1.5">
+            <button
+              onClick={() => handleRef.current?.fit()}
+              title={t('world.fit')}
+              className="rounded-lg border border-edge bg-surface/90 p-2 text-zinc-400 transition-colors hover:text-zinc-200"
+            >
+              <Maximize2 size={14} />
+            </button>
+            <button
+              onClick={() => setPanelOpen((v) => !v)}
+              title={t('world.view')}
+              className={`rounded-lg border border-edge p-2 transition-colors ${
+                panelOpen ? 'bg-accent text-[#fff]' : 'bg-surface/90 text-zinc-400 hover:text-zinc-200'
+              }`}
+            >
+              <Settings2 size={14} />
+            </button>
+          </div>
+
+          {panelOpen && (
+            <div className="absolute right-3 top-14 w-56 space-y-2.5 rounded-xl border border-edge bg-surface/95 p-3.5 backdrop-blur">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-zinc-300">{t('world.view')}</span>
+                <button
+                  className="flex items-center gap-1 text-[11px] text-zinc-500 hover:text-zinc-300"
+                  onClick={() => {
+                    setView({ ...DEFAULT_GALAXY_OPTIONS })
+                    handleRef.current?.set({ ...DEFAULT_GALAXY_OPTIONS })
+                  }}
+                >
+                  <RotateCcw size={11} /> {t('world.reset')}
+                </button>
+              </div>
+              <label className="flex cursor-pointer items-center justify-between text-[11px] text-zinc-500">
+                {t('world.colors')}
+                <input
+                  type="checkbox"
+                  checked={view.colorful}
+                  onChange={(e) => setViewLive({ colorful: e.target.checked })}
+                  className="h-3.5 w-3.5 accent-[var(--accent)]"
+                />
+              </label>
+              {slider('world.nodeSize', 'nodeScale', 0.5, 2, 0.05)}
+              {slider('world.linkWidth', 'linkWidth', 0.4, 2.5, 0.05)}
+              {slider('world.linkDist', 'linkDistance', 40, 200, 5)}
+              {slider('world.repel', 'repel', 300, 3200, 50)}
+              {slider('world.labels', 'labelFade', 0, 2, 0.05)}
             </div>
-            <div className="mt-0.5 truncate text-sm text-zinc-200">{tip.label}</div>
-            {tip.sub && <div className="truncate text-xs text-zinc-500">{tip.sub}</div>}
-          </div>
-        )}
+          )}
+
+          {graph.nodes.length === 0 && (
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-sm text-zinc-600">
+              {t('world.nothing')}
+            </div>
+          )}
+          {worldError && <div className="p-6 text-sm text-red-400">{worldError}</div>}
+          {tip && (
+            <div
+              className="pointer-events-none absolute z-10 max-w-xs rounded-lg border border-edge bg-raised px-3 py-2"
+              style={{ left: Math.min(tip.x + 14, (containerRef.current?.clientWidth ?? 600) - 240), top: tip.y - 8 }}
+            >
+              <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide" style={{ color: tip.color }}>
+                <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: tip.color }} />
+                {tip.head}
+              </div>
+              <div className="mt-0.5 truncate text-sm text-zinc-200">{tip.label}</div>
+              {tip.sub && <div className="truncate text-xs text-zinc-500">{tip.sub}</div>}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )

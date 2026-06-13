@@ -1,4 +1,4 @@
-import { app, ipcMain, shell, dialog, BrowserWindow } from 'electron'
+import { app, ipcMain, nativeImage, shell, dialog, BrowserWindow } from 'electron'
 import { spawn } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -19,6 +19,7 @@ import * as data from './data'
 import { detectSubtitles } from './subtitles'
 import { fetchVideos } from './ytdlp'
 import { searchTitleMeta, downloadCover, fetchOembed } from './metadata'
+import { leaguePoll } from './league'
 import { getSettings, setSettings, regenerateApiToken, screenshotsDir } from '../settings'
 import { restartApiServer } from '../apiServer'
 import type { MomentTag, TitleType } from '../../src/types/models'
@@ -154,6 +155,22 @@ export function registerIpcHandlers(): void {
   })
   ipcMain.handle('vault:remove', (_e, id: number) => vault.removeVaultFile(id))
   ipcMain.handle('vault:open', (_e, p: string) => shell.openPath(p))
+  // native OS drag-out: drag a vault file to the desktop, Explorer, chat, etc.
+  ipcMain.on('vault:startDrag', (event, filePath: string) => {
+    try {
+      let icon = nativeImage.createFromPath(path.join(app.getAppPath(), 'build', 'icon-32.png'))
+      if (icon.isEmpty()) icon = nativeImage.createFromPath(filePath) // images preview themselves
+      if (icon.isEmpty()) {
+        // last resort: a 1px transparent image keeps startDrag from throwing
+        icon = nativeImage.createFromDataURL(
+          'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYPgPAAEDAQAIicLsAAAAAElFTkSuQmCC'
+        )
+      }
+      event.sender.startDrag({ file: filePath, icon })
+    } catch (err) {
+      console.error('vault:startDrag failed', err)
+    }
+  })
 
   // --- world art layers (user-painted PNGs in %APPDATA%/Wist/world) ---
   ipcMain.handle('files:worldAssets', () => {
@@ -178,6 +195,9 @@ export function registerIpcHandlers(): void {
     }
     return out
   })
+
+  // --- league of legends companion ---
+  ipcMain.handle('league:poll', () => leaguePoll())
 
   // --- metadata from the internet ---
   ipcMain.handle('meta:searchTitles', (_e, type: TitleType, query: string) => searchTitleMeta(type, query))

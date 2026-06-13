@@ -37,6 +37,10 @@ const api = {
     addFolder: () => invoke('vault:addFolder'),
     remove: (id: number) => invoke('vault:remove', id),
     open: (p: string) => invoke('vault:open', p),
+    startDrag: (p: string) => ipcRenderer.send('vault:startDrag', p),
+  },
+  league: {
+    poll: () => invoke('league:poll'),
   },
   meta: {
     searchTitles: (type: string, query: string) => invoke('meta:searchTitles', type, query),
