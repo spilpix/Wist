@@ -14,7 +14,7 @@ function defaults(): AppSettings {
     defaultSubtitleLang: 'en',
     autoPlayNext: true,
     skipIntroEnabled: true,
-    accentColor: '#d4813a',
+    accentColor: '', // '' = brand (theme-specific Crail/Tangerine)
     ytDlpPath: '',
     mpvPath: '',
     language: app.getLocale().toLowerCase().startsWith('ru') ? 'ru' : 'en',

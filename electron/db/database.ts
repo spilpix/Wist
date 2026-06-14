@@ -272,6 +272,31 @@ const MIGRATIONS: string[] = [
   UPDATE tasks SET status = 'done' WHERE done = 1;
   CREATE INDEX idx_tasks_status ON tasks(status, created_at);
   `,
+
+  // 009 — projects: drop the kind CHECK so the user can type any project "type".
+  // Table rebuild (SQLite can't alter a CHECK); runs with FK off so no cascade.
+  `
+  CREATE TABLE projects_new (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    client TEXT,
+    kind TEXT NOT NULL DEFAULT 'video',
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('idea','active','review','done','archived')),
+    color TEXT,
+    cover_path TEXT,
+    deadline TEXT,
+    tools TEXT NOT NULL DEFAULT '[]',
+    description TEXT,
+    pinned INTEGER NOT NULL DEFAULT 0,
+    sort INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+  );
+  INSERT INTO projects_new (id,name,client,kind,status,color,cover_path,deadline,tools,description,pinned,sort,created_at,updated_at)
+    SELECT id,name,client,kind,status,color,cover_path,deadline,tools,description,pinned,sort,created_at,updated_at FROM projects;
+  DROP TABLE projects;
+  ALTER TABLE projects_new RENAME TO projects;
+  `,
 ]
 
 function migrate(d: Database.Database) {

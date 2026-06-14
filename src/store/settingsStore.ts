@@ -28,17 +28,37 @@ function darken(hex: string, amount = 0.3): string {
   return `${ch(m[1])} ${ch(m[2])} ${ch(m[3])}`
 }
 
-let currentAccent = '#d4813a'
+// Claude brand accent is theme-specific: Crail on light, Tangerine on dark.
+// An empty accentColor means "brand" (use these); a hex is a user override.
+const BRAND = {
+  light: { accent: '#c15f3c', hover: '#a84f30', bright: '#a84f30' },
+  dark: { accent: '#e67d22', hover: '#ffa45c', bright: '#ffa45c' },
+} as const
+
+let currentAccent = ''
 
 export function applyAccent(hex: string) {
   currentAccent = hex
   const root = document.documentElement
-  root.style.setProperty('--accent', hex)
-  root.style.setProperty('--accent-rgb', hexToRgb(hex))
-  // accent-bright is a FOREGROUND colour (active labels/icons): lighten on dark, darken on light
-  // so it stays legible on white — pure-lightened lavender is unreadable on a Notion canvas.
-  const bright = resolvedTheme() === 'light' ? darken(hex, 0.3) : lighten(hex, 0.35)
-  root.style.setProperty('--accent-bright-rgb', bright)
+  const theme = resolvedTheme()
+  const set = (accent: string, hover: string, bright: string) => {
+    root.style.setProperty('--accent', accent)
+    root.style.setProperty('--accent-rgb', hexToRgb(accent))
+    root.style.setProperty('--accent-hover-rgb', hexToRgb(hover))
+    root.style.setProperty('--accent-bright-rgb', hexToRgb(bright))
+  }
+  if (!hex || hex.toLowerCase() === 'brand') {
+    const b = BRAND[theme]
+    set(b.accent, b.hover, b.bright)
+  } else {
+    // custom accent: hover/bright derived per theme so it stays legible
+    const hoverRgb = theme === 'light' ? darken(hex, 0.15) : lighten(hex, 0.2)
+    const brightRgb = theme === 'light' ? darken(hex, 0.3) : lighten(hex, 0.35)
+    root.style.setProperty('--accent', hex)
+    root.style.setProperty('--accent-rgb', hexToRgb(hex))
+    root.style.setProperty('--accent-hover-rgb', hoverRgb)
+    root.style.setProperty('--accent-bright-rgb', brightRgb)
+  }
 }
 
 type ThemeSetting = AppSettings['theme']
@@ -70,16 +90,15 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   settings: null,
   load: async () => {
     let settings = await window.wist.settings.get()
-    // migration to the warm-brown design system (v0.21):
-    //  • accent — self-healing: any of the now-removed purple accents → amber-orange.
-    //    Fires only for legacy values; once orange it never matches again. Custom
-    //    non-purple accents (teal/rose/amber/…) are left untouched.
+    // migration to the Claude brand palette (v0.23):
+    //  • accent — self-healing: any legacy default accent → '' (brand = theme-specific
+    //    Crail/Tangerine). Custom accents the user explicitly picked are left untouched.
     //  • theme — one-time flip of legacy installs to dark; future manual toggles stick.
     try {
       const patch: Partial<AppSettings> = {}
-      const OLD_PURPLES = ['#7c6af7', '#7c5cbf', '#6366f1']
-      if (settings.accentColor && OLD_PURPLES.includes(settings.accentColor.toLowerCase())) {
-        patch.accentColor = '#d4813a'
+      const OLD_DEFAULTS = ['#d4813a', '#7c6af7', '#7c5cbf', '#6366f1']
+      if (settings.accentColor && OLD_DEFAULTS.includes(settings.accentColor.toLowerCase())) {
+        patch.accentColor = ''
       }
       if (!localStorage.getItem('wist.designV2')) {
         patch.theme = 'dark'
@@ -96,7 +115,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   },
   update: async (patch) => {
     const settings = await window.wist.settings.set(patch)
-    if (patch.accentColor) applyAccent(settings.accentColor)
+    if (patch.accentColor !== undefined) applyAccent(settings.accentColor)
     if (patch.theme) applyTheme(settings.theme)
     if (patch.language) useI18nStore.getState().setLang(settings.language)
     set({ settings })

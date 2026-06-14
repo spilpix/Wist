@@ -13,7 +13,7 @@ const SERVICE_META: Record<MusicService, { label: string; color: string }> = {
   yandex: { label: 'Яндекс Музыка', color: '#ffcc00' },
   soundcloud: { label: 'SoundCloud', color: '#ff5500' },
   apple: { label: 'Apple Music', color: '#fa57c1' },
-  other: { label: 'Link', color: '#d4813a' },
+  other: { label: 'Link', color: '#e67d22' },
 }
 
 export default function Music() {

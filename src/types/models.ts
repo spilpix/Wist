@@ -104,7 +104,7 @@ export interface Task {
 export const TASK_STATUSES: TaskStatus[] = ['todo', 'doing', 'done']
 export const TASK_STATUS_COLORS: Record<TaskStatus, string> = {
   todo: '#8a8278', // text-2 gray
-  doing: '#d4813a', // accent — actively in progress
+  doing: '#e67d22', // accent — actively in progress
   done: '#6fb06f', // active green
 }
 
@@ -144,7 +144,7 @@ export interface VaultDiskEntry {
   kind: VaultKind
 }
 
-export type ProjectKind = 'video' | 'motion' | 'edit' | '3d' | 'design' | 'other'
+export type ProjectKind = string // free-text type (suggestions in PROJECT_KIND_SUGGESTIONS)
 export type ProjectStatus = 'idea' | 'active' | 'review' | 'done' | 'archived'
 export type ProjectAssetKind = 'folder' | 'file' | 'url' | 'image'
 
@@ -152,7 +152,7 @@ export interface Project {
   id: number
   name: string
   client: string | null
-  kind: ProjectKind
+  kind: string
   status: ProjectStatus
   color: string | null
   cover_path: string | null
@@ -377,8 +377,6 @@ export const MOMENT_TAG_COLORS: Record<MomentTag, string> = {
   beautiful: '#6fb06f',
 }
 
-export const PROJECT_KINDS: ProjectKind[] = ['video', 'motion', 'edit', '3d', 'design', 'other']
-
 export const PROJECT_STATUSES: ProjectStatus[] = ['idea', 'active', 'review', 'done', 'archived']
 
 export const PROJECT_STATUS_COLORS: Record<ProjectStatus, string> = {
@@ -389,16 +387,29 @@ export const PROJECT_STATUS_COLORS: Record<ProjectStatus, string> = {
   archived: '#4a4744',
 }
 
-// preset creative tools — labels live in i18n under project.tool.*
-export const PROJECT_TOOLS = [
-  'blender',
-  'davinci',
-  'aftereffects',
-  'photoshop',
-  'premiere',
-  'cinema4d',
-  'figma',
-  'other',
-] as const
+// type suggestions only — the project "type" field is free-text (any string allowed)
+export const PROJECT_KIND_SUGGESTIONS = ['Видео', 'Моушн', 'Монтаж', '3D', 'Дизайн', 'VFX', 'Анимация']
 
-export const PROJECT_COLORS = ['#d4813a', '#7aa8c4', '#6fb06f', '#c9a96b', '#a87dc4', '#c47a7a', '#3a8a8a', '#8a8278']
+// tool suggestions only — tools are free tags now
+export const PROJECT_TOOL_SUGGESTIONS = ['Blender', 'DaVinci', 'After Effects', 'Photoshop', 'Premiere', 'Cinema 4D', 'Figma']
+
+export const PROJECT_COLORS = ['#e67d22', '#7aa8c4', '#6fb06f', '#c9a96b', '#a87dc4', '#c47a7a', '#3a8a8a', '#8a8278']
+
+// preset cover gradients (id → CSS background) — pickable in the project modal,
+// stored as cover_path = "gradient:<id>" and rendered by <ProjectCover/>.
+export const COVER_TEMPLATES: Array<{ id: string; css: string }> = [
+  { id: 'tangerine', css: 'linear-gradient(135deg, #E67D22, #C15F3C)' },
+  { id: 'peach', css: 'linear-gradient(135deg, #FFB38A, #E67D22)' },
+  { id: 'espresso', css: 'linear-gradient(135deg, #847A6D, #2C2418)' },
+  { id: 'dusk', css: 'linear-gradient(160deg, #2C2418, #E67D22)' },
+  { id: 'ocean', css: 'linear-gradient(135deg, #7AA8C4, #3A8A8A)' },
+  { id: 'forest', css: 'linear-gradient(135deg, #6FB06F, #3A8A8A)' },
+  { id: 'grape', css: 'linear-gradient(135deg, #A87DC4, #C47A7A)' },
+  { id: 'sand', css: 'linear-gradient(135deg, #F4F3EE, #B1ADA1)' },
+]
+
+/** resolve a cover_path to a CSS gradient, or null if it's a real image / unset */
+export function coverGradient(cover: string | null | undefined): string | null {
+  if (!cover || !cover.startsWith('gradient:')) return null
+  return COVER_TEMPLATES.find((c) => c.id === cover.slice(9))?.css ?? null
+}

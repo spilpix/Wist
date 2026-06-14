@@ -8,11 +8,12 @@ import type { SubtitleLang } from '../types/models'
 import { useI18n, t as tGlobal, type TKey } from '../i18n'
 
 const ACCENT_PRESETS: Array<{ nameKey: TKey; value: string }> = [
-  { nameKey: 'set.accent.amber', value: '#d4813a' },
+  { nameKey: 'set.accent.brand', value: '' }, // theme-specific Crail/Tangerine
+  { nameKey: 'set.accent.amber', value: '#e67d22' },
+  { nameKey: 'set.accent.crail', value: '#c15f3c' },
   { nameKey: 'set.accent.teal', value: '#3a8a8a' },
   { nameKey: 'set.accent.blue', value: '#7aa8c4' },
   { nameKey: 'set.accent.rose', value: '#c47a7a' },
-  { nameKey: 'set.accent.green', value: '#6fb06f' },
 ]
 
 function Row({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
@@ -194,14 +195,18 @@ export default function SettingsPage() {
                   title={t(preset.nameKey)}
                   onClick={() => update({ accentColor: preset.value })}
                   className={`h-7 w-7 rounded-full transition-transform hover:scale-110 ${
-                    settings.accentColor === preset.value ? 'ring-2 ring-white ring-offset-2 ring-offset-surface' : ''
+                    settings.accentColor === preset.value ? 'ring-2 ring-accent ring-offset-2 ring-offset-surface' : ''
                   }`}
-                  style={{ backgroundColor: preset.value }}
+                  style={
+                    preset.value
+                      ? { backgroundColor: preset.value }
+                      : { backgroundImage: 'linear-gradient(135deg, #c15f3c, #e67d22)' }
+                  }
                 />
               ))}
               <input
                 type="color"
-                value={settings.accentColor}
+                value={settings.accentColor || getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#e67d22'}
                 onChange={(e) => update({ accentColor: e.target.value })}
                 className="h-7 w-7 cursor-pointer rounded-full border-0 bg-transparent p-0"
                 title={t('set.accentCustom')}

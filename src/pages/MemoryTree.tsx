@@ -19,7 +19,7 @@ import { useI18n, type TKey } from '../i18n'
 
 const GRAPH_DARK = { bg: '#141210', edge: '#2e2b26', text: '#8a8278', linkBoost: 1 }
 const GRAPH_LIGHT = { bg: '#ffffff', edge: '#9b99ab', text: '#3a3744', linkBoost: 2.3 }
-const GROUP_COLORS = ['#c47a7a', '#6fb06f', '#a87dc4', '#7aa8c4', '#c9a96b', '#d4813a', '#3a8a8a', '#8a8278']
+const GROUP_COLORS = ['#c47a7a', '#6fb06f', '#a87dc4', '#7aa8c4', '#c9a96b', '#e67d22', '#3a8a8a', '#8a8278']
 
 const KIND_HEX: Record<MemoryKind, string> = {
   moment: '#a87dc4',
@@ -27,7 +27,7 @@ const KIND_HEX: Record<MemoryKind, string> = {
   book: '#c9a96b',
   note: '#7aa8c4',
   journal: '#c47a7a',
-  project: '#d4813a',
+  project: '#e67d22',
 }
 
 const KIND_ORDER: MemoryKind[] = ['title', 'book', 'note', 'moment', 'journal', 'project']
@@ -366,7 +366,7 @@ export default function MemoryTree() {
 
         {/* graph canvas */}
         <div ref={containerRef} className="relative min-w-0 flex-1 overflow-hidden" style={{ background: palette.bg }}>
-          <GraphCanvas ref={graphRef} data={graph} accent="#d4813a" colorOf={colorOf} groups={groups} view={view} palette={palette} onNavigate={onNavigate} onTip={onTip} />
+          <GraphCanvas ref={graphRef} data={graph} accent="#e67d22" colorOf={colorOf} groups={groups} view={view} palette={palette} onNavigate={onNavigate} onTip={onTip} />
 
           <div className="absolute right-3 top-3 flex gap-1.5">
             <button

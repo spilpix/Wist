@@ -1,5 +1,5 @@
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { ArrowLeft, ArrowRight, Moon, PanelLeft, Search, Sun } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Moon, PanelLeft, Sun } from 'lucide-react'
 import Sidebar from './Sidebar'
 import ErrorBoundary from './ErrorBoundary'
 import Toaster from './ui/Toaster'
@@ -12,7 +12,6 @@ import { useI18n } from '../i18n'
 function TitleBar() {
   const { t } = useI18n()
   const navigate = useNavigate()
-  const setPalette = useUiStore((s) => s.setPalette)
   const toggleSidebar = useUiStore((s) => s.toggleSidebar)
   const settings = useSettingsStore((s) => s.settings)
   const update = useSettingsStore((s) => s.update)
@@ -30,18 +29,6 @@ function TitleBar() {
       </button>
       <button className={toolBtn} onClick={() => navigate(1)} title={t('app.forward')}>
         <ArrowRight size={16} />
-      </button>
-
-      <button
-        onClick={() => setPalette(true)}
-        className="app-no-drag ml-1.5 flex items-center gap-2 rounded-md border border-edge/70 bg-raised/60 px-2.5 py-1 text-xs text-zinc-500 transition-colors hover:bg-raised hover:text-zinc-300"
-      >
-        <Search size={12} />
-        {t('cmdk.searchHint')}
-        <span className="ml-1 flex items-center gap-1">
-          <span className="kbd">Ctrl</span>
-          <span className="kbd">K</span>
-        </span>
       </button>
 
       <button

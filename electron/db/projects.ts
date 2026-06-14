@@ -34,7 +34,6 @@ export function getProject(id: number): Project | null {
   return row ? rowToProject(row) : null
 }
 
-const KINDS = ['video', 'motion', 'edit', '3d', 'design', 'other']
 const STATUSES = ['idea', 'active', 'review', 'done', 'archived']
 
 export function createProject(data: Partial<Project>): Project {
@@ -46,7 +45,7 @@ export function createProject(data: Partial<Project>): Project {
     .run(
       (data.name ?? '').trim() || 'Untitled',
       data.client ?? null,
-      data.kind && KINDS.includes(data.kind) ? data.kind : 'video',
+      typeof data.kind === 'string' ? data.kind.trim() : 'video', // free-text type
       data.status && STATUSES.includes(data.status) ? data.status : 'active',
       data.color ?? null,
       data.cover_path ?? null,
@@ -61,10 +60,15 @@ export function createProject(data: Partial<Project>): Project {
 export function updateProject(id: number, patch: Partial<Project>): Project {
   const sets: string[] = []
   const values: any[] = []
-  for (const key of ['name', 'client', 'kind', 'status', 'color', 'cover_path', 'deadline', 'description'] as const) {
+  for (const key of ['name', 'client', 'kind', 'color', 'cover_path', 'deadline', 'description'] as const) {
     if (patch[key] === undefined) continue
     sets.push(`${key} = ?`)
     values.push(patch[key])
+  }
+  // status is CHECK-constrained — validate so a bad value can't throw a constraint error
+  if (patch.status !== undefined && STATUSES.includes(patch.status)) {
+    sets.push('status = ?')
+    values.push(patch.status)
   }
   if (patch.tools !== undefined) {
     sets.push('tools = ?')

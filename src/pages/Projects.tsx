@@ -5,6 +5,7 @@ import EmptyState from '../components/ui/EmptyState'
 import Spinner from '../components/ui/Spinner'
 import ConfirmDialog from '../components/ui/ConfirmDialog'
 import ProjectModal from '../components/ProjectModal'
+import ProjectCover from '../components/ProjectCover'
 import { useProjectStore } from '../store/projectStore'
 import { toast } from '../store/toastStore'
 import { PROJECT_STATUS_COLORS, type Project } from '../types/models'
@@ -146,15 +147,9 @@ function ProjectCard({
       className="tile group relative flex flex-col overflow-hidden !border-edge/60 text-left"
     >
       {p.cover_path ? (
-        <div className="relative h-24 w-full shrink-0 overflow-hidden">
-          <img
-            src={window.wist.media.fileUrl(p.cover_path)}
-            alt=""
-            loading="lazy"
-            className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.05]"
-          />
+        <ProjectCover cover={p.cover_path} className="h-24 w-full shrink-0">
           <div className="absolute inset-x-0 bottom-0 h-1" style={{ backgroundColor: accent }} />
-        </div>
+        </ProjectCover>
       ) : (
         <div className="h-1.5 w-full shrink-0" style={{ backgroundColor: accent }} />
       )}
@@ -169,15 +164,13 @@ function ProjectCard({
           </span>
         </div>
 
-        <div className="mb-3 truncate text-xs text-zinc-500">
-          {p.client || t(`project.kind.${p.kind}` as 'project.kind.video')}
-        </div>
+        <div className="mb-3 truncate text-xs text-zinc-500">{p.client || p.kind}</div>
 
         {p.tools.length > 0 && (
           <div className="mb-3 flex flex-wrap gap-1">
             {p.tools.slice(0, 4).map((tool) => (
               <span key={tool} className="rounded-md bg-raised px-1.5 py-0.5 text-[10px] font-medium text-zinc-400">
-                {t(`project.tool.${tool}` as 'project.tool.other')}
+                {tool}
               </span>
             ))}
             {p.tools.length > 4 && <span className="px-1 text-[10px] text-zinc-600">+{p.tools.length - 4}</span>}

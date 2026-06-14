@@ -241,7 +241,7 @@ export default function CommandPalette() {
           <Search size={16} className="shrink-0 text-zinc-600" />
           <input
             autoFocus
-            className="h-12 w-full bg-transparent text-[15px] text-zinc-100 outline-none placeholder:text-zinc-600"
+            className="h-12 w-full bg-transparent text-[15px] text-zinc-100 outline-none placeholder:text-zinc-500 focus-visible:!outline-none"
             placeholder={t('cmdk.placeholder')}
             value={query}
             onChange={(e) => setQuery(e.target.value)}

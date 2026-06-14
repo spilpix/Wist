@@ -926,7 +926,7 @@ export default function Player() {
                     className="absolute top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full ring-1 ring-black/60"
                     style={{
                       left: `${(m.timestamp_seconds / duration) * 100}%`,
-                      backgroundColor: m.tag ? MOMENT_TAG_COLORS[m.tag] : '#d4813a',
+                      backgroundColor: m.tag ? MOMENT_TAG_COLORS[m.tag] : '#e67d22',
                     }}
                   />
                 ))}

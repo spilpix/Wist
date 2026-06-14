@@ -7,10 +7,15 @@ module.exports = {
         // semantic surfaces — driven by CSS variables, themeable (dark/light)
         bg: 'rgb(var(--bg) / <alpha-value>)',
         surface: 'rgb(var(--surface) / <alpha-value>)',
+        card: 'rgb(var(--card) / <alpha-value>)',
         raised: 'rgb(var(--raised) / <alpha-value>)',
+        field: 'rgb(var(--input-bg) / <alpha-value>)',
+        highlight: 'rgb(var(--highlight) / <alpha-value>)',
         edge: 'rgb(var(--edge) / <alpha-value>)',
         accent: 'rgb(var(--accent-rgb) / <alpha-value>)',
+        'accent-hover': 'rgb(var(--accent-hover-rgb) / <alpha-value>)',
         'accent-bright': 'rgb(var(--accent-bright-rgb) / <alpha-value>)',
+        'accent-subtle': 'rgb(var(--accent-subtle) / <alpha-value>)',
         // text hierarchy: `white` and the zinc scale flip with the theme.
         // Use literal values (e.g. text-[#fff]) for white-on-accent/over-image cases.
         white: 'rgb(var(--ink-0) / <alpha-value>)',

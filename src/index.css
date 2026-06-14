@@ -2,29 +2,34 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ---------- theme tokens ---------- */
-/* Dark is the default (warm-brown design system); .force-dark pins dark tokens
-   on a subtree (player, hero cards). Accent #d4813a (amber-orange). */
+/* ---------- theme tokens (Claude brand palette) ---------- */
+/* Dark is the default; accent = Tangerine #E67D22. .force-dark pins dark tokens
+   on a subtree (player, hero cards). Light theme uses Crail #C15F3C accent. */
 :root,
 .force-dark {
-  --accent: #d4813a;
-  --accent-rgb: 212 129 58;
-  --accent-bright-rgb: 227 173 127;
+  --accent: #e67d22; /* Tangerine */
+  --accent-rgb: 230 125 34;
+  --accent-hover-rgb: 255 164 92; /* #FFA45C */
+  --accent-bright-rgb: 255 164 92; /* foreground accent (active labels/icons) */
+  --accent-subtle: 58 32 16; /* #3A2010 badge / tag bg */
 
-  --bg: 20 18 16; /* #141210 base */
-  --surface: 26 24 20; /* #1a1814 sidebar / panels */
-  --raised: 34 32 24; /* #222018 cards */
-  --edge: 46 43 38; /* #2e2b26 borders / dividers */
+  --bg: 30 26 23; /* #1E1A17 base */
+  --surface: 37 32 24; /* #252018 sidebar / panels */
+  --card: 44 36 24; /* #2C2418 cards / modals */
+  --raised: 50 42 30; /* subtle elevated fill — chips / ghost buttons */
+  --input-bg: 36 30 24; /* #241E18 inputs */
+  --highlight: 42 34 24; /* #2A2218 row hover / selection */
+  --edge: 58 48 40; /* #3A3028 borders / dividers */
 
-  --ink-0: 212 201 184; /* #d4c9b8 primary text / headings */
-  --ink-100: 212 201 184; /* #d4c9b8 */
-  --ink-200: 199 188 172;
-  --ink-300: 171 161 147;
-  --ink-400: 138 130 120; /* #8a8278 secondary text */
-  --ink-500: 106 100 92;
-  --ink-600: 92 87 80; /* tertiary text / hints — lifted for legibility on the dark canvas */
-  --ink-700: 60 57 52;
-  --ink-800: 46 43 38; /* #2e2b26 */
+  --ink-0: 255 245 225; /* #FFF5E1 primary text / headings */
+  --ink-100: 255 245 225;
+  --ink-200: 237 227 209;
+  --ink-300: 207 198 181;
+  --ink-400: 177 173 161; /* #B1ADA1 secondary text */
+  --ink-500: 140 132 121;
+  --ink-600: 106 96 88; /* #6A6058 muted / placeholders */
+  --ink-700: 84 76 68;
+  --ink-800: 58 48 40; /* #3A3028 */
 
   /* status palette — reference tokens, mirrored by the JS maps in src/types/models.ts */
   --st-active: #6fb06f;
@@ -33,52 +38,58 @@
   --st-pause-bg: #2b2618;
   --st-done: #7aa8c4;
   --st-done-bg: #1a2430;
-  --st-urgent: #d4813a;
-  --st-urgent-bg: #2a1f18;
+  --st-urgent: #e67d22;
+  --st-urgent-bg: #3a2010;
   --st-review: #a87dc4;
   --st-error: #c47a7a;
   --st-render: #3a8a8a;
-  --st-archive: #4a4744;
+  --st-archive: #6a6058;
 
-  --scrollbar: #322e28;
-  --card-shadow: 0 1px 2px rgb(0 0 0 / 0.32), 0 6px 20px rgb(0 0 0 / 0.26);
-  --card-shadow-hover: 0 10px 28px rgb(0 0 0 / 0.34);
+  --scrollbar: #3a3028;
+  --card-shadow: 0 1px 2px rgb(0 0 0 / 0.34), 0 6px 20px rgb(0 0 0 / 0.28);
+  --card-shadow-hover: 0 10px 28px rgb(0 0 0 / 0.36);
   --palette-shadow: 0 24px 80px rgb(0 0 0 / 0.55);
-  --c-success: 111 176 111; /* #6fb06f */
-  --c-danger: 196 122 122; /* #c47a7a */
+  --c-success: 111 176 111;
+  --c-danger: 196 122 122;
   color-scheme: dark;
 }
 
-/* over-media contexts (player chrome, hero cards) want crisp white primary text,
-   not the warm cream used across the app shell — restore pure white just for them. */
+/* over-media contexts (player chrome, hero cards) want crisp white primary text */
 .force-dark {
   --ink-0: 255 255 255;
   --ink-100: 244 244 245;
 }
 
 [data-theme='light'] {
-  /* Notion-warm light: white canvas, soft off-white panels, warm-gray ink */
-  /* accent-bright fallback for first paint (JS recomputes it per accent in applyAccent) */
-  --accent-bright-rgb: 148 90 41;
-  --bg: 255 255 255;
-  --surface: 251 251 250;
-  --raised: 246 246 244;
-  --edge: 235 234 230;
+  /* Claude light: warm off-white canvas, Crail accent, espresso ink */
+  --accent: #c15f3c; /* Crail */
+  --accent-rgb: 193 95 60;
+  --accent-hover-rgb: 168 79 48; /* #A84F30 */
+  --accent-bright-rgb: 168 79 48; /* darker for legible accent text on white */
+  --accent-subtle: 255 212 168; /* #FFD4A8 */
 
-  --ink-0: 31 30 27;
-  --ink-100: 45 43 39;
-  --ink-200: 60 58 53;
-  --ink-300: 86 83 76;
-  --ink-400: 120 117 109;
-  --ink-500: 146 143 134;
-  --ink-600: 176 172 163;
-  --ink-700: 211 208 200;
-  --ink-800: 236 235 230;
+  --bg: 250 249 245; /* #FAF9F5 */
+  --surface: 244 243 238; /* #F4F3EE */
+  --card: 255 255 255; /* #FFFFFF */
+  --raised: 236 234 226; /* subtle elevated fill */
+  --input-bg: 214 211 201; /* #D6D3C9 */
+  --highlight: 255 245 225; /* #FFF5E1 */
+  --edge: 232 228 220; /* #E8E4DC */
 
-  --scrollbar: #d8d6d0;
-  --card-shadow: 0 1px 2px rgb(22 22 38 / 0.05), 0 2px 10px rgb(22 22 38 / 0.05);
-  --card-shadow-hover: 0 6px 20px rgb(22 22 38 / 0.1);
-  --palette-shadow: 0 24px 80px rgb(25 25 50 / 0.18);
+  --ink-0: 60 47 35; /* #3C2F23 primary text */
+  --ink-100: 60 47 35;
+  --ink-200: 74 60 48;
+  --ink-300: 95 83 69;
+  --ink-400: 132 122 109; /* #847A6D secondary */
+  --ink-500: 154 145 132;
+  --ink-600: 177 173 161; /* #B1ADA1 muted */
+  --ink-700: 203 199 189;
+  --ink-800: 232 228 220; /* #E8E4DC */
+
+  --scrollbar: #d6d3c9;
+  --card-shadow: 0 1px 2px rgb(60 47 35 / 0.05), 0 2px 10px rgb(60 47 35 / 0.05);
+  --card-shadow-hover: 0 6px 20px rgb(60 47 35 / 0.1);
+  --palette-shadow: 0 24px 80px rgb(60 47 35 / 0.18);
   --c-success: 21 128 61;
   --c-danger: 185 28 28;
   color-scheme: light;
@@ -86,22 +97,25 @@
 
 /* .force-dark must beat [data-theme='light'] inheritance even when nested deep */
 [data-theme='light'] .force-dark {
-  --bg: 20 18 16;
-  --surface: 26 24 20;
-  --raised: 34 32 24;
-  --edge: 46 43 38;
+  --bg: 30 26 23;
+  --surface: 37 32 24;
+  --card: 44 36 24;
+  --raised: 50 42 30;
+  --input-bg: 36 30 24;
+  --highlight: 42 34 24;
+  --edge: 58 48 40;
   --ink-0: 255 255 255;
   --ink-100: 244 244 245;
-  --ink-200: 199 188 172;
-  --ink-300: 171 161 147;
-  --ink-400: 138 130 120;
-  --ink-500: 106 100 92;
-  --ink-600: 74 71 68;
-  --ink-700: 60 57 52;
-  --ink-800: 46 43 38;
-  --scrollbar: #322e28;
-  --card-shadow: 0 1px 2px rgb(0 0 0 / 0.32), 0 6px 20px rgb(0 0 0 / 0.26);
-  --card-shadow-hover: 0 10px 28px rgb(0 0 0 / 0.34);
+  --ink-200: 237 227 209;
+  --ink-300: 207 198 181;
+  --ink-400: 177 173 161;
+  --ink-500: 140 132 121;
+  --ink-600: 106 96 88;
+  --ink-700: 84 76 68;
+  --ink-800: 58 48 40;
+  --scrollbar: #3a3028;
+  --card-shadow: 0 1px 2px rgb(0 0 0 / 0.34), 0 6px 20px rgb(0 0 0 / 0.28);
+  --card-shadow-hover: 0 10px 28px rgb(0 0 0 / 0.36);
   --palette-shadow: 0 24px 80px rgb(0 0 0 / 0.55);
   --c-success: 111 176 111;
   --c-danger: 196 122 122;
@@ -343,7 +357,7 @@ video::-webkit-media-controls {
     @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-all duration-150 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40 disabled:active:scale-100;
   }
   .btn-accent {
-    @apply btn bg-accent hover:bg-accent/85;
+    @apply btn bg-accent hover:bg-accent-hover;
     color: #fff; /* literal: white-on-accent in both themes */
     /* flat & quiet (Notion/Claude) — a hairline, not a glow */
     box-shadow: 0 1px 2px rgb(0 0 0 / 0.18);
@@ -355,17 +369,17 @@ video::-webkit-media-controls {
     @apply btn bg-red-500/15 text-red-400 hover:bg-red-500/25;
   }
   .input {
-    @apply w-full rounded-lg border border-edge bg-raised px-3 py-2 text-sm text-zinc-200 outline-none transition-all placeholder:text-zinc-600 focus:border-accent;
+    @apply w-full rounded-lg border border-edge bg-field px-3 py-2 text-sm text-zinc-200 outline-none transition-all placeholder:text-zinc-500 focus:border-accent;
   }
   .input:focus,
   .select:focus {
     box-shadow: 0 0 0 3px rgb(var(--accent-rgb) / 0.2);
   }
   .select {
-    @apply rounded-lg border border-edge bg-raised px-2.5 py-2 text-sm text-zinc-300 outline-none transition-all focus:border-accent;
+    @apply rounded-lg border border-edge bg-field px-2.5 py-2 text-sm text-zinc-300 outline-none transition-all focus:border-accent;
   }
   .card {
-    @apply rounded-xl border border-edge/50 bg-surface transition-all duration-200;
+    @apply rounded-xl border border-edge/60 bg-card transition-all duration-200;
     box-shadow: var(--card-shadow);
   }
   /* an interactive card — lifts and deepens its shadow on hover */
@@ -399,7 +413,8 @@ input:focus-visible,
 select:focus-visible,
 textarea:focus-visible,
 [tabindex]:focus-visible {
-  outline: 2px solid rgb(var(--accent-rgb) / 0.55);
-  outline-offset: 2px;
-  border-radius: 6px;
+  /* no forced border-radius — the outline follows each element's own rounding,
+     so it never looks offset/crooked against the element it wraps */
+  outline: 2px solid rgb(var(--accent-rgb) / 0.5);
+  outline-offset: 1px;
 }

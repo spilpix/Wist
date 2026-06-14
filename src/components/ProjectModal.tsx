@@ -1,14 +1,16 @@
 import { useState } from 'react'
-import { ImagePlus, Pencil, X } from 'lucide-react'
+import { ImagePlus, Plus, X } from 'lucide-react'
 import Modal from './ui/Modal'
+import ChipsInput from './ui/ChipsInput'
+import ProjectCover from './ProjectCover'
 import { useI18n } from '../i18n'
 import {
+  COVER_TEMPLATES,
   PROJECT_COLORS,
-  PROJECT_KINDS,
+  PROJECT_KIND_SUGGESTIONS,
   PROJECT_STATUSES,
-  PROJECT_TOOLS,
+  PROJECT_TOOL_SUGGESTIONS,
   type Project,
-  type ProjectKind,
   type ProjectStatus,
 } from '../types/models'
 
@@ -24,7 +26,8 @@ export default function ProjectModal({
   const { t } = useI18n()
   const [name, setName] = useState(project?.name ?? '')
   const [client, setClient] = useState(project?.client ?? '')
-  const [kind, setKind] = useState<ProjectKind>(project?.kind ?? 'video')
+  const [showClient, setShowClient] = useState(!!project?.client)
+  const [kind, setKind] = useState(project?.kind ?? '')
   const [status, setStatus] = useState<ProjectStatus>(project?.status ?? 'active')
   const [deadline, setDeadline] = useState(project?.deadline ?? '')
   const [tools, setTools] = useState<string[]>(project?.tools ?? [])
@@ -32,9 +35,6 @@ export default function ProjectModal({
   const [cover, setCover] = useState<string | null>(project?.cover_path ?? null)
   const [description, setDescription] = useState(project?.description ?? '')
   const [saving, setSaving] = useState(false)
-
-  const toggleTool = (tool: string) =>
-    setTools((cur) => (cur.includes(tool) ? cur.filter((x) => x !== tool) : [...cur, tool]))
 
   const pickCover = async () => {
     const src = await window.wist.files.pickImage()
@@ -47,8 +47,8 @@ export default function ProjectModal({
     setSaving(true)
     const data = {
       name: name.trim(),
-      client: client.trim() || null,
-      kind,
+      client: showClient ? client.trim() || null : null,
+      kind: kind.trim(),
       status,
       deadline: deadline || null,
       tools,
@@ -67,40 +67,44 @@ export default function ProjectModal({
   return (
     <Modal title={project ? t('project.edit') : t('project.new')} onClose={onClose}>
       <div className="space-y-4">
+        {/* cover — preset gradient templates or an uploaded image */}
         <div>
           <label className="mb-1.5 block text-xs font-medium text-zinc-400">{t('project.cover')}</label>
-          {cover ? (
-            <div className="relative overflow-hidden rounded-lg border border-edge">
-              <img src={window.wist.media.fileUrl(cover)} alt="" className="h-28 w-full object-cover" />
-              <div className="absolute right-2 top-2 flex gap-1">
-                <button
-                  type="button"
-                  onClick={pickCover}
-                  title={t('project.changeCover')}
-                  className="rounded-md bg-black/60 p-1.5 text-zinc-100 backdrop-blur-sm transition-colors hover:bg-black/80"
-                >
-                  <Pencil size={13} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setCover(null)}
-                  title={t('common.delete')}
-                  className="rounded-md bg-black/60 p-1.5 text-zinc-100 backdrop-blur-sm transition-colors hover:text-red-400"
-                >
-                  <X size={13} />
-                </button>
-              </div>
-            </div>
-          ) : (
+          {cover && (
+            <ProjectCover cover={cover} className="mb-2 h-24 w-full rounded-lg border border-edge">
+              <button
+                type="button"
+                onClick={() => setCover(null)}
+                title={t('common.delete')}
+                className="absolute right-2 top-2 rounded-md bg-black/60 p-1.5 text-zinc-100 backdrop-blur-sm transition-colors hover:text-red-400"
+              >
+                <X size={13} />
+              </button>
+            </ProjectCover>
+          )}
+          <div className="flex flex-wrap items-center gap-1.5">
             <button
               type="button"
               onClick={pickCover}
-              className="flex h-28 w-full flex-col items-center justify-center gap-1.5 rounded-lg border-2 border-dashed border-edge text-zinc-500 transition-colors hover:border-accent hover:text-zinc-300"
+              title={t('project.addCover')}
+              className="flex h-7 w-9 items-center justify-center rounded-md border border-dashed border-edge text-zinc-500 transition-colors hover:border-accent hover:text-zinc-300"
             >
-              <ImagePlus size={20} />
-              <span className="text-xs font-medium">{t('project.addCover')}</span>
+              <ImagePlus size={14} />
             </button>
-          )}
+            {COVER_TEMPLATES.map((tpl) => {
+              const val = `gradient:${tpl.id}`
+              return (
+                <button
+                  key={tpl.id}
+                  type="button"
+                  onClick={() => setCover(val)}
+                  title={t('project.coverTemplate')}
+                  className={`h-7 w-9 rounded-md border transition-transform hover:scale-105 ${cover === val ? 'border-accent ring-1 ring-accent' : 'border-edge'}`}
+                  style={{ backgroundImage: tpl.css }}
+                />
+              )
+            })}
+          </div>
         </div>
 
         <div>
@@ -117,25 +121,19 @@ export default function ProjectModal({
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="mb-1 block text-xs font-medium text-zinc-400">{t('project.client')}</label>
-            <input className="input" placeholder={t('project.clientPh')} value={client} onChange={(e) => setClient(e.target.value)} />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-zinc-400">{t('project.deadline')}</label>
-            <input type="date" className="input" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <div>
             <label className="mb-1 block text-xs font-medium text-zinc-400">{t('project.kind')}</label>
-            <select className="select w-full" value={kind} onChange={(e) => setKind(e.target.value as ProjectKind)}>
-              {PROJECT_KINDS.map((k) => (
-                <option key={k} value={k}>
-                  {t(`project.kind.${k}` as 'project.kind.video')}
-                </option>
+            <input
+              className="input"
+              list="project-kind-suggestions"
+              placeholder={t('project.kindPh')}
+              value={kind}
+              onChange={(e) => setKind(e.target.value)}
+            />
+            <datalist id="project-kind-suggestions">
+              {PROJECT_KIND_SUGGESTIONS.map((k) => (
+                <option key={k} value={k} />
               ))}
-            </select>
+            </datalist>
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-zinc-400">{t('project.status')}</label>
@@ -149,24 +147,61 @@ export default function ProjectModal({
           </div>
         </div>
 
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-zinc-400">{t('project.deadline')}</label>
+            <input type="date" className="input" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
+          </div>
+          {!showClient && (
+            <div className="flex items-end">
+              <button
+                type="button"
+                onClick={() => setShowClient(true)}
+                className="flex items-center gap-1.5 py-2 text-sm text-zinc-500 transition-colors hover:text-accent-bright"
+              >
+                <Plus size={14} /> {t('project.addClient')}
+              </button>
+            </div>
+          )}
+        </div>
+
+        {showClient && (
+          <div>
+            <label className="mb-1 block text-xs font-medium text-zinc-400">{t('project.client')}</label>
+            <div className="flex gap-2">
+              <input className="input" placeholder={t('project.clientPh')} value={client} onChange={(e) => setClient(e.target.value)} />
+              <button
+                type="button"
+                onClick={() => {
+                  setClient('')
+                  setShowClient(false)
+                }}
+                title={t('common.delete')}
+                className="btn-ghost shrink-0 !px-3"
+              >
+                <X size={15} />
+              </button>
+            </div>
+          </div>
+        )}
+
         <div>
           <label className="mb-1.5 block text-xs font-medium text-zinc-400">{t('project.tools')}</label>
-          <div className="flex flex-wrap gap-1.5">
-            {PROJECT_TOOLS.map((tool) => (
-              <button
-                key={tool}
-                type="button"
-                onClick={() => toggleTool(tool)}
-                className={`rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors ${
-                  tools.includes(tool)
-                    ? 'border-accent/50 bg-accent/15 text-accent-bright'
-                    : 'border-edge bg-surface text-zinc-400 hover:text-zinc-200'
-                }`}
-              >
-                {t(`project.tool.${tool}` as 'project.tool.other')}
-              </button>
-            ))}
-          </div>
+          <ChipsInput value={tools} onChange={setTools} placeholder={t('project.toolsPh')} />
+          {!tools.length && (
+            <div className="mt-1.5 flex flex-wrap gap-1">
+              {PROJECT_TOOL_SUGGESTIONS.map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setTools([s])}
+                  className="rounded-md bg-raised px-2 py-0.5 text-[11px] text-zinc-500 transition-colors hover:text-zinc-200"
+                >
+                  + {s}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         <div>
@@ -175,7 +210,7 @@ export default function ProjectModal({
             <button
               type="button"
               onClick={() => setColor(null)}
-              className={`h-6 w-6 rounded-full border-2 text-[10px] text-zinc-500 ${color === null ? 'border-white' : 'border-edge'}`}
+              className={`h-6 w-6 rounded-full border-2 text-[10px] text-zinc-500 ${color === null ? 'border-accent' : 'border-edge'}`}
               title={t('project.colorAuto')}
             >
               ✕
@@ -185,7 +220,7 @@ export default function ProjectModal({
                 key={c}
                 type="button"
                 onClick={() => setColor(c)}
-                className={`h-6 w-6 rounded-full border-2 transition-transform hover:scale-110 ${color === c ? 'border-white' : 'border-transparent'}`}
+                className={`h-6 w-6 rounded-full border-2 transition-transform hover:scale-110 ${color === c ? 'border-accent' : 'border-transparent'}`}
                 style={{ backgroundColor: c }}
               />
             ))}

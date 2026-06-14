@@ -7,7 +7,7 @@ import { toast } from '../store/toastStore'
 import type { CanvasData, CanvasNode, Note } from '../types/models'
 import { useI18n } from '../i18n'
 
-const CARD_COLORS = ['#d4813a', '#c47a7a', '#6fb06f', '#c9a96b', '#7aa8c4', '#a87dc4', '#3a8a8a', '#8a8278']
+const CARD_COLORS = ['#e67d22', '#c47a7a', '#6fb06f', '#c9a96b', '#7aa8c4', '#a87dc4', '#3a8a8a', '#8a8278']
 const uid = () => Math.random().toString(36).slice(2, 10)
 
 type Drag =

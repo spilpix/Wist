@@ -20,6 +20,7 @@ import {
 import Spinner from '../components/ui/Spinner'
 import Modal from '../components/ui/Modal'
 import ProjectModal from '../components/ProjectModal'
+import ProjectCover from '../components/ProjectCover'
 import { daysUntil } from './Projects'
 import { PROJECT_STATUS_COLORS, type Note, type Project, type ProjectAsset, type Task } from '../types/models'
 import { useI18n } from '../i18n'
@@ -142,9 +143,7 @@ export default function ProjectDetail() {
       </button>
 
       {project.cover_path && (
-        <div className="mb-5 overflow-hidden rounded-2xl border border-edge/60">
-          <img src={window.wist.media.fileUrl(project.cover_path)} alt="" className="h-44 w-full object-cover" />
-        </div>
+        <ProjectCover cover={project.cover_path} className="mb-5 h-44 w-full rounded-2xl border border-edge/60" />
       )}
 
       <div className="mb-6 flex items-start gap-3">
@@ -159,10 +158,10 @@ export default function ProjectDetail() {
               {t(`project.status.${project.status}` as 'project.status.active')}
             </span>
           </div>
-          <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-zinc-500">
-            <span>{t(`project.kind.${project.kind}` as 'project.kind.video')}</span>
-            {project.client && <span>· {project.client}</span>}
-            {project.deadline && <span className={dueColor}>· {project.deadline}</span>}
+          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-zinc-500">
+            {project.kind && <span>{project.kind}</span>}
+            {project.client && <span>{project.client}</span>}
+            {project.deadline && <span className={dueColor}>{project.deadline}</span>}
           </div>
         </div>
         <button className="btn-ghost shrink-0" onClick={() => setEditing(true)}>
@@ -174,7 +173,7 @@ export default function ProjectDetail() {
         <div className="mb-5 flex flex-wrap gap-1.5">
           {project.tools.map((tool) => (
             <span key={tool} className="rounded-md bg-raised px-2 py-0.5 text-xs font-medium text-zinc-400">
-              {t(`project.tool.${tool}` as 'project.tool.other')}
+              {tool}
             </span>
           ))}
         </div>

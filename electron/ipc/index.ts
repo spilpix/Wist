@@ -309,10 +309,10 @@ export function registerIpcHandlers(): void {
     try {
       win.setTitleBarOverlay(
         theme === 'light'
-          ? { color: '#ffffff', symbolColor: '#5a5a68', height: 36 }
-          : { color: '#1a1814', symbolColor: '#8a8278', height: 36 }
+          ? { color: '#faf9f5', symbolColor: '#847a6d', height: 36 }
+          : { color: '#252018', symbolColor: '#b1ada1', height: 36 }
       )
-      win.setBackgroundColor(theme === 'light' ? '#ffffff' : '#141210')
+      win.setBackgroundColor(theme === 'light' ? '#faf9f5' : '#1e1a17')
     } catch {
       /* overlay not supported on this platform */
     }

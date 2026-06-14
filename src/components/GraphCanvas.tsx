@@ -101,7 +101,7 @@ export interface GraphPalette {
 
 interface Props {
   data: GraphData
-  accent: string // hex like #d4813a
+  accent: string // hex like #e67d22
   colorOf: (kind: MemoryKind) => string
   groups: GraphGroup[]
   view: GraphView
