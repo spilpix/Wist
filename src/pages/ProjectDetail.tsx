@@ -141,6 +141,12 @@ export default function ProjectDetail() {
         <ArrowLeft size={15} /> {t('nav.projects')}
       </button>
 
+      {project.cover_path && (
+        <div className="mb-5 overflow-hidden rounded-2xl border border-edge/60">
+          <img src={window.wist.media.fileUrl(project.cover_path)} alt="" className="h-44 w-full object-cover" />
+        </div>
+      )}
+
       <div className="mb-6 flex items-start gap-3">
         <div className="mt-1 h-10 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: accent }} />
         <div className="min-w-0 flex-1">

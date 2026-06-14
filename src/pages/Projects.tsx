@@ -143,9 +143,21 @@ function ProjectCard({
   return (
     <button
       onClick={onOpen}
-      className="group relative flex flex-col overflow-hidden rounded-xl border border-edge/60 bg-surface text-left transition-colors hover:border-edge"
+      className="tile group relative flex flex-col overflow-hidden !border-edge/60 text-left"
     >
-      <div className="h-1.5 w-full shrink-0" style={{ backgroundColor: accent }} />
+      {p.cover_path ? (
+        <div className="relative h-24 w-full shrink-0 overflow-hidden">
+          <img
+            src={window.wist.media.fileUrl(p.cover_path)}
+            alt=""
+            loading="lazy"
+            className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.05]"
+          />
+          <div className="absolute inset-x-0 bottom-0 h-1" style={{ backgroundColor: accent }} />
+        </div>
+      ) : (
+        <div className="h-1.5 w-full shrink-0" style={{ backgroundColor: accent }} />
+      )}
       <div className="flex flex-1 flex-col p-4">
         <div className="mb-1 flex items-start justify-between gap-2">
           <h3 className="min-w-0 flex-1 truncate text-[15px] font-semibold text-zinc-100">{p.name}</h3>

@@ -107,6 +107,9 @@ const en = {
   'project.noTasks': 'No tasks yet',
   'project.noNotes': 'No notes yet',
   'project.badge': 'Project',
+  'project.cover': 'Cover',
+  'project.addCover': 'Add cover',
+  'project.changeCover': 'Change cover',
   'home.activeProjects': 'Active projects',
   'cmdk.newProject': 'New project',
 

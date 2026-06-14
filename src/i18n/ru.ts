@@ -109,6 +109,9 @@ const ru: Record<keyof typeof en, string> = {
   'project.noTasks': 'Пока нет задач',
   'project.noNotes': 'Пока нет заметок',
   'project.badge': 'Проект',
+  'project.cover': 'Обложка',
+  'project.addCover': 'Добавить обложку',
+  'project.changeCover': 'Сменить обложку',
   'home.activeProjects': 'Активные проекты',
   'cmdk.newProject': 'Новый проект',
 

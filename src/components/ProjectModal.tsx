@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { ImagePlus, Pencil, X } from 'lucide-react'
 import Modal from './ui/Modal'
 import { useI18n } from '../i18n'
 import {
@@ -28,11 +29,18 @@ export default function ProjectModal({
   const [deadline, setDeadline] = useState(project?.deadline ?? '')
   const [tools, setTools] = useState<string[]>(project?.tools ?? [])
   const [color, setColor] = useState<string | null>(project?.color ?? null)
+  const [cover, setCover] = useState<string | null>(project?.cover_path ?? null)
   const [description, setDescription] = useState(project?.description ?? '')
   const [saving, setSaving] = useState(false)
 
   const toggleTool = (tool: string) =>
     setTools((cur) => (cur.includes(tool) ? cur.filter((x) => x !== tool) : [...cur, tool]))
+
+  const pickCover = async () => {
+    const src = await window.wist.files.pickImage()
+    if (!src) return
+    setCover(await window.wist.files.saveCoverFromPath(src))
+  }
 
   const save = async () => {
     if (!name.trim() || saving) return
@@ -45,6 +53,7 @@ export default function ProjectModal({
       deadline: deadline || null,
       tools,
       color,
+      cover_path: cover,
       description: description.trim() || null,
     }
     try {
@@ -58,6 +67,42 @@ export default function ProjectModal({
   return (
     <Modal title={project ? t('project.edit') : t('project.new')} onClose={onClose}>
       <div className="space-y-4">
+        <div>
+          <label className="mb-1.5 block text-xs font-medium text-zinc-400">{t('project.cover')}</label>
+          {cover ? (
+            <div className="relative overflow-hidden rounded-lg border border-edge">
+              <img src={window.wist.media.fileUrl(cover)} alt="" className="h-28 w-full object-cover" />
+              <div className="absolute right-2 top-2 flex gap-1">
+                <button
+                  type="button"
+                  onClick={pickCover}
+                  title={t('project.changeCover')}
+                  className="rounded-md bg-black/60 p-1.5 text-zinc-100 backdrop-blur-sm transition-colors hover:bg-black/80"
+                >
+                  <Pencil size={13} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCover(null)}
+                  title={t('common.delete')}
+                  className="rounded-md bg-black/60 p-1.5 text-zinc-100 backdrop-blur-sm transition-colors hover:text-red-400"
+                >
+                  <X size={13} />
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={pickCover}
+              className="flex h-28 w-full flex-col items-center justify-center gap-1.5 rounded-lg border-2 border-dashed border-edge text-zinc-500 transition-colors hover:border-accent hover:text-zinc-300"
+            >
+              <ImagePlus size={20} />
+              <span className="text-xs font-medium">{t('project.addCover')}</span>
+            </button>
+          )}
+        </div>
+
         <div>
           <label className="mb-1 block text-xs font-medium text-zinc-400">{t('project.name')}</label>
           <input

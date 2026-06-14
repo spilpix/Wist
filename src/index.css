@@ -26,7 +26,8 @@
   --ink-800: 39 39 42;
 
   --scrollbar: #2c2c3e;
-  --card-shadow: none;
+  --card-shadow: 0 1px 2px rgb(0 0 0 / 0.28), 0 6px 20px rgb(0 0 0 / 0.22);
+  --card-shadow-hover: 0 10px 28px rgb(0 0 0 / 0.28);
   --palette-shadow: 0 24px 80px rgb(0 0 0 / 0.5);
   --c-success: 134 239 172;
   --c-danger: 252 165 165;
@@ -51,6 +52,7 @@
 
   --scrollbar: #c8c8d2;
   --card-shadow: 0 1px 2px rgb(22 22 38 / 0.05), 0 2px 10px rgb(22 22 38 / 0.05);
+  --card-shadow-hover: 0 6px 20px rgb(22 22 38 / 0.1);
   --palette-shadow: 0 24px 80px rgb(25 25 50 / 0.18);
   --c-success: 21 128 61;
   --c-danger: 185 28 28;
@@ -73,7 +75,8 @@
   --ink-700: 63 63 70;
   --ink-800: 39 39 42;
   --scrollbar: #2c2c3e;
-  --card-shadow: none;
+  --card-shadow: 0 1px 2px rgb(0 0 0 / 0.28), 0 6px 20px rgb(0 0 0 / 0.22);
+  --card-shadow-hover: 0 10px 28px rgb(0 0 0 / 0.28);
   --palette-shadow: 0 24px 80px rgb(0 0 0 / 0.5);
   --c-success: 134 239 172;
   --c-danger: 252 165 165;
@@ -309,11 +312,15 @@ video::-webkit-media-controls {
 
 @layer components {
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40;
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-all duration-150 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40 disabled:active:scale-100;
   }
   .btn-accent {
-    @apply btn bg-accent hover:bg-accent/80;
+    @apply btn bg-accent hover:bg-accent/85;
     color: #fff; /* literal: white-on-accent in both themes */
+    box-shadow: 0 1px 2px rgb(var(--accent-rgb) / 0.35), 0 4px 14px rgb(var(--accent-rgb) / 0.22);
+  }
+  .btn-accent:hover:not(:disabled) {
+    box-shadow: 0 2px 5px rgb(var(--accent-rgb) / 0.4), 0 8px 22px rgb(var(--accent-rgb) / 0.3);
   }
   .btn-ghost {
     @apply btn bg-raised text-zinc-300 hover:bg-edge hover:text-white;
@@ -322,20 +329,31 @@ video::-webkit-media-controls {
     @apply btn bg-red-500/15 text-red-400 hover:bg-red-500/25;
   }
   .input {
-    @apply w-full rounded-lg border border-edge bg-raised px-3 py-2 text-sm text-zinc-200 outline-none transition-colors placeholder:text-zinc-600 focus:border-accent;
+    @apply w-full rounded-lg border border-edge bg-raised px-3 py-2 text-sm text-zinc-200 outline-none transition-all placeholder:text-zinc-600 focus:border-accent;
+  }
+  .input:focus,
+  .select:focus {
+    box-shadow: 0 0 0 3px rgb(var(--accent-rgb) / 0.2);
   }
   .select {
-    @apply rounded-lg border border-edge bg-raised px-2.5 py-2 text-sm text-zinc-300 outline-none transition-colors focus:border-accent;
+    @apply rounded-lg border border-edge bg-raised px-2.5 py-2 text-sm text-zinc-300 outline-none transition-all focus:border-accent;
   }
   .card {
-    @apply rounded-xl border border-edge/50 bg-surface;
+    @apply rounded-xl border border-edge/50 bg-surface transition-all duration-200;
     box-shadow: var(--card-shadow);
+  }
+  /* an interactive card — lifts and deepens its shadow on hover */
+  .tile {
+    @apply card cursor-pointer hover:-translate-y-0.5 hover:border-edge;
+  }
+  .tile:hover {
+    box-shadow: var(--card-shadow-hover);
   }
   .page {
     @apply h-full overflow-y-auto px-10 py-8 animate-fade-in;
   }
   .page-title {
-    @apply mb-6 text-2xl font-semibold text-white;
+    @apply mb-6 text-[1.7rem] font-bold tracking-tight text-white;
   }
   .section-title {
     @apply mb-3 text-sm font-semibold uppercase tracking-wider text-zinc-500;
@@ -343,4 +361,19 @@ video::-webkit-media-controls {
   .kbd {
     @apply inline-flex items-center justify-center rounded border border-edge bg-raised px-1.5 py-px text-[10px] font-semibold text-zinc-500;
   }
+}
+
+/* premium base: accent text selection + accessible keyboard focus ring */
+::selection {
+  background: rgb(var(--accent-rgb) / 0.3);
+}
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid rgb(var(--accent-rgb) / 0.55);
+  outline-offset: 2px;
+  border-radius: 6px;
 }

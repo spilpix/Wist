@@ -238,6 +238,24 @@ export default function Home() {
         </Link>
       </header>
 
+      {/* quick actions */}
+      <div className="-mt-4 flex flex-wrap gap-2">
+        {[
+          { icon: FolderKanban, label: t('cmdk.newProject'), to: '/projects?new=1' },
+          { icon: Plus, label: t('cmdk.addTitle'), to: '/library?add=1' },
+          { icon: ListTodo, label: t('cmdk.newTask'), to: '/tasks?focus=1' },
+          { icon: PenLine, label: t('cmdk.newNote'), to: '/notes?new=1' },
+        ].map(({ icon: Icon, label, to }) => (
+          <button
+            key={to}
+            onClick={() => navigate(to)}
+            className="flex items-center gap-2 rounded-xl border border-edge/60 bg-surface px-3.5 py-2 text-sm font-medium text-zinc-300 shadow-sm transition-all hover:-translate-y-0.5 hover:border-edge hover:text-white"
+          >
+            <Icon size={15} className="text-accent-bright" /> {label}
+          </button>
+        ))}
+      </div>
+
       {/* today — the assistant strip */}
       <section>
         <h2 className="section-title">{t('home.today')}</h2>
