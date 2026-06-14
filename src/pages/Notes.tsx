@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   Code,
+  Eye,
   Heading1,
   Heading2,
   Heading3,
@@ -17,6 +18,7 @@ import {
   Search,
   Trash2,
 } from 'lucide-react'
+import MarkdownView from '../components/MarkdownView'
 import ChipsInput from '../components/ui/ChipsInput'
 import ConfirmDialog from '../components/ui/ConfirmDialog'
 import EmptyState from '../components/ui/EmptyState'
@@ -85,6 +87,7 @@ export default function Notes() {
   const [suggestIdx, setSuggestIdx] = useState(0)
   const [slash, setSlash] = useState<{ items: SlashCmd[] } | null>(null)
   const [slashIdx, setSlashIdx] = useState(0)
+  const [preview, setPreview] = useState(false)
 
   const draftRef = useRef<Draft | null>(null)
   draftRef.current = draft
@@ -328,6 +331,24 @@ export default function Notes() {
     return out
   }, [draft, notes, titles, navigate, openNote])
 
+  // resolve a [[link]] clicked in the preview to a note or title
+  const openLink = (name: string) => {
+    const key = name.trim().toLowerCase()
+    const note = (notes ?? []).find((x) => x.title.trim().toLowerCase() === key)
+    if (note) return openNote(note)
+    const title = titles.find((x) => x.title.trim().toLowerCase() === key || x.original_title?.trim().toLowerCase() === key)
+    if (title) navigate(`/title/${title.id}`)
+  }
+  // flip a checkbox in the preview by toggling its source line
+  const toggleCheckbox = (idx: number) => {
+    const d = draftRef.current
+    if (!d) return
+    const lines = d.content.split('\n')
+    if (lines[idx] == null) return
+    lines[idx] = lines[idx].replace(/\[([ xX])\]/, (_m, c) => (c === ' ' ? '[x]' : '[ ]'))
+    patchDraft({ content: lines.join('\n') })
+  }
+
   // ---------- list ----------
   const visible = useMemo(() => {
     if (!notes) return []
@@ -408,6 +429,13 @@ export default function Notes() {
               {saveState === 'saving' ? t('notes.saving') : saveState === 'saved' ? t('notes.savedNow') : ' '}
             </span>
             <div className="ml-auto flex items-center gap-1">
+              <button
+                className={`rounded-lg p-2 transition-colors ${preview ? 'text-accent-bright' : 'text-zinc-500 hover:text-zinc-300'}`}
+                title={preview ? t('notes.edit') : t('notes.preview')}
+                onClick={() => setPreview((v) => !v)}
+              >
+                {preview ? <PenLine size={15} /> : <Eye size={15} />}
+              </button>
               <select
                 className="select !py-1 text-xs"
                 value={draft.linked_title_id ?? ''}
@@ -447,6 +475,15 @@ export default function Notes() {
               onChange={(e) => patchDraft({ title: e.target.value })}
             />
             <ChipsInput value={draft.tags} onChange={(tags) => patchDraft({ tags })} placeholder={t('notes.tagsPlaceholder')} />
+            {preview ? (
+              <div className="min-h-[260px] flex-1">
+                {draft.content.trim() ? (
+                  <MarkdownView content={draft.content} onOpenLink={openLink} onToggleCheckbox={toggleCheckbox} />
+                ) : (
+                  <p className="text-sm text-zinc-600">{t('notes.contentPlaceholder')}</p>
+                )}
+              </div>
+            ) : (
             <div className="relative min-h-[260px] flex-1">
               <textarea
                 ref={contentRef}
@@ -535,6 +572,7 @@ export default function Notes() {
                 </div>
               )}
             </div>
+            )}
 
             {/* connections: outgoing links + backlinks */}
             {(outgoing.length > 0 || backlinks.length > 0) && (

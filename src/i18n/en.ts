@@ -380,6 +380,8 @@ const en = {
   'notes.slash.divider': 'Divider',
   'notes.slash.code': 'Code block',
   'notes.slash.link': 'Link to a note',
+  'notes.preview': 'Preview',
+  'notes.edit': 'Edit',
   'notes.tagsPlaceholder': 'Tag + Enter',
   'notes.linkedTitle': 'Linked title',
   'notes.noLink': 'No link',

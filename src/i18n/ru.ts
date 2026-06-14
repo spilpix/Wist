@@ -382,6 +382,8 @@ const ru: Record<keyof typeof en, string> = {
   'notes.slash.divider': 'Разделитель',
   'notes.slash.code': 'Блок кода',
   'notes.slash.link': 'Связать запись',
+  'notes.preview': 'Просмотр',
+  'notes.edit': 'Правка',
   'notes.tagsPlaceholder': 'Тег + Enter',
   'notes.linkedTitle': 'Связанный тайтл',
   'notes.noLink': 'Без привязки',
