@@ -201,7 +201,13 @@ export default function MemoryTree() {
       window.wist.moments.list({}),
       window.wist.journal.list(),
       window.wist.projects.list(),
-    ]).then(([titles, notes, moments, journal, projects]) => setSrc({ titles, notes, moments, journal, projects }))
+    ])
+      .then(([titles, notes, moments, journal, projects]) => setSrc({ titles, notes, moments, journal, projects }))
+      .catch((e) => {
+        // a failed load must never leave the graph stuck on the spinner
+        console.error('graph load failed', e)
+        setSrc((prev) => prev ?? { titles: [], notes: [], moments: [], journal: [], projects: [] })
+      })
   }, [])
 
   const kindNames = useMemo<Record<MemoryKind, string>>(

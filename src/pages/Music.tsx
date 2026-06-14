@@ -22,7 +22,17 @@ export default function Music() {
   const [url, setUrl] = useState('')
   const [adding, setAdding] = useState(false)
 
-  const load = useCallback(() => window.wist.playlists.list().then(setPlaylists), [])
+  const load = useCallback(
+    () =>
+      window.wist.playlists
+        .list()
+        .then(setPlaylists)
+        .catch((e) => {
+          console.error('music load failed', e)
+          setPlaylists((prev) => prev ?? [])
+        }),
+    []
+  )
 
   useEffect(() => {
     load()

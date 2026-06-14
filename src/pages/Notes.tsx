@@ -99,10 +99,18 @@ export default function Notes() {
   const createdByToken = useRef<Map<number, number>>(new Map())
 
   const load = useCallback(async () => {
-    const [ns, ts] = await Promise.all([window.wist.notes.list({}), window.wist.titles.list({})])
-    setNotes(ns)
-    setTitles(ts)
-    return ns
+    try {
+      const [ns, ts] = await Promise.all([window.wist.notes.list({}), window.wist.titles.list({})])
+      setNotes(ns)
+      setTitles(ts)
+      return ns
+    } catch (e) {
+      // a failed load must never leave the page stuck on the spinner
+      console.error('notes load failed', e)
+      setNotes((prev) => prev ?? [])
+      setTitles((prev) => prev ?? [])
+      return []
+    }
   }, [])
 
   useEffect(() => {

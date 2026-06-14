@@ -24,9 +24,14 @@ export default function Journal() {
   const dirty = useRef(false)
 
   const load = useCallback(async () => {
-    const [list, st] = await Promise.all([window.wist.journal.list(), window.wist.journal.streak()])
-    setEntries(new Map(list.map((e) => [e.day, e])))
-    setStreak(st)
+    try {
+      const [list, st] = await Promise.all([window.wist.journal.list(), window.wist.journal.streak()])
+      setEntries(new Map(list.map((e) => [e.day, e])))
+      setStreak(st)
+    } catch (e) {
+      console.error('journal load failed', e)
+      setEntries((prev) => prev ?? new Map())
+    }
   }, [])
 
   useEffect(() => {

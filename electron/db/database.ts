@@ -16,6 +16,9 @@ export function openDatabase(): Database.Database {
   const file = path.join(dir, 'wist.db')
   _db = new Database(file)
   _db.pragma('journal_mode = WAL')
+  // the app and the local agent API are both writers — wait for a lock instead of
+  // failing reads with SQLITE_BUSY the instant another connection is mid-write
+  _db.pragma('busy_timeout = 5000')
   _db.pragma('foreign_keys = ON')
   migrate(_db)
   return _db

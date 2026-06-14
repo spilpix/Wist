@@ -30,9 +30,14 @@ export default function Games() {
   const [confirm, setConfirm] = useState<Game | null>(null)
 
   const load = useCallback(async () => {
-    const [g, r] = await Promise.all([window.wist.games.list(), window.wist.games.running()])
-    setGames(g)
-    setRunning(r)
+    try {
+      const [g, r] = await Promise.all([window.wist.games.list(), window.wist.games.running()])
+      setGames(g)
+      setRunning(r)
+    } catch (e) {
+      console.error('games load failed', e)
+      setGames((prev) => prev ?? [])
+    }
   }, [])
 
   useEffect(() => {

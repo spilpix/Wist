@@ -32,9 +32,16 @@ export default function Tasks() {
   // optimistic board move + the onDataChanged refresh from clobbering each other
   const load = useCallback(() => {
     const seq = ++loadSeq.current
-    return window.wist.tasks.list().then((ts) => {
-      if (seq === loadSeq.current) setTasks(ts)
-    })
+    return window.wist.tasks
+      .list()
+      .then((ts) => {
+        if (seq === loadSeq.current) setTasks(ts)
+      })
+      .catch((e) => {
+        // a failed load must never leave the page stuck on the spinner
+        console.error('tasks load failed', e)
+        setTasks((prev) => prev ?? [])
+      })
   }, [])
 
   useEffect(() => {

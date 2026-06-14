@@ -328,7 +328,17 @@ function VideosTab({ titles, loading, filters, view, setFilters, setView, genres
 // ---------------- Music tab ----------------
 function MusicTab({ t }: { t: TFn }) {
   const [playlists, setPlaylists] = useState<Playlist[] | null>(null)
-  const load = useCallback(() => window.wist.playlists.list().then(setPlaylists), [])
+  const load = useCallback(
+    () =>
+      window.wist.playlists
+        .list()
+        .then(setPlaylists)
+        .catch((e) => {
+          console.error('playlists load failed', e)
+          setPlaylists((prev) => prev ?? [])
+        }),
+    []
+  )
   useEffect(() => {
     load()
   }, [load])
@@ -396,7 +406,17 @@ function MusicTab({ t }: { t: TFn }) {
 function FilesTab({ t }: { t: TFn }) {
   const navigate = useNavigate()
   const [files, setFiles] = useState<VaultFile[] | null>(null)
-  const load = useCallback(() => window.wist.vault.list().then(setFiles), [])
+  const load = useCallback(
+    () =>
+      window.wist.vault
+        .list()
+        .then(setFiles)
+        .catch((e) => {
+          console.error('vault load failed', e)
+          setFiles((prev) => prev ?? [])
+        }),
+    []
+  )
   useEffect(() => {
     load()
   }, [load])
