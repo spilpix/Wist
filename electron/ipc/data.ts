@@ -7,6 +7,7 @@ import { getSettings } from '../settings'
 
 const TABLES = [
   'titles', 'episodes', 'moments', 'youtube_sources', 'watch_sessions', 'screenshots',
+  'projects', 'project_assets',
   'notes', 'journal_entries', 'tasks', 'playlists', 'vault_files',
 ] as const
 

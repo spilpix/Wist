@@ -8,6 +8,7 @@ import {
   CalendarDays,
   ChevronDown,
   Clock,
+  FolderKanban,
   FolderOpen,
   Gamepad2,
   Heart,
@@ -33,6 +34,14 @@ const topLinks: Link[] = [{ to: '/', key: 'nav.home', icon: Home }]
 
 const GROUPS: Array<{ key: TKey; id: string; links: Link[] }> = [
   {
+    key: 'nav.studio',
+    id: 'studio',
+    links: [
+      { to: '/projects', key: 'nav.projects', icon: FolderKanban },
+      { to: '/vault', key: 'nav.vault', icon: Archive },
+    ],
+  },
+  {
     key: 'nav.media',
     id: 'media',
     links: [
@@ -57,7 +66,6 @@ const GROUPS: Array<{ key: TKey; id: string; links: Link[] }> = [
     id: 'tools',
     links: [
       { to: '/tasks', key: 'nav.tasks', icon: ListTodo },
-      { to: '/vault', key: 'nav.vault', icon: Archive },
       { to: '/music', key: 'nav.music', icon: Music },
       { to: '/league', key: 'nav.league', icon: Gamepad2 },
     ],

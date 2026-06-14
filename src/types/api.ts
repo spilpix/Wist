@@ -13,6 +13,7 @@ import type {
   MonthBar,
   Note,
   Playlist,
+  Project,
   StatsSummary,
   SubtitleTrack,
   Task,
@@ -48,6 +49,14 @@ export interface WistApi {
     update(id: number, patch: Partial<Task>): Promise<Task>
     remove(id: number): Promise<void>
     clearCompleted(): Promise<number>
+  }
+  projects: {
+    list(): Promise<Project[]>
+    get(id: number): Promise<Project | null>
+    create(data: Partial<Project>): Promise<Project>
+    update(id: number, patch: Partial<Project>): Promise<Project>
+    remove(id: number): Promise<void>
+    reorder(ids: number[]): Promise<void>
   }
   playlists: {
     list(): Promise<Playlist[]>

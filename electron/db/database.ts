@@ -182,6 +182,43 @@ const MIGRATIONS: string[] = [
 
   ALTER TABLE notes ADD COLUMN source TEXT NOT NULL DEFAULT 'user';
   `,
+
+  // 004 — projects: a creative workspace that gathers folders/files/refs and
+  // links notes & tasks. Pure additive (CREATE + nullable ADD COLUMN) so FK can stay on.
+  `
+  CREATE TABLE projects (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    client TEXT,
+    kind TEXT NOT NULL DEFAULT 'video' CHECK (kind IN ('video','motion','edit','3d','design','other')),
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('idea','active','review','done','archived')),
+    color TEXT,
+    cover_path TEXT,
+    deadline TEXT,
+    tools TEXT NOT NULL DEFAULT '[]',
+    description TEXT,
+    pinned INTEGER NOT NULL DEFAULT 0,
+    sort INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+  );
+
+  CREATE TABLE project_assets (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    kind TEXT NOT NULL DEFAULT 'file' CHECK (kind IN ('folder','file','url','image')),
+    path TEXT,
+    url TEXT,
+    label TEXT,
+    thumb_path TEXT,
+    sort INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+  );
+  CREATE INDEX idx_project_assets_project ON project_assets(project_id);
+
+  ALTER TABLE notes ADD COLUMN project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL;
+  ALTER TABLE tasks ADD COLUMN project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL;
+  `,
 ]
 
 function migrate(d: Database.Database) {

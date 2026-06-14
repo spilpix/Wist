@@ -22,6 +22,7 @@ const KIND_HEX: Record<MemoryKind, string> = {
   book: '#f59e0b',
   note: '#60a5fa',
   journal: '#f472b6',
+  project: '#ec4899',
 }
 
 const KIND_ORDER: MemoryKind[] = ['title', 'book', 'note', 'moment', 'journal']
@@ -186,6 +187,7 @@ export default function MemoryTree() {
       note: t('world.kind.note'),
       moment: t('world.kind.moment'),
       journal: t('world.kind.journal'),
+      project: t('world.kind.project'),
     }),
     [t]
   )
@@ -198,6 +200,7 @@ export default function MemoryTree() {
       note: src.notes.length,
       moment: src.moments.length,
       journal: src.journal.length,
+      project: 0, // projects join the graph in M4
     }
   }, [src])
 

@@ -40,7 +40,7 @@ function mock(): GalaxyData {
   return {
     nodes,
     edges,
-    kindNames: { moment: 'Момент', title: 'Тайтл', book: 'Книга', note: 'Запись', journal: 'Дневник' },
+    kindNames: { moment: 'Момент', title: 'Тайтл', book: 'Книга', note: 'Запись', journal: 'Дневник', project: 'Проект' },
   }
 }
 

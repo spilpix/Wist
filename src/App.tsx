@@ -13,6 +13,7 @@ import Journal from './pages/Journal'
 import Tasks from './pages/Tasks'
 import Music from './pages/Music'
 import Vault from './pages/Vault'
+import Projects from './pages/Projects'
 import League from './pages/League'
 import LocalFiles from './pages/LocalFiles'
 import YouTubeSources from './pages/YouTubeSources'
@@ -49,6 +50,7 @@ export default function App() {
           <Route path="/tasks" element={<Tasks />} />
           <Route path="/music" element={<Music />} />
           <Route path="/vault" element={<Vault />} />
+          <Route path="/projects" element={<Projects />} />
           <Route path="/league" element={<League />} />
           <Route path="/tree" element={lazyPage(<MemoryTree />)} />
           <Route path="/local" element={<LocalFiles />} />

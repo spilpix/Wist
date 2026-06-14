@@ -24,6 +24,14 @@ const api = {
     remove: (id: number) => invoke('tasks:remove', id),
     clearCompleted: () => invoke('tasks:clearCompleted'),
   },
+  projects: {
+    list: () => invoke('projects:list'),
+    get: (id: number) => invoke('projects:get', id),
+    create: (data: unknown) => invoke('projects:create', data),
+    update: (id: number, patch: unknown) => invoke('projects:update', id, patch),
+    remove: (id: number) => invoke('projects:remove', id),
+    reorder: (ids: number[]) => invoke('projects:reorder', ids),
+  },
   playlists: {
     list: () => invoke('playlists:list'),
     create: (data: unknown) => invoke('playlists:create', data),

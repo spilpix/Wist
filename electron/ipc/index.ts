@@ -8,6 +8,7 @@ import * as moments from '../db/moments'
 import * as notes from '../db/notes'
 import * as journal from '../db/journal'
 import * as tasks from '../db/tasks'
+import * as projects from '../db/projects'
 import * as playlists from '../db/playlists'
 import * as vault from '../db/vault'
 import * as sessions from '../db/sessions'
@@ -103,6 +104,14 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('tasks:update', (_e, id: number, patch) => tasks.updateTask(id, patch ?? {}))
   ipcMain.handle('tasks:remove', (_e, id: number) => tasks.deleteTask(id))
   ipcMain.handle('tasks:clearCompleted', () => tasks.clearCompleted())
+
+  // --- projects ---
+  ipcMain.handle('projects:list', () => projects.listProjects())
+  ipcMain.handle('projects:get', (_e, id: number) => projects.getProject(id))
+  ipcMain.handle('projects:create', (_e, payload) => projects.createProject(payload ?? {}))
+  ipcMain.handle('projects:update', (_e, id: number, patch) => projects.updateProject(id, patch ?? {}))
+  ipcMain.handle('projects:remove', (_e, id: number) => projects.deleteProject(id))
+  ipcMain.handle('projects:reorder', (_e, ids: number[]) => projects.reorderProjects(ids ?? []))
 
   // --- playlists ---
   ipcMain.handle('playlists:list', () => playlists.listPlaylists())

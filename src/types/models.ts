@@ -61,12 +61,14 @@ export interface Note {
   content: string
   tags: string[]
   linked_title_id: number | null
+  project_id: number | null
   pinned: 0 | 1
   source: string // 'user' or an agent name
   created_at: string
   updated_at: string
   // derived
   linked_title_name?: string | null
+  project_name?: string | null
 }
 
 export interface JournalEntry {
@@ -88,9 +90,12 @@ export interface Task {
   priority: TaskPriority
   due_date: string | null
   tags: string[]
+  project_id: number | null
   source: string // 'user' or an agent name
   created_at: string
   completed_at: string | null
+  // derived
+  project_name?: string | null
 }
 
 export type MusicService = 'spotify' | 'youtube' | 'yandex' | 'soundcloud' | 'apple' | 'other'
@@ -114,6 +119,43 @@ export interface VaultFile {
   size: number
   kind: VaultKind
   tags: string[]
+  created_at: string
+}
+
+export type ProjectKind = 'video' | 'motion' | 'edit' | '3d' | 'design' | 'other'
+export type ProjectStatus = 'idea' | 'active' | 'review' | 'done' | 'archived'
+export type ProjectAssetKind = 'folder' | 'file' | 'url' | 'image'
+
+export interface Project {
+  id: number
+  name: string
+  client: string | null
+  kind: ProjectKind
+  status: ProjectStatus
+  color: string | null
+  cover_path: string | null
+  deadline: string | null // YYYY-MM-DD
+  tools: string[]
+  description: string | null
+  pinned: 0 | 1
+  sort: number
+  created_at: string
+  updated_at: string
+  // derived
+  asset_count?: number
+  note_count?: number
+  open_task_count?: number
+}
+
+export interface ProjectAsset {
+  id: number
+  project_id: number
+  kind: ProjectAssetKind
+  path: string | null
+  url: string | null
+  label: string | null
+  thumb_path: string | null
+  sort: number
   created_at: string
 }
 
@@ -183,7 +225,7 @@ export interface MetaCandidate {
   source: string
 }
 
-export type MemoryKind = 'moment' | 'title' | 'book' | 'note' | 'journal'
+export type MemoryKind = 'moment' | 'title' | 'book' | 'note' | 'journal' | 'project'
 
 export interface MemoryEvent {
   key: string
@@ -313,3 +355,29 @@ export const MOMENT_TAG_COLORS: Record<MomentTag, string> = {
   important: '#ef4444',
   beautiful: '#4ade80',
 }
+
+export const PROJECT_KINDS: ProjectKind[] = ['video', 'motion', 'edit', '3d', 'design', 'other']
+
+export const PROJECT_STATUSES: ProjectStatus[] = ['idea', 'active', 'review', 'done', 'archived']
+
+export const PROJECT_STATUS_COLORS: Record<ProjectStatus, string> = {
+  idea: '#8b8b9e',
+  active: '#a888f0',
+  review: '#f59e0b',
+  done: '#4ade80',
+  archived: '#52525b',
+}
+
+// preset creative tools — labels live in i18n under project.tool.*
+export const PROJECT_TOOLS = [
+  'blender',
+  'davinci',
+  'aftereffects',
+  'photoshop',
+  'premiere',
+  'cinema4d',
+  'figma',
+  'other',
+] as const
+
+export const PROJECT_COLORS = ['#a888f0', '#60a5fa', '#4ade80', '#facc15', '#f59e0b', '#ef4444', '#ec4899', '#14b8a6']

@@ -15,6 +15,7 @@ export const KIND_COLORS: Record<MemoryKind, number> = {
   book: 0xf59e0b,
   note: 0x60a5fa,
   journal: 0xf472b6,
+  project: 0xec4899,
 }
 
 const W = 1200
