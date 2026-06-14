@@ -7,7 +7,7 @@ import * as journal from './db/journal'
 import { now } from './db/database'
 
 /**
- * Local HTTP API so external tools and AI agents can write into Wist:
+ * Local HTTP API so external tools and AI agents can write into Bard:
  * tasks they completed, reports as notes, journal updates. 127.0.0.1 only,
  * Bearer-token auth, JSON in/out.
  */
@@ -67,7 +67,7 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse): Prom
   const auth = req.headers.authorization ?? ''
   const token = auth.startsWith('Bearer ') ? auth.slice(7) : (req.headers['x-api-key'] as string | undefined)
   if (!settings.apiToken || token !== settings.apiToken) {
-    json(res, 401, { error: 'Unauthorized: pass Authorization: Bearer <token> (see Wist Settings)' })
+    json(res, 401, { error: 'Unauthorized: pass Authorization: Bearer <token> (see Bard Settings)' })
     return
   }
 
@@ -201,7 +201,7 @@ export function restartApiServer(): void {
     handle(req, res).catch((err) => json(res, 500, { error: String(err?.message ?? err) }))
   })
   server.on('error', (err) => {
-    console.error('Wist API server error:', err.message)
+    console.error('Bard API server error:', err.message)
     server = null
   })
   server.listen(settings.apiPort || 7459, '127.0.0.1')

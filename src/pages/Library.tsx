@@ -1,22 +1,97 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { ArrowDownAZ, ArrowUpAZ, LayoutGrid, Library as LibraryIcon, List, Plus, Search } from 'lucide-react'
+import {
+  Archive,
+  ArrowDownAZ,
+  ArrowUpAZ,
+  ExternalLink,
+  File as FileIcon,
+  FileText,
+  FileVideo,
+  Film,
+  Image as ImageIcon,
+  LayoutGrid,
+  Library as LibraryIcon,
+  List,
+  Music as MusicIcon,
+  Music2,
+  Plus,
+  Search,
+  Trash2,
+} from 'lucide-react'
 import AddTitleModal from '../components/AddTitleModal'
 import TitleCard from '../components/TitleCard'
 import TitleRow from '../components/TitleRow'
 import EmptyState from '../components/ui/EmptyState'
 import Spinner from '../components/ui/Spinner'
 import { useLibraryStore } from '../store/libraryStore'
-import { STATUS_COLORS, TITLE_STATUSES, TITLE_TYPES, type TitleStatus, type TitleType } from '../types/models'
-import { useI18n } from '../i18n'
+import {
+  STATUS_COLORS,
+  TITLE_STATUSES,
+  TITLE_TYPES,
+  type MusicService,
+  type Playlist,
+  type Title,
+  type TitleFilters,
+  type TitleStatus,
+  type TitleType,
+  type VaultFile,
+  type VaultKind,
+} from '../types/models'
+import { useI18n, type TKey } from '../i18n'
 
 const SORTS = ['date_added', 'title', 'rating', 'progress', 'last_watched'] as const
+type LibTab = 'videos' | 'music' | 'files'
+
+const TABS: Array<{ id: LibTab; key: TKey; icon: typeof Film }> = [
+  { id: 'videos', key: 'lib.tabVideos', icon: Film },
+  { id: 'music', key: 'lib.tabMusic', icon: Music2 },
+  { id: 'files', key: 'lib.tabFiles', icon: Archive },
+]
+
+const SERVICE_META: Record<MusicService, { label: string; color: string }> = {
+  spotify: { label: 'Spotify', color: '#1db954' },
+  youtube: { label: 'YouTube', color: '#ff0033' },
+  yandex: { label: 'Яндекс', color: '#ffcc00' },
+  soundcloud: { label: 'SoundCloud', color: '#ff5500' },
+  apple: { label: 'Apple Music', color: '#fa57c1' },
+  other: { label: 'Link', color: '#a888f0' },
+}
+
+const KIND_ICON: Record<VaultKind, typeof FileIcon> = {
+  image: ImageIcon,
+  video: FileVideo,
+  audio: MusicIcon,
+  doc: FileText,
+  archive: Archive,
+  other: FileIcon,
+}
+
+function formatBytes(n: number): string {
+  if (!n) return '—'
+  const units = ['B', 'KB', 'MB', 'GB', 'TB']
+  let i = 0
+  let v = n
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024
+    i++
+  }
+  return `${v.toFixed(v < 10 && i > 0 ? 1 : 0)} ${units[i]}`
+}
 
 export default function Library() {
   const { t } = useI18n()
   const { titles, loading, filters, view, setFilters, setView, load } = useLibraryStore()
   const [searchParams, setSearchParams] = useSearchParams()
   const [showAdd, setShowAdd] = useState(false)
+
+  const tab = (searchParams.get('tab') as LibTab) || 'videos'
+  const setTab = (id: LibTab) => {
+    const next = new URLSearchParams(searchParams)
+    if (id === 'videos') next.delete('tab')
+    else next.set('tab', id)
+    setSearchParams(next, { replace: true })
+  }
 
   // command palette deep link: /library?add=1 opens the add-title modal
   useEffect(() => {
@@ -49,14 +124,75 @@ export default function Library() {
 
   return (
     <div className="page">
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-5 flex items-center justify-between">
         <h1 className="page-title !mb-0">{heading}</h1>
-        <button className="btn-accent" onClick={() => setShowAdd(true)}>
-          <Plus size={16} /> {t('lib.addTitle')}
-        </button>
+        {tab === 'videos' && (
+          <button className="btn-accent" onClick={() => setShowAdd(true)}>
+            <Plus size={16} /> {t('lib.addTitle')}
+          </button>
+        )}
       </div>
 
-      {/* status chips — the sidebar "My Lists" moved here */}
+      {/* YouTube-style category chips */}
+      <div className="no-scrollbar mb-6 flex gap-2 overflow-x-auto">
+        {TABS.map(({ id, key, icon: Icon }) => (
+          <button
+            key={id}
+            onClick={() => setTab(id)}
+            className={`flex shrink-0 items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-[13px] font-medium transition-colors ${
+              tab === id
+                ? 'bg-accent text-[#fff]'
+                : 'bg-raised text-zinc-400 hover:bg-edge hover:text-zinc-200'
+            }`}
+          >
+            <Icon size={14} />
+            {t(key)}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'videos' && (
+        <VideosTab
+          titles={titles}
+          loading={loading}
+          filters={filters}
+          view={view}
+          setFilters={setFilters}
+          setView={setView}
+          genres={genres}
+          years={years}
+          onAdd={() => setShowAdd(true)}
+          t={t}
+        />
+      )}
+      {tab === 'music' && <MusicTab t={t} />}
+      {tab === 'files' && <FilesTab t={t} />}
+
+      {showAdd && <AddTitleModal onClose={() => setShowAdd(false)} onSaved={() => load()} />}
+    </div>
+  )
+}
+
+// ---------------- Videos tab (the original library grid) ----------------
+type TFn = (key: TKey, params?: Record<string, string | number>) => string
+
+interface VideosProps {
+  titles: Title[]
+  loading: boolean
+  filters: TitleFilters
+  view: 'grid' | 'list'
+  setFilters: (patch: Partial<TitleFilters>) => void
+  setView: (view: 'grid' | 'list') => void
+  genres: string[]
+  years: number[]
+  onAdd: () => void
+  t: TFn
+}
+
+function VideosTab({ titles, loading, filters, view, setFilters, setView, genres, years, onAdd, t }: VideosProps) {
+  return (
+    <>
+      {/* status chips — the sidebar "My Lists" moved here (Видео tab) */}
       <div className="mb-4 flex flex-wrap items-center gap-1.5">
         <button
           onClick={() => setFilters({ status: 'all' })}
@@ -166,26 +302,146 @@ export default function Library() {
           title={t('lib.emptyTitle')}
           subtitle={t('lib.emptySubtitle')}
           action={
-            <button className="btn-accent" onClick={() => setShowAdd(true)}>
+            <button className="btn-accent" onClick={onAdd}>
               <Plus size={16} /> {t('lib.addFirst')}
             </button>
           }
         />
       ) : view === 'grid' ? (
         <div className="grid grid-cols-3 gap-x-5 gap-y-7 lg:grid-cols-4 xl:grid-cols-5">
-          {titles.map((t) => (
-            <TitleCard key={t.id} title={t} />
+          {titles.map((title) => (
+            <TitleCard key={title.id} title={title} />
           ))}
         </div>
       ) : (
         <div className="space-y-1">
-          {titles.map((t) => (
-            <TitleRow key={t.id} title={t} />
+          {titles.map((title) => (
+            <TitleRow key={title.id} title={title} />
           ))}
         </div>
       )}
+    </>
+  )
+}
 
-      {showAdd && <AddTitleModal onClose={() => setShowAdd(false)} onSaved={() => load()} />}
+// ---------------- Music tab ----------------
+function MusicTab({ t }: { t: TFn }) {
+  const [playlists, setPlaylists] = useState<Playlist[] | null>(null)
+  const load = useCallback(() => window.wist.playlists.list().then(setPlaylists), [])
+  useEffect(() => {
+    load()
+  }, [load])
+
+  if (!playlists) return <Spinner />
+  if (!playlists.length) {
+    return <EmptyState icon={MusicIcon} title={t('lib.musicEmpty')} subtitle={t('lib.musicEmptySub')} />
+  }
+
+  return (
+    <div className="grid grid-cols-3 gap-5 lg:grid-cols-4 xl:grid-cols-5">
+      {playlists.map((p) => {
+        const meta = SERVICE_META[p.service] ?? SERVICE_META.other
+        return (
+          <div key={p.id} className="group">
+            <button
+              onClick={() => window.wist.shell.openExternal(p.url)}
+              className="relative block aspect-square w-full overflow-hidden rounded-xl bg-raised text-left transition-transform duration-150 hover:-translate-y-0.5"
+            >
+              {p.cover_path ? (
+                <img
+                  src={window.wist.media.fileUrl(p.cover_path)}
+                  alt={p.title}
+                  loading="lazy"
+                  className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.03]"
+                />
+              ) : (
+                <div
+                  className="flex h-full w-full items-center justify-center"
+                  style={{ background: `linear-gradient(135deg, ${meta.color}33, ${meta.color}0d)` }}
+                >
+                  <MusicIcon size={36} style={{ color: meta.color }} />
+                </div>
+              )}
+              <span
+                className="absolute left-2 top-2 rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#fff]"
+                style={{ backgroundColor: meta.color }}
+              >
+                {meta.label}
+              </span>
+              <span className="absolute bottom-2 right-2 flex h-9 w-9 items-center justify-center rounded-full bg-black/70 opacity-0 transition-opacity group-hover:opacity-100">
+                <ExternalLink size={15} className="text-[#fff]" />
+              </span>
+            </button>
+            <div className="mt-2 flex items-start justify-between gap-2">
+              <div className="min-w-0 truncate text-[13px] font-medium text-zinc-200">{p.title}</div>
+              <button
+                className="shrink-0 text-zinc-600 opacity-0 transition-all hover:text-red-400 group-hover:opacity-100"
+                onClick={async () => {
+                  await window.wist.playlists.remove(p.id)
+                  load()
+                }}
+              >
+                <Trash2 size={13} />
+              </button>
+            </div>
+          </div>
+        )
+      })}
     </div>
+  )
+}
+
+// ---------------- Files tab ----------------
+function FilesTab({ t }: { t: TFn }) {
+  const [files, setFiles] = useState<VaultFile[] | null>(null)
+  const load = useCallback(() => window.wist.vault.list().then(setFiles), [])
+  useEffect(() => {
+    load()
+  }, [load])
+
+  const addFiles = async () => {
+    const n = await window.wist.vault.pickAndAdd()
+    if (n > 0) load()
+  }
+
+  if (!files) return <Spinner />
+
+  return (
+    <>
+      <div className="mb-5 flex justify-end">
+        <button className="btn-ghost" onClick={addFiles}>
+          <Plus size={15} /> {t('vault.add')}
+        </button>
+      </div>
+      {!files.length ? (
+        <EmptyState icon={Archive} title={t('lib.filesEmpty')} subtitle={t('lib.filesEmptySub')} />
+      ) : (
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-4">
+          {files.map((f) => {
+            const Icon = KIND_ICON[f.kind] ?? FileIcon
+            return (
+              <div key={f.id} className="group flex items-center gap-3 rounded-xl border border-edge/50 bg-surface p-3 transition-colors hover:border-edge">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-raised text-accent-bright">
+                  <Icon size={20} />
+                </span>
+                <button onClick={() => window.wist.vault.open(f.path)} className="min-w-0 flex-1 text-left">
+                  <div className="truncate text-[13px] font-medium text-zinc-200 group-hover:text-white">{f.name}</div>
+                  <div className="text-xs text-zinc-500">{formatBytes(f.size)}</div>
+                </button>
+                <button
+                  className="shrink-0 text-zinc-600 opacity-0 transition-all hover:text-red-400 group-hover:opacity-100"
+                  onClick={async () => {
+                    await window.wist.vault.remove(f.id)
+                    load()
+                  }}
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </>
   )
 }

@@ -16,7 +16,7 @@ function win(): BrowserWindow | undefined {
 
 export async function exportAll(): Promise<string | null> {
   const res = await dialog.showSaveDialog(win()!, {
-    title: 'Export Wist data',
+    title: 'Export Bard data',
     defaultPath: `wist-backup-${new Date().toISOString().slice(0, 10)}.json`,
     filters: [{ name: 'JSON', extensions: ['json'] }],
   })
@@ -37,7 +37,7 @@ export async function exportAll(): Promise<string | null> {
 
 export async function importAll(): Promise<boolean> {
   const res = await dialog.showOpenDialog(win()!, {
-    title: 'Import Wist backup',
+    title: 'Import Bard backup',
     properties: ['openFile'],
     filters: [{ name: 'JSON', extensions: ['json'] }],
   })
@@ -45,7 +45,7 @@ export async function importAll(): Promise<boolean> {
 
   const raw = JSON.parse(fs.readFileSync(res.filePaths[0], 'utf-8'))
   if (raw?.app !== 'wist' || !Array.isArray(raw.titles)) {
-    throw new Error('Not a valid Wist backup file.')
+    throw new Error('Not a valid Bard backup file.')
   }
 
   const d = db()

@@ -5,30 +5,32 @@
       <stop offset="55%" stop-color="#15151f"/>
       <stop offset="100%" stop-color="#0d0d14"/>
     </linearGradient>
-    <linearGradient id="tri" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#b89bf7"/>
+    <linearGradient id="wave" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#c4abfa"/>
       <stop offset="100%" stop-color="#7c5cbf"/>
     </linearGradient>
     <radialGradient id="glow" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" stop-color="#7c5cbf" stop-opacity="0.55"/>
+      <stop offset="0%" stop-color="#7c5cbf" stop-opacity="0.5"/>
       <stop offset="100%" stop-color="#7c5cbf" stop-opacity="0"/>
     </radialGradient>
   </defs>
 
   <!-- rounded-square dark base -->
   <rect width="512" height="512" rx="116" fill="url(#bg)"/>
-  <!-- subtle inner border -->
   <rect x="5" y="5" width="502" height="502" rx="112" fill="none" stroke="#a888f0" stroke-opacity="0.18" stroke-width="3"/>
 
-  <!-- purple glow behind the play mark -->
-  <circle cx="264" cy="260" r="195" fill="url(#glow)"/>
+  <!-- accent glow behind the waveform -->
+  <circle cx="256" cy="268" r="205" fill="url(#glow)"/>
 
-  <!-- play triangle with rounded corners (thick round-joined stroke) -->
-  <path d="M 208 178 L 342 256 L 208 334 Z"
-        fill="url(#tri)" stroke="url(#tri)" stroke-width="56" stroke-linejoin="round"/>
+  <!-- symmetric Bard waveform -->
+  <g fill="url(#wave)">
+    <rect x="69"  y="181" width="46" height="150" rx="23" opacity="0.8"/>
+    <rect x="151" y="131" width="46" height="250" rx="23" opacity="0.92"/>
+    <rect x="233" y="86"  width="46" height="340" rx="23"/>
+    <rect x="315" y="131" width="46" height="250" rx="23" opacity="0.92"/>
+    <rect x="397" y="181" width="46" height="150" rx="23" opacity="0.8"/>
+  </g>
 
   <!-- moment sparkle, top right -->
-  <path d="M 384 110 q 7 26 33 33 q -26 7 -33 33 q -7 -26 -33 -33 q 26 -7 33 -33 Z" fill="#cdb9f8"/>
-  <!-- small companion sparkle -->
-  <path d="M 423 178 q 4 14 18 18 q -14 4 -18 18 q -4 -14 -18 -18 q 14 -4 18 -18 Z" fill="#8d6fd1" opacity="0.9"/>
+  <path d="M 402 96 q 7 26 33 33 q -26 7 -33 33 q -7 -26 -33 -33 q 26 -7 33 -33 Z" fill="#cdb9f8"/>
 </svg>

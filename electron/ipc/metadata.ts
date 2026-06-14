@@ -10,7 +10,7 @@ import type { MetaCandidate, TitleType } from '../../src/types/models'
 function fetchJson(url: string, redirects = 3): Promise<any> {
   return new Promise((resolve, reject) => {
     const mod = url.startsWith('https') ? https : http
-    const req = mod.get(url, { headers: { 'User-Agent': 'Wist/0.4 (personal media hub)' }, timeout: 12000 }, (res) => {
+    const req = mod.get(url, { headers: { 'User-Agent': 'Bard/0.9 (personal media hub)' }, timeout: 12000 }, (res) => {
       if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location && redirects > 0) {
         res.resume()
         resolve(fetchJson(new URL(res.headers.location, url).toString(), redirects - 1))
@@ -137,7 +137,7 @@ export function downloadCover(url: string): Promise<string> {
     const ext = /\.(png|webp|gif)(\?|$)/i.exec(url)?.[1]?.toLowerCase() ?? 'jpg'
     const file = path.join(coversDir(), `cover-${Date.now()}.${ext}`)
     const mod = url.startsWith('https') ? https : http
-    const req = mod.get(url, { headers: { 'User-Agent': 'Wist/0.4' }, timeout: 15000 }, (res) => {
+    const req = mod.get(url, { headers: { 'User-Agent': 'Bard/0.9' }, timeout: 15000 }, (res) => {
       if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
         res.resume()
         resolve(downloadCover(new URL(res.headers.location, url).toString()))

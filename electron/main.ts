@@ -7,6 +7,12 @@ import { registerIpcHandlers } from './ipc'
 import { getSettings } from './settings'
 import { restartApiServer, setApiNotifier } from './apiServer'
 
+// Keep reading the original "Wist" data folder after the Bard rebrand.
+// app.getName() now returns "Bard" (productName), which would otherwise move
+// userData to %APPDATA%/Bard and orphan the existing database, settings,
+// covers, screenshots and world art. Pin it before anything touches the path.
+app.setPath('userData', path.join(app.getPath('appData'), 'Wist'))
+
 // Custom scheme that streams local media (video, covers, screenshots) into the
 // renderer with Range support — file:// is blocked by web security.
 protocol.registerSchemesAsPrivileged([
@@ -94,7 +100,7 @@ function createWindow() {
     backgroundColor: dark ? '#0d0d14' : '#f7f7fa',
     autoHideMenuBar: true,
     show: false,
-    title: 'Wist',
+    title: 'Bard',
     // frameless titlebar with native Windows window controls drawn on top
     titleBarStyle: 'hidden',
     titleBarOverlay: dark
