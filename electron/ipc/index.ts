@@ -113,6 +113,44 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('projects:remove', (_e, id: number) => projects.deleteProject(id))
   ipcMain.handle('projects:reorder', (_e, ids: number[]) => projects.reorderProjects(ids ?? []))
 
+  // project assets (folders / files / reference images / links)
+  ipcMain.handle('projects:assets', (_e, projectId: number) => projects.listAssets(projectId))
+  ipcMain.handle('projects:addFiles', async (_e, projectId: number) => {
+    const res = await dialog.showOpenDialog(BrowserWindow.getAllWindows()[0]!, { properties: ['openFile', 'multiSelections'] })
+    if (res.canceled || !res.filePaths.length) return 0
+    return projects.addAssets(projectId, res.filePaths.map((p) => ({ kind: 'file' as const, path: p, label: path.basename(p) })))
+  })
+  ipcMain.handle('projects:addFolder', async (_e, projectId: number) => {
+    const res = await dialog.showOpenDialog(BrowserWindow.getAllWindows()[0]!, { properties: ['openDirectory', 'multiSelections'] })
+    if (res.canceled || !res.filePaths.length) return 0
+    return projects.addAssets(projectId, res.filePaths.map((p) => ({ kind: 'folder' as const, path: p, label: path.basename(p) })))
+  })
+  ipcMain.handle('projects:addImages', async (_e, projectId: number) => {
+    const res = await dialog.showOpenDialog(BrowserWindow.getAllWindows()[0]!, {
+      properties: ['openFile', 'multiSelections'],
+      filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'avif'] }],
+    })
+    if (res.canceled || !res.filePaths.length) return 0
+    return projects.addAssets(projectId, res.filePaths.map((p) => ({ kind: 'image' as const, path: p, label: path.basename(p) })))
+  })
+  ipcMain.handle('projects:addUrl', (_e, projectId: number, url: string, label: string | null) =>
+    projects.addAssets(projectId, [{ kind: 'url', url, label: label || url }])
+  )
+  // drag-drop from the OS: classify each dropped path (dir → folder, image ext → image, else file)
+  ipcMain.handle('projects:addPaths', (_e, projectId: number, paths: string[]) => {
+    const items = (paths ?? []).filter(Boolean).map((p) => {
+      let kind: 'folder' | 'image' | 'file' = 'file'
+      try {
+        if (fs.statSync(p).isDirectory()) kind = 'folder'
+      } catch { /* unreadable path → treat as file */ }
+      if (kind === 'file' && /\.(png|jpe?g|webp|gif|bmp|avif)$/i.test(p)) kind = 'image'
+      return { kind, path: p, label: path.basename(p) }
+    })
+    return projects.addAssets(projectId, items)
+  })
+  ipcMain.handle('projects:removeAsset', (_e, id: number) => projects.removeAsset(id))
+  ipcMain.handle('projects:reorderAssets', (_e, ids: number[]) => projects.reorderAssets(ids ?? []))
+
   // --- playlists ---
   ipcMain.handle('playlists:list', () => playlists.listPlaylists())
   ipcMain.handle('playlists:create', (_e, payload) => playlists.createPlaylist(payload ?? {}))

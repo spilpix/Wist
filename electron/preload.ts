@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
 
 const invoke = (channel: string, ...args: unknown[]) => ipcRenderer.invoke(channel, ...args)
 
@@ -31,6 +31,18 @@ const api = {
     update: (id: number, patch: unknown) => invoke('projects:update', id, patch),
     remove: (id: number) => invoke('projects:remove', id),
     reorder: (ids: number[]) => invoke('projects:reorder', ids),
+    assets: (projectId: number) => invoke('projects:assets', projectId),
+    addFiles: (projectId: number) => invoke('projects:addFiles', projectId),
+    addFolder: (projectId: number) => invoke('projects:addFolder', projectId),
+    addImages: (projectId: number) => invoke('projects:addImages', projectId),
+    addUrl: (projectId: number, url: string, label: string | null) => invoke('projects:addUrl', projectId, url, label),
+    addPaths: (projectId: number, paths: string[]) => invoke('projects:addPaths', projectId, paths),
+    removeAsset: (id: number) => invoke('projects:removeAsset', id),
+    reorderAssets: (ids: number[]) => invoke('projects:reorderAssets', ids),
+  },
+  util: {
+    // resolves a dropped File to its absolute path (File.path was removed in Electron 32+)
+    pathForFile: (file: File) => webUtils.getPathForFile(file),
   },
   playlists: {
     list: () => invoke('playlists:list'),

@@ -1,5 +1,5 @@
 import { db, now } from './database'
-import type { Project } from '../../src/types/models'
+import type { Project, ProjectAsset } from '../../src/types/models'
 
 function safeParse(v: unknown): string[] {
   if (typeof v !== 'string') return []
@@ -92,5 +92,41 @@ export function reorderProjects(ids: number[]): void {
   const tx = db().transaction((order: number[]) => {
     order.forEach((id, i) => stmt.run(i, id))
   })
+  tx(ids)
+}
+
+// ---- assets (folders / files / urls / reference images) ----
+
+function touch(projectId: number): void {
+  db().prepare('UPDATE projects SET updated_at = ? WHERE id = ?').run(now(), projectId)
+}
+
+export function listAssets(projectId: number): ProjectAsset[] {
+  return db()
+    .prepare('SELECT * FROM project_assets WHERE project_id = ? ORDER BY sort ASC, id ASC')
+    .all(projectId) as ProjectAsset[]
+}
+
+type NewAsset = { kind: ProjectAsset['kind']; path?: string | null; url?: string | null; label?: string | null }
+
+export function addAssets(projectId: number, items: NewAsset[]): number {
+  if (!items.length) return 0
+  const base = (db().prepare('SELECT COALESCE(MAX(sort), -1) AS m FROM project_assets WHERE project_id = ?').get(projectId) as any).m as number
+  const stmt = db().prepare('INSERT INTO project_assets (project_id, kind, path, url, label, sort) VALUES (?, ?, ?, ?, ?, ?)')
+  const tx = db().transaction((rows: NewAsset[]) => {
+    rows.forEach((it, i) => stmt.run(projectId, it.kind, it.path ?? null, it.url ?? null, it.label ?? null, base + 1 + i))
+  })
+  tx(items)
+  touch(projectId)
+  return items.length
+}
+
+export function removeAsset(id: number): void {
+  db().prepare('DELETE FROM project_assets WHERE id = ?').run(id)
+}
+
+export function reorderAssets(ids: number[]): void {
+  const stmt = db().prepare('UPDATE project_assets SET sort = ? WHERE id = ?')
+  const tx = db().transaction((order: number[]) => order.forEach((id, i) => stmt.run(i, id)))
   tx(ids)
 }

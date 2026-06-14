@@ -14,6 +14,7 @@ import type {
   Note,
   Playlist,
   Project,
+  ProjectAsset,
   StatsSummary,
   SubtitleTrack,
   Task,
@@ -57,6 +58,17 @@ export interface WistApi {
     update(id: number, patch: Partial<Project>): Promise<Project>
     remove(id: number): Promise<void>
     reorder(ids: number[]): Promise<void>
+    assets(projectId: number): Promise<ProjectAsset[]>
+    addFiles(projectId: number): Promise<number>
+    addFolder(projectId: number): Promise<number>
+    addImages(projectId: number): Promise<number>
+    addUrl(projectId: number, url: string, label: string | null): Promise<number>
+    addPaths(projectId: number, paths: string[]): Promise<number>
+    removeAsset(id: number): Promise<void>
+    reorderAssets(ids: number[]): Promise<void>
+  }
+  util: {
+    pathForFile(file: File): string
   }
   playlists: {
     list(): Promise<Playlist[]>
