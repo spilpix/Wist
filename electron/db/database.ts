@@ -227,6 +227,28 @@ const MIGRATIONS: string[] = [
   ALTER TABLE vault_files ADD COLUMN parent_id INTEGER REFERENCES vault_files(id) ON DELETE CASCADE;
   CREATE INDEX idx_vault_parent ON vault_files(parent_id);
   `,
+
+  // 006 — games library with Steam-style automatic playtime tracking
+  `
+  CREATE TABLE games (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    exe_path TEXT NOT NULL,
+    exe_name TEXT NOT NULL,
+    cover_path TEXT,
+    total_seconds INTEGER NOT NULL DEFAULT 0,
+    last_played TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+  );
+  CREATE TABLE game_sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    game_id INTEGER NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+    started_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    ended_at TEXT,
+    seconds INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE INDEX idx_game_sessions_game ON game_sessions(game_id);
+  `,
 ]
 
 function migrate(d: Database.Database) {

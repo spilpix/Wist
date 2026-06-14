@@ -6,9 +6,9 @@
 /* Dark is the default; .force-dark pins dark tokens on a subtree (player, hero cards). */
 :root,
 .force-dark {
-  --accent: #7c5cbf;
-  --accent-rgb: 124 92 191;
-  --accent-bright-rgb: 168 136 240;
+  --accent: #7c6af7;
+  --accent-rgb: 124 106 247;
+  --accent-bright-rgb: 138 122 246;
 
   --bg: 13 13 20;
   --surface: 17 17 24;
@@ -35,22 +35,23 @@
 }
 
 [data-theme='light'] {
-  --bg: 247 247 250;
-  --surface: 255 255 255;
-  --raised: 240 240 244;
-  --edge: 224 224 232;
+  /* Notion-warm light: white canvas, soft off-white panels, warm-gray ink */
+  --bg: 255 255 255;
+  --surface: 251 251 250;
+  --raised: 246 246 244;
+  --edge: 235 234 230;
 
-  --ink-0: 24 24 31;
-  --ink-100: 31 31 40;
-  --ink-200: 41 41 51;
-  --ink-300: 62 62 74;
-  --ink-400: 92 92 104;
-  --ink-500: 120 120 132;
-  --ink-600: 158 158 170;
-  --ink-700: 200 200 209;
-  --ink-800: 235 235 240;
+  --ink-0: 31 30 27;
+  --ink-100: 45 43 39;
+  --ink-200: 60 58 53;
+  --ink-300: 86 83 76;
+  --ink-400: 120 117 109;
+  --ink-500: 146 143 134;
+  --ink-600: 176 172 163;
+  --ink-700: 211 208 200;
+  --ink-800: 236 235 230;
 
-  --scrollbar: #c8c8d2;
+  --scrollbar: #d8d6d0;
   --card-shadow: 0 1px 2px rgb(22 22 38 / 0.05), 0 2px 10px rgb(22 22 38 / 0.05);
   --card-shadow-hover: 0 6px 20px rgb(22 22 38 / 0.1);
   --palette-shadow: 0 24px 80px rgb(25 25 50 / 0.18);

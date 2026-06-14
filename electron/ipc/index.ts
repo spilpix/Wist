@@ -9,6 +9,8 @@ import * as notes from '../db/notes'
 import * as journal from '../db/journal'
 import * as tasks from '../db/tasks'
 import * as projects from '../db/projects'
+import * as gamesDb from '../db/games'
+import { runningGameIds } from './gameTracker'
 import * as playlists from '../db/playlists'
 import * as vault from '../db/vault'
 import * as sessions from '../db/sessions'
@@ -20,7 +22,6 @@ import * as data from './data'
 import { detectSubtitles } from './subtitles'
 import { fetchVideos } from './ytdlp'
 import { searchTitleMeta, downloadCover, fetchOembed } from './metadata'
-import { leaguePoll } from './league'
 import { getSettings, setSettings, regenerateApiToken, screenshotsDir } from '../settings'
 import { restartApiServer } from '../apiServer'
 import type { MomentTag, TitleType } from '../../src/types/models'
@@ -227,8 +228,20 @@ export function registerIpcHandlers(): void {
     return out
   })
 
-  // --- league of legends companion ---
-  ipcMain.handle('league:poll', () => leaguePoll())
+  // --- games (Steam-style auto playtime tracking) ---
+  ipcMain.handle('games:list', () => gamesDb.listGames())
+  ipcMain.handle('games:get', (_e, id: number) => gamesDb.getGame(id))
+  ipcMain.handle('games:create', (_e, payload) => gamesDb.createGame(payload))
+  ipcMain.handle('games:update', (_e, id: number, patch) => gamesDb.updateGame(id, patch ?? {}))
+  ipcMain.handle('games:remove', (_e, id: number) => gamesDb.deleteGame(id))
+  ipcMain.handle('games:running', () => runningGameIds())
+  ipcMain.handle('games:pickExe', async () => {
+    const res = await dialog.showOpenDialog(BrowserWindow.getAllWindows()[0]!, {
+      properties: ['openFile'],
+      filters: [{ name: 'Game executable', extensions: ['exe'] }],
+    })
+    return res.canceled || !res.filePaths.length ? null : res.filePaths[0]
+  })
 
   // --- metadata from the internet ---
   ipcMain.handle('meta:searchTitles', (_e, type: TitleType, query: string) => searchTitleMeta(type, query))
@@ -315,7 +328,7 @@ export function registerIpcHandlers(): void {
           ? { color: '#ffffff', symbolColor: '#5a5a68', height: 36 }
           : { color: '#111118', symbolColor: '#a1a1aa', height: 36 }
       )
-      win.setBackgroundColor(theme === 'light' ? '#f7f7fa' : '#0d0d14')
+      win.setBackgroundColor(theme === 'light' ? '#ffffff' : '#0d0d14')
     } catch {
       /* overlay not supported on this platform */
     }

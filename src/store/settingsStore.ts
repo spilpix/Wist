@@ -21,11 +21,24 @@ function lighten(hex: string, amount = 0.35): string {
   return `${ch(m[1])} ${ch(m[2])} ${ch(m[3])}`
 }
 
+function darken(hex: string, amount = 0.3): string {
+  const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
+  if (!m) return '90 76 200'
+  const ch = (v: string) => Math.max(0, Math.round(parseInt(v, 16) * (1 - amount)))
+  return `${ch(m[1])} ${ch(m[2])} ${ch(m[3])}`
+}
+
+let currentAccent = '#7c6af7'
+
 export function applyAccent(hex: string) {
+  currentAccent = hex
   const root = document.documentElement
   root.style.setProperty('--accent', hex)
   root.style.setProperty('--accent-rgb', hexToRgb(hex))
-  root.style.setProperty('--accent-bright-rgb', lighten(hex))
+  // accent-bright is a FOREGROUND colour (active labels/icons): lighten on dark, darken on light
+  // so it stays legible on white — pure-lightened lavender is unreadable on a Notion canvas.
+  const bright = resolvedTheme() === 'light' ? darken(hex, 0.3) : lighten(hex, 0.35)
+  root.style.setProperty('--accent-bright-rgb', bright)
 }
 
 type ThemeSetting = AppSettings['theme']
@@ -40,6 +53,7 @@ export function applyTheme(setting: ThemeSetting) {
   currentThemeSetting = setting
   const resolved = setting === 'system' ? (systemDark.matches ? 'dark' : 'light') : setting
   document.documentElement.dataset.theme = resolved
+  applyAccent(currentAccent) // recompute the foreground accent for the new theme
   try {
     localStorage.setItem('wist.themeResolved', resolved) // pre-paint hint for next launch
   } catch {

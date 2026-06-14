@@ -3,24 +3,21 @@ import { NavLink, useLocation, useSearchParams } from 'react-router-dom'
 import {
   Archive,
   BarChart3,
-  Bookmark,
   BookOpen,
+  Bookmark,
   CalendarDays,
   ChevronDown,
-  Clock,
   FolderKanban,
-  FolderOpen,
   Gamepad2,
-  Heart,
   Home,
   Library,
   ListTodo,
   Music,
   PenLine,
   Settings,
-  TreePine,
-  Youtube,
+  Share2,
 } from 'lucide-react'
+import { useUiStore } from '../store/uiStore'
 import { useI18n, type TKey } from '../i18n'
 
 interface Link {
@@ -34,48 +31,32 @@ const topLinks: Link[] = [{ to: '/', key: 'nav.home', icon: Home }]
 
 const GROUPS: Array<{ key: TKey; id: string; links: Link[] }> = [
   {
-    key: 'nav.studio',
-    id: 'studio',
+    key: 'nav.life',
+    id: 'life',
     links: [
-      { to: '/projects', key: 'nav.projects', icon: FolderKanban },
-      { to: '/vault', key: 'nav.vault', icon: Archive },
+      { to: '/journal', key: 'nav.journal', icon: CalendarDays },
+      { to: '/tasks', key: 'nav.tasks', icon: ListTodo },
+      { to: '/moments', key: 'nav.moments', icon: Bookmark },
     ],
   },
   {
-    key: 'nav.media',
-    id: 'media',
+    key: 'nav.content',
+    id: 'content',
     links: [
       { to: '/library', key: 'nav.library', icon: Library },
       { to: '/library?type=book', key: 'nav.books', icon: BookOpen },
-      { to: '/continue', key: 'nav.continue', icon: Clock },
-      { to: '/favorites', key: 'nav.favorites', icon: Heart },
-    ],
-  },
-  {
-    key: 'nav.memory',
-    id: 'memory',
-    links: [
-      { to: '/notes', key: 'nav.notes', icon: PenLine },
-      { to: '/journal', key: 'nav.journal', icon: CalendarDays },
-      { to: '/moments', key: 'nav.moments', icon: Bookmark },
-      { to: '/tree', key: 'nav.tree', icon: TreePine },
-    ],
-  },
-  {
-    key: 'nav.tools',
-    id: 'tools',
-    links: [
-      { to: '/tasks', key: 'nav.tasks', icon: ListTodo },
       { to: '/music', key: 'nav.music', icon: Music },
-      { to: '/league', key: 'nav.league', icon: Gamepad2 },
+      { to: '/games', key: 'nav.games', icon: Gamepad2 },
     ],
   },
   {
-    key: 'nav.sources',
-    id: 'sources',
+    key: 'nav.work',
+    id: 'work',
     links: [
-      { to: '/local', key: 'nav.localFiles', icon: FolderOpen },
-      { to: '/youtube', key: 'nav.youtube', icon: Youtube },
+      { to: '/projects', key: 'nav.projects', icon: FolderKanban },
+      { to: '/notes', key: 'nav.notes', icon: PenLine },
+      { to: '/vault', key: 'nav.vault', icon: Archive },
+      { to: '/tree', key: 'nav.tree', icon: Share2 },
     ],
   },
 ]
@@ -87,9 +68,9 @@ const bottomLinks: Link[] = [
 
 function linkClass(isActive: boolean, compact = false): string {
   return [
-    'flex items-center rounded-lg text-[13px] font-medium transition-colors',
-    compact ? 'justify-center px-0 py-2' : 'gap-2.5 px-3 py-[7px]',
-    isActive ? 'bg-accent/15 text-accent-bright' : 'text-zinc-400 hover:bg-raised hover:text-zinc-200',
+    'flex items-center rounded-md text-[13px] font-medium transition-colors duration-150',
+    compact ? 'justify-center px-0 py-2' : 'gap-2.5 px-2.5 py-[7px]',
+    isActive ? 'bg-accent/15 text-accent-bright' : 'text-zinc-400 hover:bg-white/[0.04] hover:text-zinc-200',
   ].join(' ')
 }
 
@@ -107,8 +88,7 @@ export default function Sidebar() {
   const { t } = useI18n()
   const pathname = useLocation().pathname
   const onLibrary = pathname.split('?')[0].endsWith('/library')
-  // collapse to a compact icon rail on the graph page (Obsidian-style two-level nav)
-  const compact = pathname.startsWith('/tree')
+  const compact = useUiStore((s) => s.sidebarCollapsed)
   const [collapsed, setCollapsed] = useState<Set<string>>(loadCollapsed)
 
   // Library and Books share the /library route — disambiguate active state by ?type
@@ -140,12 +120,12 @@ export default function Sidebar() {
         title={t(key)}
         className={({ isActive }) => activeClass(to, isActive, true)}
       >
-        <Icon size={17} />
+        <Icon size={18} />
       </NavLink>
     )
     return (
-      <aside className="flex h-full w-[58px] shrink-0 flex-col border-r border-edge/60 bg-surface transition-all">
-        <nav className="flex-1 space-y-1 overflow-y-auto px-2 pb-4 pt-4">
+      <aside className="flex h-full w-[56px] shrink-0 flex-col border-r border-edge/60 bg-surface transition-all duration-200">
+        <nav className="flex-1 space-y-1 overflow-y-auto px-2 pb-4 pt-3">
           {topLinks.map(railLink)}
           {GROUPS.map((group) => (
             <div key={group.id} className="space-y-1 border-t border-edge/50 pt-1">
@@ -160,12 +140,12 @@ export default function Sidebar() {
 
   // ---- full sidebar ----
   return (
-    <aside className="flex h-full w-[200px] shrink-0 flex-col border-r border-edge/60 bg-surface transition-all">
-      <nav className="flex-1 space-y-4 overflow-y-auto px-3 pb-4 pt-4">
+    <aside className="flex h-full w-[212px] shrink-0 flex-col border-r border-edge/60 bg-surface transition-all duration-200">
+      <nav className="flex-1 space-y-5 overflow-y-auto px-3 pb-4 pt-3">
         <div className="space-y-0.5">
           {topLinks.map(({ to, key, icon: Icon }) => (
             <NavLink key={to} to={to} end={to === '/'} className={({ isActive }) => activeClass(to, isActive)}>
-              <Icon size={15} />
+              <Icon size={16} />
               {t(key)}
             </NavLink>
           ))}
@@ -177,16 +157,20 @@ export default function Sidebar() {
             <div key={group.id}>
               <button
                 onClick={() => toggleGroup(group.id)}
-                className="mb-1 flex w-full items-center justify-between rounded-md px-3 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-zinc-600 transition-colors hover:text-zinc-400"
+                className="group/header mb-1 flex w-full items-center gap-1.5 rounded-md px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-zinc-500 transition-colors hover:text-zinc-400"
               >
+                <span className="h-1.5 w-1.5 rounded-full bg-accent/70" />
                 {t(group.key)}
-                <ChevronDown size={11} className={`transition-transform ${isCollapsed ? '-rotate-90' : ''}`} />
+                <ChevronDown
+                  size={11}
+                  className={`ml-auto text-zinc-600 transition-transform duration-150 ${isCollapsed ? '-rotate-90' : ''}`}
+                />
               </button>
               {!isCollapsed && (
                 <div className="space-y-0.5">
                   {group.links.map(({ to, key, icon: Icon }) => (
                     <NavLink key={to} to={to} className={({ isActive }) => activeClass(to, isActive)}>
-                      <Icon size={15} />
+                      <Icon size={16} />
                       {t(key)}
                     </NavLink>
                   ))}
@@ -200,7 +184,7 @@ export default function Sidebar() {
       <div className="space-y-0.5 border-t border-edge/60 px-3 py-3">
         {bottomLinks.map(({ to, key, icon: Icon }) => (
           <NavLink key={to} to={to} className={({ isActive }) => activeClass(to, isActive)}>
-            <Icon size={15} />
+            <Icon size={16} />
             {t(key)}
           </NavLink>
         ))}

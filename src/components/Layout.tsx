@@ -1,6 +1,5 @@
-import { Outlet } from 'react-router-dom'
-import { Moon, Search, Sun } from 'lucide-react'
-import BardLogo from './BardLogo'
+import { Outlet, useNavigate } from 'react-router-dom'
+import { ArrowLeft, ArrowRight, Moon, PanelLeft, Search, Sun } from 'lucide-react'
 import Sidebar from './Sidebar'
 import Toaster from './ui/Toaster'
 import CommandPalette from './CommandPalette'
@@ -8,39 +7,46 @@ import { useUiStore } from '../store/uiStore'
 import { useSettingsStore, resolvedTheme } from '../store/settingsStore'
 import { useI18n } from '../i18n'
 
-/** Slim draggable title bar; native Windows window controls overlay the right edge. */
+/** Slim draggable toolbar; native Windows window controls overlay the right edge. */
 function TitleBar() {
   const { t } = useI18n()
+  const navigate = useNavigate()
   const setPalette = useUiStore((s) => s.setPalette)
+  const toggleSidebar = useUiStore((s) => s.toggleSidebar)
   const settings = useSettingsStore((s) => s.settings)
   const update = useSettingsStore((s) => s.update)
-  const dark = (settings?.theme === 'system' ? resolvedTheme() : settings?.theme ?? 'dark') === 'dark'
+  const dark = (settings?.theme === 'system' ? resolvedTheme() : settings?.theme ?? 'light') === 'dark'
+
+  const toolBtn = 'app-no-drag rounded-md p-1.5 text-zinc-500 transition-colors hover:bg-raised hover:text-zinc-200'
 
   return (
-    <header className="app-drag relative flex h-9 shrink-0 items-center gap-2 border-b border-edge/60 bg-surface px-4">
-      <BardLogo size={18} />
-      <span className="text-[13px] font-semibold tracking-tight text-zinc-300">Bard</span>
+    <header className="app-drag relative flex h-9 shrink-0 items-center gap-0.5 border-b border-edge/60 bg-surface px-2">
+      <button className={toolBtn} onClick={toggleSidebar} title={t('app.toggleSidebar')}>
+        <PanelLeft size={16} />
+      </button>
+      <button className={toolBtn} onClick={() => navigate(-1)} title={t('app.back')}>
+        <ArrowLeft size={16} />
+      </button>
+      <button className={toolBtn} onClick={() => navigate(1)} title={t('app.forward')}>
+        <ArrowRight size={16} />
+      </button>
 
-      {/* command palette trigger, Notion-style */}
       <button
         onClick={() => setPalette(true)}
-        className="app-no-drag absolute left-1/2 flex w-72 -translate-x-1/2 items-center justify-between rounded-lg border border-edge/70 bg-raised/70 px-3 py-1 text-xs text-zinc-500 transition-colors hover:bg-raised hover:text-zinc-300"
+        className="app-no-drag ml-1.5 flex items-center gap-2 rounded-md border border-edge/70 bg-raised/60 px-2.5 py-1 text-xs text-zinc-500 transition-colors hover:bg-raised hover:text-zinc-300"
       >
-        <span className="flex items-center gap-2">
-          <Search size={12} />
-          {t('cmdk.searchHint')}
-        </span>
-        <span className="flex items-center gap-1">
+        <Search size={12} />
+        {t('cmdk.searchHint')}
+        <span className="ml-1 flex items-center gap-1">
           <span className="kbd">Ctrl</span>
           <span className="kbd">K</span>
         </span>
       </button>
 
-      {/* theme toggle (clear of the native window controls) */}
       <button
         onClick={() => update({ theme: dark ? 'light' : 'dark' })}
         title={t('cmdk.toggleTheme')}
-        className="app-no-drag ml-auto mr-[140px] rounded-lg p-1.5 text-zinc-500 transition-colors hover:bg-raised hover:text-zinc-200"
+        className="app-no-drag ml-auto mr-[140px] rounded-md p-1.5 text-zinc-500 transition-colors hover:bg-raised hover:text-zinc-200"
       >
         {dark ? <Sun size={14} /> : <Moon size={14} />}
       </button>

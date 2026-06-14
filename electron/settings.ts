@@ -14,16 +14,14 @@ function defaults(): AppSettings {
     defaultSubtitleLang: 'en',
     autoPlayNext: true,
     skipIntroEnabled: true,
-    accentColor: '#7c5cbf',
+    accentColor: '#7c6af7',
     ytDlpPath: '',
     mpvPath: '',
     language: app.getLocale().toLowerCase().startsWith('ru') ? 'ru' : 'en',
-    theme: 'dark',
+    theme: 'light',
     apiEnabled: false,
     apiPort: 7459,
     apiToken: '',
-    riotApiKey: '',
-    riotPlatform: 'euw1',
   }
 }
 

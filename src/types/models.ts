@@ -171,59 +171,25 @@ export interface ProjectAsset {
   created_at: string
 }
 
-export interface LeagueRank {
-  tier: string
-  division: string
-  lp: number
-  wins: number
-  losses: number
-}
-
-export interface LeagueAbility {
-  slot: 'P' | 'Q' | 'W' | 'E' | 'R'
+export interface Game {
+  id: number
   name: string
-  iconUrl: string
+  exe_path: string
+  exe_name: string // basename, lowercased — what the process scan matches
+  cover_path: string | null
+  total_seconds: number
+  last_played: string | null
+  created_at: string
+  // derived
+  running?: boolean
 }
 
-export interface LeagueBuild {
-  role: string
-  coreItems: Array<{ name: string; iconUrl: string }>
-  runes: string
-  keystone: string
-  skill: string
-  tips: string[]
-}
-
-export interface LeagueChampion {
-  id: string
-  name: string
-  title: string
-  tags: string[]
-  squareUrl: string
-  abilities: LeagueAbility[]
-  build: LeagueBuild
-}
-
-export interface LeagueLivePlayer {
-  name: string
-  champion: string
-  championSquareUrl: string
-  kills: number
-  deaths: number
-  assists: number
-  cs: number
-  level: number
-  items: string[]
-  isSelf: boolean
-}
-
-export interface LeaguePoll {
-  connected: boolean
-  phase: string // None | Lobby | ChampSelect | InProgress | …
-  summoner?: { name: string; tag: string; level: number; iconUrl: string }
-  ranked?: { solo?: LeagueRank; flex?: LeagueRank }
-  champion?: LeagueChampion
-  live?: { activePlayer: string; order: LeagueLivePlayer[]; chaos: LeagueLivePlayer[] }
+export interface GameSession {
+  id: number
+  game_id: number
+  started_at: string
+  ended_at: string | null
+  seconds: number
 }
 
 export interface MetaCandidate {
@@ -322,8 +288,6 @@ export interface AppSettings {
   apiEnabled: boolean
   apiPort: number
   apiToken: string
-  riotApiKey: string
-  riotPlatform: string // euw1, na1, kr, ru, …
 }
 
 export interface SubtitleTrack {

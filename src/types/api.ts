@@ -2,10 +2,10 @@ import type {
   AppSettings,
   ContinueItem,
   Episode,
+  Game,
   HeatmapDay,
   ImportGroup,
   JournalEntry,
-  LeaguePoll,
   MemoryEvent,
   MetaCandidate,
   Moment,
@@ -90,8 +90,14 @@ export interface WistApi {
     open(path: string): Promise<string>
     startDrag(path: string): void
   }
-  league: {
-    poll(): Promise<LeaguePoll>
+  games: {
+    list(): Promise<Game[]>
+    get(id: number): Promise<Game | null>
+    create(data: { name?: string; exe_path: string; cover_path?: string | null }): Promise<Game>
+    update(id: number, patch: Partial<Game>): Promise<Game>
+    remove(id: number): Promise<void>
+    running(): Promise<number[]>
+    pickExe(): Promise<string | null>
   }
   meta: {
     searchTitles(type: TitleType, query: string): Promise<MetaCandidate[]>

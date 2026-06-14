@@ -15,7 +15,7 @@ import Music from './pages/Music'
 import Vault from './pages/Vault'
 import Projects from './pages/Projects'
 import ProjectDetail from './pages/ProjectDetail'
-import League from './pages/League'
+import Games from './pages/Games'
 import LocalFiles from './pages/LocalFiles'
 import YouTubeSources from './pages/YouTubeSources'
 import SettingsPage from './pages/Settings'
@@ -53,7 +53,7 @@ export default function App() {
           <Route path="/vault" element={<Vault />} />
           <Route path="/projects" element={<Projects />} />
           <Route path="/project/:id" element={<ProjectDetail />} />
-          <Route path="/league" element={<League />} />
+          <Route path="/games" element={<Games />} />
           <Route path="/tree" element={lazyPage(<MemoryTree />)} />
           <Route path="/local" element={<LocalFiles />} />
           <Route path="/youtube" element={<YouTubeSources />} />

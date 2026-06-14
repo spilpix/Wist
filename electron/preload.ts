@@ -40,6 +40,15 @@ const api = {
     removeAsset: (id: number) => invoke('projects:removeAsset', id),
     reorderAssets: (ids: number[]) => invoke('projects:reorderAssets', ids),
   },
+  games: {
+    list: () => invoke('games:list'),
+    get: (id: number) => invoke('games:get', id),
+    create: (data: unknown) => invoke('games:create', data),
+    update: (id: number, patch: unknown) => invoke('games:update', id, patch),
+    remove: (id: number) => invoke('games:remove', id),
+    running: () => invoke('games:running'),
+    pickExe: () => invoke('games:pickExe'),
+  },
   util: {
     // resolves a dropped File to its absolute path (File.path was removed in Electron 32+)
     pathForFile: (file: File) => webUtils.getPathForFile(file),
@@ -62,9 +71,6 @@ const api = {
     remove: (id: number) => invoke('vault:remove', id),
     open: (p: string) => invoke('vault:open', p),
     startDrag: (p: string) => ipcRenderer.send('vault:startDrag', p),
-  },
-  league: {
-    poll: () => invoke('league:poll'),
   },
   meta: {
     searchTitles: (type: string, query: string) => invoke('meta:searchTitles', type, query),

@@ -25,11 +25,11 @@ app.whenReady().then(() => {
       return 'ok'
     })()`).catch((e) => { errors.push('seed: ' + e.message); sawError = true })
 
-    const routes = ['#/tree', '#/league', '#/vault', '#/notes', '#/']
+    const routes = ['#/tree', '#/games', '#/vault', '#/notes', '#/']
     for (const r of routes) {
       await win.webContents.executeJavaScript(`location.hash = '${r}'`)
       await new Promise((res) => setTimeout(res, 2500))
-      if (r === '#/tree' || r === '#/league') {
+      if (r === '#/tree' || r === '#/games') {
         try {
           const img = await win.webContents.capturePage()
           fs.writeFileSync(path.join(__dirname, `shot-${r.replace(/[#/]/g, '') || 'home'}.png`), img.toPNG())

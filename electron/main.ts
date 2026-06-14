@@ -6,6 +6,7 @@ import { openDatabase } from './db/database'
 import { registerIpcHandlers } from './ipc'
 import { getSettings } from './settings'
 import { restartApiServer, setApiNotifier } from './apiServer'
+import { startGameTracker } from './ipc/gameTracker'
 
 // Keep reading the original "Wist" data folder after the Bard rebrand.
 // app.getName() now returns "Bard" (productName), which would otherwise move
@@ -99,7 +100,7 @@ function createWindow() {
     height: 920,
     minWidth: 1080,
     minHeight: 640,
-    backgroundColor: dark ? '#0d0d14' : '#f7f7fa',
+    backgroundColor: dark ? '#0d0d14' : '#ffffff',
     autoHideMenuBar: true,
     show: false,
     title: 'Bard',
@@ -137,6 +138,8 @@ app.whenReady().then(() => {
   // local HTTP API for AI agents (off by default; Settings → API)
   setApiNotifier((kind) => mainWindow?.webContents.send('wist:data-changed', kind))
   restartApiServer()
+  // Steam-style background playtime tracking for the Games module
+  startGameTracker(() => mainWindow?.webContents.send('wist:data-changed', 'games'))
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
