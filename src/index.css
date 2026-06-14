@@ -3,35 +3,57 @@
 @tailwind utilities;
 
 /* ---------- theme tokens ---------- */
-/* Dark is the default; .force-dark pins dark tokens on a subtree (player, hero cards). */
+/* Dark is the default (warm-brown design system); .force-dark pins dark tokens
+   on a subtree (player, hero cards). Accent #d4813a (amber-orange). */
 :root,
 .force-dark {
-  --accent: #7c6af7;
-  --accent-rgb: 124 106 247;
-  --accent-bright-rgb: 138 122 246;
+  --accent: #d4813a;
+  --accent-rgb: 212 129 58;
+  --accent-bright-rgb: 227 173 127;
 
-  --bg: 13 13 20;
-  --surface: 17 17 24;
-  --raised: 26 26 36;
-  --edge: 35 35 51;
+  --bg: 20 18 16; /* #141210 base */
+  --surface: 26 24 20; /* #1a1814 sidebar / panels */
+  --raised: 34 32 24; /* #222018 cards */
+  --edge: 46 43 38; /* #2e2b26 borders / dividers */
 
+  --ink-0: 212 201 184; /* #d4c9b8 primary text / headings */
+  --ink-100: 212 201 184; /* #d4c9b8 */
+  --ink-200: 199 188 172;
+  --ink-300: 171 161 147;
+  --ink-400: 138 130 120; /* #8a8278 secondary text */
+  --ink-500: 106 100 92;
+  --ink-600: 74 71 68; /* #4a4744 placeholders / hints */
+  --ink-700: 60 57 52;
+  --ink-800: 46 43 38; /* #2e2b26 */
+
+  /* status palette — reference tokens, mirrored by the JS maps in src/types/models.ts */
+  --st-active: #6fb06f;
+  --st-active-bg: #1e2b1e;
+  --st-pause: #c9a96b;
+  --st-pause-bg: #2b2618;
+  --st-done: #7aa8c4;
+  --st-done-bg: #1a2430;
+  --st-urgent: #d4813a;
+  --st-urgent-bg: #2a1f18;
+  --st-review: #a87dc4;
+  --st-error: #c47a7a;
+  --st-render: #3a8a8a;
+  --st-archive: #4a4744;
+
+  --scrollbar: #322e28;
+  --card-shadow: 0 1px 2px rgb(0 0 0 / 0.32), 0 6px 20px rgb(0 0 0 / 0.26);
+  --card-shadow-hover: 0 10px 28px rgb(0 0 0 / 0.34);
+  --palette-shadow: 0 24px 80px rgb(0 0 0 / 0.55);
+  --c-success: 111 176 111; /* #6fb06f */
+  --c-danger: 196 122 122; /* #c47a7a */
+  color-scheme: dark;
+}
+
+/* over-media contexts (player chrome, hero cards) want crisp white primary text,
+   not the warm cream used across the app shell — restore pure white just for them. */
+.force-dark {
   --ink-0: 255 255 255;
   --ink-100: 244 244 245;
-  --ink-200: 228 228 231;
-  --ink-300: 212 212 216;
-  --ink-400: 161 161 170;
-  --ink-500: 113 113 122;
-  --ink-600: 82 82 91;
-  --ink-700: 63 63 70;
-  --ink-800: 39 39 42;
-
-  --scrollbar: #2c2c3e;
-  --card-shadow: 0 1px 2px rgb(0 0 0 / 0.28), 0 6px 20px rgb(0 0 0 / 0.22);
-  --card-shadow-hover: 0 10px 28px rgb(0 0 0 / 0.28);
-  --palette-shadow: 0 24px 80px rgb(0 0 0 / 0.5);
-  --c-success: 134 239 172;
-  --c-danger: 252 165 165;
-  color-scheme: dark;
 }
 
 [data-theme='light'] {
@@ -62,25 +84,25 @@
 
 /* .force-dark must beat [data-theme='light'] inheritance even when nested deep */
 [data-theme='light'] .force-dark {
-  --bg: 13 13 20;
-  --surface: 17 17 24;
-  --raised: 26 26 36;
-  --edge: 35 35 51;
+  --bg: 20 18 16;
+  --surface: 26 24 20;
+  --raised: 34 32 24;
+  --edge: 46 43 38;
   --ink-0: 255 255 255;
   --ink-100: 244 244 245;
-  --ink-200: 228 228 231;
-  --ink-300: 212 212 216;
-  --ink-400: 161 161 170;
-  --ink-500: 113 113 122;
-  --ink-600: 82 82 91;
-  --ink-700: 63 63 70;
-  --ink-800: 39 39 42;
-  --scrollbar: #2c2c3e;
-  --card-shadow: 0 1px 2px rgb(0 0 0 / 0.28), 0 6px 20px rgb(0 0 0 / 0.22);
-  --card-shadow-hover: 0 10px 28px rgb(0 0 0 / 0.28);
-  --palette-shadow: 0 24px 80px rgb(0 0 0 / 0.5);
-  --c-success: 134 239 172;
-  --c-danger: 252 165 165;
+  --ink-200: 199 188 172;
+  --ink-300: 171 161 147;
+  --ink-400: 138 130 120;
+  --ink-500: 106 100 92;
+  --ink-600: 74 71 68;
+  --ink-700: 60 57 52;
+  --ink-800: 46 43 38;
+  --scrollbar: #322e28;
+  --card-shadow: 0 1px 2px rgb(0 0 0 / 0.32), 0 6px 20px rgb(0 0 0 / 0.26);
+  --card-shadow-hover: 0 10px 28px rgb(0 0 0 / 0.34);
+  --palette-shadow: 0 24px 80px rgb(0 0 0 / 0.55);
+  --c-success: 111 176 111;
+  --c-danger: 196 122 122;
   color-scheme: dark;
 }
 

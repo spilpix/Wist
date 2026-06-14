@@ -100,14 +100,14 @@ function createWindow() {
     height: 920,
     minWidth: 1080,
     minHeight: 640,
-    backgroundColor: dark ? '#0d0d14' : '#ffffff',
+    backgroundColor: dark ? '#141210' : '#ffffff',
     autoHideMenuBar: true,
     show: false,
     title: 'Bard',
     // frameless titlebar with native Windows window controls drawn on top
     titleBarStyle: 'hidden',
     titleBarOverlay: dark
-      ? { color: '#111118', symbolColor: '#a1a1aa', height: 36 }
+      ? { color: '#1a1814', symbolColor: '#8a8278', height: 36 }
       : { color: '#ffffff', symbolColor: '#5a5a68', height: 36 },
     // packaged builds inherit the window icon from the exe resource
     ...(app.isPackaged ? {} : { icon: path.join(__dirname, '../build/icon.png') }),

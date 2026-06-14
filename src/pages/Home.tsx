@@ -264,7 +264,7 @@ export default function Home() {
           <div role="button" tabIndex={0} onClick={() => navigate('/journal')} className="card flex cursor-pointer flex-col px-5 py-4 text-left transition-transform hover:-translate-y-0.5">
             <div className="mb-2 flex items-center justify-between">
               <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-zinc-500">
-                <CalendarDays size={13} className="text-[#f472b6]" /> {t('nav.journal')}
+                <CalendarDays size={13} className="text-[#c47a7a]" /> {t('nav.journal')}
               </span>
               {streak > 0 && (
                 <span className="flex items-center gap-1 text-xs text-zinc-500">
@@ -302,7 +302,7 @@ export default function Home() {
           <div className="card flex flex-col px-5 py-4">
             <button onClick={() => navigate('/tasks')} className="mb-2 flex items-center justify-between text-left">
               <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-zinc-500 hover:text-zinc-300">
-                <ListTodo size={13} className="text-[#ffd27d]" /> {t('nav.tasks')}
+                <ListTodo size={13} className="text-[#c9a96b]" /> {t('nav.tasks')}
               </span>
               {openTasks.length > 0 && <span className="text-xs text-zinc-500">{openTasks.length}</span>}
             </button>
@@ -334,7 +334,7 @@ export default function Home() {
           <div className="card flex flex-col px-5 py-4">
             <button onClick={() => navigate('/notes')} className="mb-2 flex items-center justify-between text-left">
               <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-zinc-500 hover:text-zinc-300">
-                <PenLine size={13} className="text-[#60a5fa]" /> {t('nav.notes')}
+                <PenLine size={13} className="text-[#7aa8c4]" /> {t('nav.notes')}
               </span>
             </button>
             {recentNotes.length === 0 ? (

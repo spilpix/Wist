@@ -10,25 +10,25 @@ interface SettingsState {
 
 function hexToRgb(hex: string): string {
   const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
-  if (!m) return '124 92 191'
+  if (!m) return '212 129 58'
   return `${parseInt(m[1], 16)} ${parseInt(m[2], 16)} ${parseInt(m[3], 16)}`
 }
 
 function lighten(hex: string, amount = 0.35): string {
   const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
-  if (!m) return '168 136 240'
+  if (!m) return '227 173 127'
   const ch = (v: string) => Math.min(255, Math.round(parseInt(v, 16) + (255 - parseInt(v, 16)) * amount))
   return `${ch(m[1])} ${ch(m[2])} ${ch(m[3])}`
 }
 
 function darken(hex: string, amount = 0.3): string {
   const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
-  if (!m) return '90 76 200'
+  if (!m) return '148 90 41'
   const ch = (v: string) => Math.max(0, Math.round(parseInt(v, 16) * (1 - amount)))
   return `${ch(m[1])} ${ch(m[2])} ${ch(m[3])}`
 }
 
-let currentAccent = '#7c6af7'
+let currentAccent = '#d4813a'
 
 export function applyAccent(hex: string) {
   currentAccent = hex
@@ -69,7 +69,26 @@ systemDark.addEventListener('change', () => {
 export const useSettingsStore = create<SettingsState>((set, get) => ({
   settings: null,
   load: async () => {
-    const settings = await window.wist.settings.get()
+    let settings = await window.wist.settings.get()
+    // migration to the warm-brown design system (v0.21):
+    //  • accent — self-healing: any of the now-removed purple accents → amber-orange.
+    //    Fires only for legacy values; once orange it never matches again. Custom
+    //    non-purple accents (teal/rose/amber/…) are left untouched.
+    //  • theme — one-time flip of legacy installs to dark; future manual toggles stick.
+    try {
+      const patch: Partial<AppSettings> = {}
+      const OLD_PURPLES = ['#7c6af7', '#7c5cbf', '#6366f1']
+      if (settings.accentColor && OLD_PURPLES.includes(settings.accentColor.toLowerCase())) {
+        patch.accentColor = '#d4813a'
+      }
+      if (!localStorage.getItem('wist.designV2')) {
+        patch.theme = 'dark'
+        localStorage.setItem('wist.designV2', '1')
+      }
+      if (Object.keys(patch).length) settings = await window.wist.settings.set(patch)
+    } catch {
+      /* storage unavailable — fall back to stored settings */
+    }
     applyAccent(settings.accentColor)
     applyTheme(settings.theme ?? 'dark')
     useI18nStore.getState().setLang(settings.language === 'ru' ? 'ru' : 'en')

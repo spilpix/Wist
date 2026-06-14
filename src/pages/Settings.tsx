@@ -8,11 +8,11 @@ import type { SubtitleLang } from '../types/models'
 import { useI18n, t as tGlobal, type TKey } from '../i18n'
 
 const ACCENT_PRESETS: Array<{ nameKey: TKey; value: string }> = [
-  { nameKey: 'set.accent.purple', value: '#7c5cbf' },
-  { nameKey: 'set.accent.iris', value: '#6366f1' },
-  { nameKey: 'set.accent.teal', value: '#14b8a6' },
-  { nameKey: 'set.accent.rose', value: '#f43f5e' },
-  { nameKey: 'set.accent.amber', value: '#f59e0b' },
+  { nameKey: 'set.accent.amber', value: '#d4813a' },
+  { nameKey: 'set.accent.teal', value: '#3a8a8a' },
+  { nameKey: 'set.accent.blue', value: '#7aa8c4' },
+  { nameKey: 'set.accent.rose', value: '#c47a7a' },
+  { nameKey: 'set.accent.green', value: '#6fb06f' },
 ]
 
 function Row({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {

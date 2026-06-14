@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { NavLink, useLocation, useSearchParams } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { NavLink, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   Archive,
   BarChart3,
@@ -7,6 +7,7 @@ import {
   Bookmark,
   CalendarDays,
   ChevronDown,
+  ChevronsUpDown,
   FolderKanban,
   Frame,
   Gamepad2,
@@ -28,8 +29,6 @@ interface Link {
   key: TKey
   icon: typeof Home
 }
-
-const topLinks: Link[] = [{ to: '/', key: 'nav.home', icon: Home }]
 
 const GROUPS: Array<{ key: TKey; id: string; links: Link[] }> = [
   {
@@ -69,11 +68,24 @@ const bottomLinks: Link[] = [
   { to: '/settings', key: 'nav.settings', icon: Settings },
 ]
 
-function linkClass(isActive: boolean, compact = false): string {
+/** Row style for a navigation item (full sidebar). */
+function rowClass(active: boolean): string {
   return [
-    'flex items-center rounded-md text-[13px] font-medium transition-colors duration-150',
-    compact ? 'justify-center px-0 py-2' : 'gap-2.5 px-2.5 py-[7px]',
-    isActive ? 'bg-accent/15 text-accent-bright' : 'text-zinc-400 hover:bg-white/[0.05] hover:text-zinc-200',
+    'group/i flex items-center gap-2.5 rounded-md px-2 py-1 text-[14px] transition-colors duration-150',
+    active ? 'bg-accent/15 font-medium text-zinc-100' : 'text-zinc-300 hover:bg-white/[0.05] hover:text-zinc-100',
+  ].join(' ')
+}
+
+/** Icon style inside a row / rail item. */
+function iconClass(active: boolean): string {
+  return active ? 'shrink-0 text-accent-bright' : 'shrink-0 text-zinc-500 group-hover/i:text-zinc-300'
+}
+
+/** Square icon button for the collapsed rail. */
+function railClass(active: boolean): string {
+  return [
+    'group/i relative flex h-9 w-9 items-center justify-center rounded-lg transition-colors',
+    active ? 'bg-accent/15 text-accent-bright' : 'text-zinc-400 hover:bg-white/[0.06] hover:text-zinc-100',
   ].join(' ')
 }
 
@@ -89,16 +101,32 @@ export default function Sidebar() {
   const [searchParams] = useSearchParams()
   const activeType = searchParams.get('type')
   const { t } = useI18n()
+  const navigate = useNavigate()
   const pathname = useLocation().pathname
-  const onLibrary = pathname.split('?')[0].endsWith('/library')
+  const onLibrary = pathname === '/library'
   const compact = useUiStore((s) => s.sidebarCollapsed)
   const setPalette = useUiStore((s) => s.setPalette)
   const [collapsed, setCollapsed] = useState<Set<string>>(loadCollapsed)
+  const [taskCount, setTaskCount] = useState(0)
 
-  const activeClass = (to: string, isActive: boolean, isCompact = false): string => {
-    if (to === '/library') return linkClass(onLibrary && activeType !== 'book', isCompact)
-    if (to === '/library?type=book') return linkClass(onLibrary && activeType === 'book', isCompact)
-    return linkClass(isActive, isCompact)
+  // live open-task count → Notion-style inbox badge on the Tasks tab
+  useEffect(() => {
+    const load = () =>
+      window.wist.tasks
+        .list({ done: false })
+        .then((ts) => setTaskCount(ts.length))
+        .catch(() => undefined)
+    load()
+    return window.wist.events.onDataChanged((kind) => {
+      if (kind === 'tasks') load()
+    })
+  }, [])
+
+  // resolve the "real" active state (library shares one path between titles & books)
+  const isLinkActive = (to: string, routeActive: boolean): boolean => {
+    if (to === '/library') return onLibrary && activeType !== 'book'
+    if (to === '/library?type=book') return onLibrary && activeType === 'book'
+    return routeActive
   }
 
   const toggleGroup = (id: string) => {
@@ -113,78 +141,122 @@ export default function Sidebar() {
     }
   }
 
-  // ---- compact icon rail ----
+  // ---- quick tab bar (Notion's app-level row: Home · Search · Calendar · Inbox) ----
+  const tabs: Array<{ icon: typeof Home; label: string; to?: string; action?: () => void; active?: boolean; badge?: number }> = [
+    { icon: Home, label: t('nav.home'), to: '/', active: pathname === '/' },
+    { icon: Search, label: t('cmdk.searchHint'), action: () => setPalette(true) },
+    { icon: CalendarDays, label: t('nav.journal'), to: '/journal', active: pathname.startsWith('/journal') },
+    { icon: ListTodo, label: t('nav.tasks'), to: '/tasks', active: pathname.startsWith('/tasks'), badge: taskCount },
+  ]
+
+  // ================= compact icon rail =================
   if (compact) {
-    const railLink = ({ to, key, icon: Icon }: Link) => (
-      <NavLink key={to} to={to} end={to === '/'} title={t(key)} className={({ isActive }) => activeClass(to, isActive, true)}>
-        <Icon size={18} />
-      </NavLink>
-    )
     return (
       <aside className="flex h-full w-[56px] shrink-0 flex-col border-r border-edge/60 bg-surface transition-all duration-200">
         <div className="flex h-12 items-center justify-center border-b border-edge/50">
           <BardLogo size={20} />
         </div>
-        <nav className="flex-1 space-y-1 overflow-y-auto px-2 pb-4 pt-3">
-          {topLinks.map(railLink)}
+        <nav className="flex flex-1 flex-col items-center gap-1 overflow-y-auto px-2 pb-4 pt-3">
+          <NavLink to="/" end title={t('nav.home')} className={({ isActive }) => railClass(isActive)}>
+            <Home size={18} />
+          </NavLink>
+          <button title={t('cmdk.searchHint')} onClick={() => setPalette(true)} className={railClass(false)}>
+            <Search size={18} />
+          </button>
           {GROUPS.map((group) => (
-            <div key={group.id} className="space-y-1 border-t border-edge/50 pt-1">
-              {group.links.map(railLink)}
+            <div key={group.id} className="mt-1 flex w-full flex-col items-center gap-1 border-t border-edge/50 pt-2">
+              {group.links.map(({ to, key, icon: Icon }) => (
+                <NavLink key={to} to={to} title={t(key)} className={({ isActive }) => railClass(isLinkActive(to, isActive))}>
+                  <Icon size={18} />
+                  {to === '/tasks' && taskCount > 0 && (
+                    <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-accent ring-2 ring-surface" />
+                  )}
+                </NavLink>
+              ))}
             </div>
           ))}
         </nav>
-        <div className="space-y-1 border-t border-edge/60 px-2 py-3">{bottomLinks.map(railLink)}</div>
+        <div className="flex flex-col items-center gap-1 border-t border-edge/60 px-2 py-3">
+          {bottomLinks.map(({ to, key, icon: Icon }) => (
+            <NavLink key={to} to={to} title={t(key)} className={({ isActive }) => railClass(isActive)}>
+              <Icon size={18} />
+            </NavLink>
+          ))}
+        </div>
       </aside>
     )
   }
 
-  // ---- full sidebar ----
+  // ================= full sidebar =================
   return (
-    <aside className="flex h-full w-[224px] shrink-0 flex-col border-r border-edge/60 bg-surface transition-all duration-200">
-      {/* workspace header */}
-      <div className="px-3 pt-3">
-        <div className="flex items-center gap-2 rounded-lg px-2 py-1.5">
+    <aside className="flex h-full w-[240px] shrink-0 flex-col border-r border-edge/60 bg-surface transition-all duration-200">
+      {/* workspace switcher */}
+      <div className="px-2 pt-2.5">
+        <button
+          onClick={() => setPalette(true)}
+          title={t('cmdk.searchHint')}
+          className="group flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-white/[0.05]"
+        >
           <BardLogo size={20} />
-          <span className="text-[15px] font-bold tracking-tight text-white">Bard</span>
-        </div>
+          <span className="text-[14px] font-semibold tracking-tight text-zinc-100">Bard</span>
+          <ChevronsUpDown size={13} className="ml-auto text-zinc-500 opacity-0 transition-opacity group-hover:opacity-100" />
+        </button>
       </div>
 
-      <nav className="flex-1 space-y-5 overflow-y-auto px-3 pb-4 pt-2">
-        {/* quick row */}
-        <div className="space-y-0.5">
-          {topLinks.map(({ to, key, icon: Icon }) => (
-            <NavLink key={to} to={to} end={to === '/'} className={({ isActive }) => activeClass(to, isActive)}>
-              <Icon size={16} />
-              {t(key)}
-            </NavLink>
-          ))}
+      {/* quick tab bar */}
+      <div className="flex items-center gap-1 px-2.5 pb-1.5 pt-1">
+        {tabs.map((tab) => (
           <button
-            onClick={() => setPalette(true)}
-            className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-[7px] text-[13px] font-medium text-zinc-400 transition-colors duration-150 hover:bg-white/[0.05] hover:text-zinc-200"
+            key={tab.to ?? tab.label}
+            title={tab.label}
+            onClick={() => (tab.to ? navigate(tab.to) : tab.action?.())}
+            className={`relative flex h-9 flex-1 items-center justify-center rounded-lg transition-colors ${
+              tab.active ? 'bg-accent/15 text-accent-bright' : 'text-zinc-400 hover:bg-white/[0.06] hover:text-zinc-100'
+            }`}
           >
-            <Search size={16} />
-            {t('cmdk.searchHint')}
+            <tab.icon size={17} />
+            {tab.badge ? (
+              <span className="absolute -right-1 -top-1 flex h-[17px] min-w-[17px] items-center justify-center rounded-full bg-accent px-1 text-[10px] font-bold leading-none text-[#fff] ring-2 ring-surface">
+                {tab.badge > 99 ? '99+' : tab.badge}
+              </span>
+            ) : null}
           </button>
-        </div>
+        ))}
+      </div>
 
+      <nav className="flex-1 space-y-4 overflow-y-auto px-2.5 pb-4 pt-2">
         {GROUPS.map((group) => {
           const isCollapsed = collapsed.has(group.id)
           return (
             <div key={group.id}>
               <button
                 onClick={() => toggleGroup(group.id)}
-                className="mb-1 flex w-full items-center gap-1.5 rounded-md px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-zinc-500 transition-colors hover:text-zinc-400"
+                className="group/h mb-0.5 flex w-full items-center gap-1 rounded px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.06em] text-zinc-500 transition-colors hover:text-zinc-300"
               >
-                <span className="h-1.5 w-1.5 rounded-full bg-accent/70" />
                 {t(group.key)}
-                <ChevronDown size={11} className={`ml-auto text-zinc-600 transition-transform duration-150 ${isCollapsed ? '-rotate-90' : ''}`} />
+                <ChevronDown
+                  size={12}
+                  className={`ml-auto text-zinc-600 transition-all duration-150 ${
+                    isCollapsed ? '-rotate-90 opacity-100' : 'opacity-0 group-hover/h:opacity-100'
+                  }`}
+                />
               </button>
               {!isCollapsed && (
-                <div className="space-y-0.5">
+                <div className="space-y-px">
                   {group.links.map(({ to, key, icon: Icon }) => (
-                    <NavLink key={to} to={to} className={({ isActive }) => activeClass(to, isActive)}>
-                      <Icon size={16} />
-                      {t(key)}
+                    <NavLink key={to} to={to} className={({ isActive }) => rowClass(isLinkActive(to, isActive))}>
+                      {({ isActive }) => {
+                        const active = isLinkActive(to, isActive)
+                        return (
+                          <>
+                            <Icon size={17} className={iconClass(active)} />
+                            <span className="min-w-0 flex-1 truncate">{t(key)}</span>
+                            {to === '/tasks' && taskCount > 0 && (
+                              <span className="shrink-0 text-[11px] font-medium text-zinc-500">{taskCount}</span>
+                            )}
+                          </>
+                        )
+                      }}
                     </NavLink>
                   ))}
                 </div>
@@ -194,11 +266,15 @@ export default function Sidebar() {
         })}
       </nav>
 
-      <div className="space-y-0.5 border-t border-edge/60 px-3 py-3">
+      <div className="space-y-px border-t border-edge/60 px-2.5 py-2.5">
         {bottomLinks.map(({ to, key, icon: Icon }) => (
-          <NavLink key={to} to={to} className={({ isActive }) => activeClass(to, isActive)}>
-            <Icon size={16} />
-            {t(key)}
+          <NavLink key={to} to={to} className={({ isActive }) => rowClass(isActive)}>
+            {({ isActive }) => (
+              <>
+                <Icon size={17} className={iconClass(isActive)} />
+                <span className="truncate">{t(key)}</span>
+              </>
+            )}
           </NavLink>
         ))}
       </div>

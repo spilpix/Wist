@@ -348,11 +348,11 @@ export interface ImportGroup {
 export const TITLE_STATUSES: TitleStatus[] = ['watching', 'completed', 'planned', 'on_hold', 'dropped']
 
 export const STATUS_COLORS: Record<TitleStatus, string> = {
-  watching: '#a888f0',
-  completed: '#4ade80',
-  planned: '#8b8b9e',
-  on_hold: '#f59e0b',
-  dropped: '#ef4444',
+  watching: '#7aa8c4',
+  completed: '#6fb06f',
+  planned: '#8a8278',
+  on_hold: '#c9a96b',
+  dropped: '#c47a7a',
 }
 
 export const TITLE_TYPES: TitleType[] = ['anime', 'movie', 'series', 'cartoon', 'youtube', 'book']
@@ -360,11 +360,11 @@ export const TITLE_TYPES: TitleType[] = ['anime', 'movie', 'series', 'cartoon', 
 export const MOMENT_TAGS: MomentTag[] = ['epic', 'funny', 'sad', 'important', 'beautiful']
 
 export const MOMENT_TAG_COLORS: Record<MomentTag, string> = {
-  epic: '#a888f0',
-  funny: '#facc15',
-  sad: '#60a5fa',
-  important: '#ef4444',
-  beautiful: '#4ade80',
+  epic: '#a87dc4',
+  funny: '#c9a96b',
+  sad: '#7aa8c4',
+  important: '#c47a7a',
+  beautiful: '#6fb06f',
 }
 
 export const PROJECT_KINDS: ProjectKind[] = ['video', 'motion', 'edit', '3d', 'design', 'other']
@@ -372,11 +372,11 @@ export const PROJECT_KINDS: ProjectKind[] = ['video', 'motion', 'edit', '3d', 'd
 export const PROJECT_STATUSES: ProjectStatus[] = ['idea', 'active', 'review', 'done', 'archived']
 
 export const PROJECT_STATUS_COLORS: Record<ProjectStatus, string> = {
-  idea: '#8b8b9e',
-  active: '#a888f0',
-  review: '#f59e0b',
-  done: '#4ade80',
-  archived: '#52525b',
+  idea: '#8a8278',
+  active: '#6fb06f',
+  review: '#a87dc4',
+  done: '#7aa8c4',
+  archived: '#4a4744',
 }
 
 // preset creative tools — labels live in i18n under project.tool.*
@@ -391,4 +391,4 @@ export const PROJECT_TOOLS = [
   'other',
 ] as const
 
-export const PROJECT_COLORS = ['#a888f0', '#60a5fa', '#4ade80', '#facc15', '#f59e0b', '#ef4444', '#ec4899', '#14b8a6']
+export const PROJECT_COLORS = ['#d4813a', '#7aa8c4', '#6fb06f', '#c9a96b', '#a87dc4', '#c47a7a', '#3a8a8a', '#8a8278']

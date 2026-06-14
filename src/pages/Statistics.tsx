@@ -37,7 +37,7 @@ const CHART_TOOLTIP_STYLE = {
 const CHART_ITEM_STYLE = { color: 'rgb(var(--ink-200))' }
 const CHART_TICK = { fill: '#8a8a96', fontSize: 11 } // neutral mid-gray, readable on both themes
 
-const PIE_COLORS = ['#a888f0', '#4ade80', '#60a5fa', '#facc15', '#f87171']
+const PIE_COLORS = ['#d4813a', '#6fb06f', '#7aa8c4', '#c9a96b', '#c47a7a']
 
 function OverviewCard({ icon: Icon, value, label }: { icon: typeof Tv; value: string; label: string }) {
   return (
@@ -55,7 +55,7 @@ function OverviewCard({ icon: Icon, value, label }: { icon: typeof Tv; value: st
 
 export default function Statistics() {
   const { t, lang } = useI18n()
-  const accent = useSettingsStore((s) => s.settings?.accentColor) ?? '#7c5cbf'
+  const accent = useSettingsStore((s) => s.settings?.accentColor) ?? '#d4813a'
   const [loading, setLoading] = useState(true)
   const [summary, setSummary] = useState<StatsSummary | null>(null)
   const [types, setTypes] = useState<TypeSlice[]>([])

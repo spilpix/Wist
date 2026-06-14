@@ -101,7 +101,7 @@ export interface GraphPalette {
 
 interface Props {
   data: GraphData
-  accent: string // hex like #7c6af7
+  accent: string // hex like #d4813a
   colorOf: (kind: MemoryKind) => string
   groups: GraphGroup[]
   view: GraphView
@@ -110,7 +110,7 @@ interface Props {
   onTip: (tip: GraphTip | null) => void
 }
 
-const DEFAULT_PALETTE: GraphPalette = { bg: '#1e1e2e', edge: '#3b3b54', text: '#c9c9da' }
+const DEFAULT_PALETTE: GraphPalette = { bg: '#141210', edge: '#2e2b26', text: '#8a8278' }
 
 function hexA(hex: string, a: number): string {
   const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)

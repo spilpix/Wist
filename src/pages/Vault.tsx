@@ -34,12 +34,12 @@ const KIND_ICONS: Record<VaultKind, typeof FileText> = {
 }
 
 const KIND_COLORS: Record<VaultKind, string> = {
-  image: '#4ade80',
-  video: '#a888f0',
-  audio: '#fb923c',
-  doc: '#60a5fa',
-  archive: '#facc15',
-  other: '#8b8b9e',
+  image: '#6fb06f',
+  video: '#a87dc4',
+  audio: '#3a8a8a',
+  doc: '#7aa8c4',
+  archive: '#c9a96b',
+  other: '#8a8278',
 }
 
 function formatSize(bytes: number): string {
@@ -310,7 +310,7 @@ function VaultCard({
 }) {
   const isImage = !r.isFolder && r.kind === 'image' && r.path
   const Icon = r.isFolder ? (r.live ? FolderSymlink : Folder) : KIND_ICONS[r.kind]
-  const color = r.isFolder ? 'var(--accent-bright, #a888f0)' : KIND_COLORS[r.kind]
+  const color = r.isFolder ? 'rgb(var(--accent-bright-rgb))' : KIND_COLORS[r.kind]
 
   return (
     <div
