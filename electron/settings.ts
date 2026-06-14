@@ -22,6 +22,8 @@ function defaults(): AppSettings {
     apiEnabled: false,
     apiPort: 7459,
     apiToken: '',
+    riotApiKey: '',
+    riotPlatform: 'euw1',
   }
 }
 

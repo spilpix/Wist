@@ -28,15 +28,20 @@ interface Link {
   icon: typeof Home
 }
 
-const mainLinks: Link[] = [
-  { to: '/', key: 'nav.home', icon: Home },
-  { to: '/library', key: 'nav.library', icon: Library },
-  { to: '/library?type=book', key: 'nav.books', icon: BookOpen },
-  { to: '/continue', key: 'nav.continue', icon: Clock },
-  { to: '/favorites', key: 'nav.favorites', icon: Heart },
-]
+// Home stands alone at the top; everything else lives in a labelled domain group
+const topLinks: Link[] = [{ to: '/', key: 'nav.home', icon: Home }]
 
 const GROUPS: Array<{ key: TKey; id: string; links: Link[] }> = [
+  {
+    key: 'nav.media',
+    id: 'media',
+    links: [
+      { to: '/library', key: 'nav.library', icon: Library },
+      { to: '/library?type=book', key: 'nav.books', icon: BookOpen },
+      { to: '/continue', key: 'nav.continue', icon: Clock },
+      { to: '/favorites', key: 'nav.favorites', icon: Heart },
+    ],
+  },
   {
     key: 'nav.memory',
     id: 'memory',
@@ -98,6 +103,13 @@ export default function Sidebar() {
   const compact = pathname.startsWith('/tree')
   const [collapsed, setCollapsed] = useState<Set<string>>(loadCollapsed)
 
+  // Library and Books share the /library route — disambiguate active state by ?type
+  const activeClass = (to: string, isActive: boolean, isCompact = false): string => {
+    if (to === '/library') return linkClass(onLibrary && activeType !== 'book', isCompact)
+    if (to === '/library?type=book') return linkClass(onLibrary && activeType === 'book', isCompact)
+    return linkClass(isActive, isCompact)
+  }
+
   const toggleGroup = (id: string) => {
     const next = new Set(collapsed)
     if (next.has(id)) next.delete(id)
@@ -112,13 +124,13 @@ export default function Sidebar() {
 
   // ---- compact icon rail ----
   if (compact) {
-    const railLink = (to: string, key: TKey, Icon: typeof Home, active?: boolean) => (
+    const railLink = ({ to, key, icon: Icon }: Link) => (
       <NavLink
         key={to}
         to={to}
         end={to === '/'}
         title={t(key)}
-        className={({ isActive }) => linkClass(active ?? isActive, true)}
+        className={({ isActive }) => activeClass(to, isActive, true)}
       >
         <Icon size={17} />
       </NavLink>
@@ -126,23 +138,14 @@ export default function Sidebar() {
     return (
       <aside className="flex h-full w-[58px] shrink-0 flex-col border-r border-edge/60 bg-surface transition-all">
         <nav className="flex-1 space-y-1 overflow-y-auto px-2 pb-4 pt-4">
-          {mainLinks.map(({ to, key, icon }) =>
-            railLink(
-              to,
-              key,
-              icon,
-              to === '/library' ? onLibrary && activeType !== 'book' : to === '/library?type=book' ? onLibrary && activeType === 'book' : undefined
-            )
-          )}
+          {topLinks.map(railLink)}
           {GROUPS.map((group) => (
             <div key={group.id} className="space-y-1 border-t border-edge/50 pt-1">
-              {group.links.map(({ to, key, icon }) => railLink(to, key, icon))}
+              {group.links.map(railLink)}
             </div>
           ))}
         </nav>
-        <div className="space-y-1 border-t border-edge/60 px-2 py-3">
-          {bottomLinks.map(({ to, key, icon }) => railLink(to, key, icon))}
-        </div>
+        <div className="space-y-1 border-t border-edge/60 px-2 py-3">{bottomLinks.map(railLink)}</div>
       </aside>
     )
   }
@@ -152,17 +155,8 @@ export default function Sidebar() {
     <aside className="flex h-full w-[200px] shrink-0 flex-col border-r border-edge/60 bg-surface transition-all">
       <nav className="flex-1 space-y-4 overflow-y-auto px-3 pb-4 pt-4">
         <div className="space-y-0.5">
-          {mainLinks.map(({ to, key, icon: Icon }) => (
-            <NavLink
-              key={to}
-              to={to}
-              end={to === '/'}
-              className={({ isActive }) => {
-                if (to === '/library') return linkClass(onLibrary && activeType !== 'book')
-                if (to === '/library?type=book') return linkClass(onLibrary && activeType === 'book')
-                return linkClass(isActive)
-              }}
-            >
+          {topLinks.map(({ to, key, icon: Icon }) => (
+            <NavLink key={to} to={to} end={to === '/'} className={({ isActive }) => activeClass(to, isActive)}>
               <Icon size={15} />
               {t(key)}
             </NavLink>
@@ -183,7 +177,7 @@ export default function Sidebar() {
               {!isCollapsed && (
                 <div className="space-y-0.5">
                   {group.links.map(({ to, key, icon: Icon }) => (
-                    <NavLink key={to} to={to} className={({ isActive }) => linkClass(isActive)}>
+                    <NavLink key={to} to={to} className={({ isActive }) => activeClass(to, isActive)}>
                       <Icon size={15} />
                       {t(key)}
                     </NavLink>
@@ -197,7 +191,7 @@ export default function Sidebar() {
 
       <div className="space-y-0.5 border-t border-edge/60 px-3 py-3">
         {bottomLinks.map(({ to, key, icon: Icon }) => (
-          <NavLink key={to} to={to} className={({ isActive }) => linkClass(isActive)}>
+          <NavLink key={to} to={to} className={({ isActive }) => activeClass(to, isActive)}>
             <Icon size={15} />
             {t(key)}
           </NavLink>

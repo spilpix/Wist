@@ -28,6 +28,7 @@ const en = {
   'nav.books': 'Books',
   'nav.notes': 'Notes',
   'nav.tree': 'My World',
+  'nav.media': 'Media',
   'nav.memory': 'Memory',
   'nav.league': 'League',
   'nav.journal': 'Journal',

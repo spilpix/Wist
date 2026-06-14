@@ -30,6 +30,7 @@ const ru: Record<keyof typeof en, string> = {
   'nav.books': 'Книги',
   'nav.notes': 'Записи',
   'nav.tree': 'Мой мир',
+  'nav.media': 'Медиа',
   'nav.memory': 'Память',
   'nav.league': 'Лига',
   'nav.journal': 'Дневник',

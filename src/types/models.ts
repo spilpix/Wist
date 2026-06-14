@@ -268,6 +268,8 @@ export interface AppSettings {
   apiEnabled: boolean
   apiPort: number
   apiToken: string
+  riotApiKey: string
+  riotPlatform: string // euw1, na1, kr, ru, …
 }
 
 export interface SubtitleTrack {

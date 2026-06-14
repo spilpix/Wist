@@ -1,6 +1,6 @@
 import https from 'node:https'
 import fs from 'node:fs'
-import { exec } from 'node:child_process'
+import { execFile } from 'node:child_process'
 import type { LeaguePoll, LeagueRank, LeagueChampion, LeagueLivePlayer } from '../../src/types/models'
 
 /**
@@ -90,11 +90,12 @@ function credsFromLockfile(): Creds | null {
 }
 
 function credsFromProcess(): Promise<Creds | null> {
-  // most reliable: the LeagueClientUx command line carries port + auth token
+  // most reliable: the LeagueClientUx command line carries port + auth token.
+  // execFile with an args array avoids cmd.exe nested-quote escaping entirely.
   return new Promise((resolve) => {
-    const cmd =
-      'powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter \\"name = \'LeagueClientUx.exe\'\\" | Select-Object -ExpandProperty CommandLine"'
-    exec(cmd, { timeout: 6000, windowsHide: true }, (err, stdout) => {
+    const script =
+      'Get-CimInstance Win32_Process -Filter "name = \'LeagueClientUx.exe\'" | Select-Object -ExpandProperty CommandLine'
+    execFile('powershell', ['-NoProfile', '-NonInteractive', '-Command', script], { timeout: 6000, windowsHide: true }, (err, stdout) => {
       if (err || !stdout) return resolve(null)
       const port = /--app-port=(\d+)/.exec(stdout)
       const token = /--remoting-auth-token=([\w-]+)/.exec(stdout)
@@ -104,9 +105,21 @@ function credsFromProcess(): Promise<Creds | null> {
   })
 }
 
+// when the client is closed the process scan is the slow part — throttle it so
+// sitting on the League page doesn't spawn PowerShell on every 3s poll
+let lastProcessScanAt = 0
+
 async function getCreds(): Promise<Creds | null> {
   if (cachedCreds) return cachedCreds
-  cachedCreds = credsFromLockfile() ?? (await credsFromProcess())
+  const fromLock = credsFromLockfile()
+  if (fromLock) {
+    cachedCreds = fromLock
+    return cachedCreds
+  }
+  const now = Date.now()
+  if (now - lastProcessScanAt < 12000) return null
+  lastProcessScanAt = now
+  cachedCreds = await credsFromProcess()
   return cachedCreds
 }
 
