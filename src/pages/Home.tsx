@@ -221,7 +221,8 @@ export default function Home() {
   })
 
   return (
-    <div className="page space-y-10">
+    <div className="page">
+      <div className="mx-auto max-w-5xl space-y-9">
       <header className="flex items-start justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-white">{t(greetingKey())}</h1>
@@ -462,6 +463,7 @@ export default function Home() {
           {t('home.wellSpent', { duration: formatDurationHuman(summary.secondsWatched) })}
         </div>
       )}
+      </div>
     </div>
   )
 }

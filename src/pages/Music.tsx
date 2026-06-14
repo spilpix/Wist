@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { ExternalLink, Music as MusicIcon, Plus, Trash2 } from 'lucide-react'
 import EmptyState from '../components/ui/EmptyState'
 import Spinner from '../components/ui/Spinner'
+import PageHeader from '../components/ui/PageHeader'
 import { toast } from '../store/toastStore'
 import type { MusicService, Playlist } from '../types/models'
 import { useI18n, t as tGlobal } from '../i18n'
@@ -59,8 +60,7 @@ export default function Music() {
 
   return (
     <div className="page">
-      <h1 className="page-title">{t('nav.music')}</h1>
-      <p className="-mt-4 mb-6 max-w-2xl text-sm text-zinc-500">{t('music.intro')}</p>
+      <PageHeader icon={MusicIcon} title={t('nav.music')} subtitle={t('music.intro')} />
 
       <div className="mb-8 flex max-w-2xl gap-2">
         <input

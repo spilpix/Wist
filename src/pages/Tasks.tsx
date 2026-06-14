@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { Bot, Check, ChevronDown, ChevronRight, Flag, FolderKanban, ListTodo, Plus, Trash2 } from 'lucide-react'
 import EmptyState from '../components/ui/EmptyState'
 import Spinner from '../components/ui/Spinner'
+import PageHeader from '../components/ui/PageHeader'
 import type { Task, TaskPriority } from '../types/models'
 import { formatRelative } from '../utils/formatters'
 import { useI18n } from '../i18n'
@@ -112,10 +113,11 @@ export default function Tasks() {
 
   return (
     <div className="page max-w-4xl">
-      <div className="mb-6 flex items-baseline justify-between">
-        <h1 className="page-title !mb-0">{t('nav.tasks')}</h1>
-        <span className="text-sm text-zinc-500">{t('tasks.openCount', { n: open.length })}</span>
-      </div>
+      <PageHeader
+        icon={ListTodo}
+        title={t('nav.tasks')}
+        actions={<span className="text-sm text-zinc-500">{t('tasks.openCount', { n: open.length })}</span>}
+      />
 
       {/* quick capture */}
       <div className="mb-6 flex gap-2">

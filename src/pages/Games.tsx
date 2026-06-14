@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react'
 import { Clock, Gamepad2, ImagePlus, Pencil, Play, Plus, Trash2, X } from 'lucide-react'
 import EmptyState from '../components/ui/EmptyState'
 import Spinner from '../components/ui/Spinner'
+import PageHeader from '../components/ui/PageHeader'
+import Button from '../components/ui/Button'
 import Modal from '../components/ui/Modal'
 import ConfirmDialog from '../components/ui/ConfirmDialog'
 import { toast } from '../store/toastStore'
@@ -57,13 +59,16 @@ export default function Games() {
 
   return (
     <div className="page">
-      <div className="mb-2 flex items-center justify-between">
-        <h1 className="page-title !mb-0">{t('nav.games')}</h1>
-        <button className="btn-accent" onClick={addGame}>
-          <Plus size={16} /> {t('game.add')}
-        </button>
-      </div>
-      <p className="mb-6 max-w-2xl text-sm text-zinc-500">{t('game.trackingHint')}</p>
+      <PageHeader
+        icon={Gamepad2}
+        title={t('nav.games')}
+        subtitle={t('game.trackingHint')}
+        actions={
+          <Button variant="accent" onClick={addGame}>
+            <Plus size={16} /> {t('game.add')}
+          </Button>
+        }
+      />
 
       {!games.length ? (
         <EmptyState
