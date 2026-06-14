@@ -192,6 +192,41 @@ export interface GameSession {
   seconds: number
 }
 
+export type CanvasNodeType = 'text' | 'note' | 'image'
+
+export interface CanvasNode {
+  id: string
+  type: CanvasNodeType
+  x: number
+  y: number
+  w: number
+  h: number
+  text?: string // text card
+  noteId?: number // note card → links to a note
+  path?: string // image card → local image path
+  color?: string | null
+}
+
+export interface CanvasEdge {
+  id: string
+  from: string // node id
+  to: string // node id
+  label?: string
+}
+
+export interface CanvasData {
+  nodes: CanvasNode[]
+  edges: CanvasEdge[]
+}
+
+export interface Canvas {
+  id: number
+  name: string
+  data: CanvasData
+  created_at: string
+  updated_at: string
+}
+
 export interface MetaCandidate {
   title: string
   original_title: string | null

@@ -10,6 +10,7 @@ import * as journal from '../db/journal'
 import * as tasks from '../db/tasks'
 import * as projects from '../db/projects'
 import * as gamesDb from '../db/games'
+import * as canvases from '../db/canvases'
 import { runningGameIds } from './gameTracker'
 import * as playlists from '../db/playlists'
 import * as vault from '../db/vault'
@@ -242,6 +243,13 @@ export function registerIpcHandlers(): void {
     })
     return res.canceled || !res.filePaths.length ? null : res.filePaths[0]
   })
+
+  // --- canvas (infinite board) ---
+  ipcMain.handle('canvas:list', () => canvases.listCanvases())
+  ipcMain.handle('canvas:get', (_e, id: number) => canvases.getCanvas(id))
+  ipcMain.handle('canvas:create', (_e, name: string) => canvases.createCanvas(name))
+  ipcMain.handle('canvas:update', (_e, id: number, patch) => canvases.updateCanvas(id, patch ?? {}))
+  ipcMain.handle('canvas:remove', (_e, id: number) => canvases.deleteCanvas(id))
 
   // --- metadata from the internet ---
   ipcMain.handle('meta:searchTitles', (_e, type: TitleType, query: string) => searchTitleMeta(type, query))

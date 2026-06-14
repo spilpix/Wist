@@ -249,6 +249,17 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX idx_game_sessions_game ON game_sessions(game_id);
   `,
+
+  // 007 — Canvas: an infinite board stored as one JSON blob per canvas (Obsidian-style)
+  `
+  CREATE TABLE canvases (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    data TEXT NOT NULL DEFAULT '{"nodes":[],"edges":[]}',
+    created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+  );
+  `,
 ]
 
 function migrate(d: Database.Database) {

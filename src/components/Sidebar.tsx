@@ -8,6 +8,7 @@ import {
   CalendarDays,
   ChevronDown,
   FolderKanban,
+  Frame,
   Gamepad2,
   Home,
   Library,
@@ -56,6 +57,7 @@ const GROUPS: Array<{ key: TKey; id: string; links: Link[] }> = [
     links: [
       { to: '/projects', key: 'nav.projects', icon: FolderKanban },
       { to: '/notes', key: 'nav.notes', icon: PenLine },
+      { to: '/canvas', key: 'nav.canvas', icon: Frame },
       { to: '/vault', key: 'nav.vault', icon: Archive },
       { to: '/tree', key: 'nav.tree', icon: Share2 },
     ],

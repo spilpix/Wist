@@ -8,7 +8,9 @@ import { getSettings } from '../settings'
 const TABLES = [
   'titles', 'episodes', 'moments', 'youtube_sources', 'watch_sessions', 'screenshots',
   'projects', 'project_assets',
+  'games', 'game_sessions',
   'notes', 'journal_entries', 'tasks', 'playlists', 'vault_files',
+  'canvases',
 ] as const
 
 function win(): BrowserWindow | undefined {

@@ -16,6 +16,8 @@ import Vault from './pages/Vault'
 import Projects from './pages/Projects'
 import ProjectDetail from './pages/ProjectDetail'
 import Games from './pages/Games'
+import Canvas from './pages/Canvas'
+import CanvasBoard from './pages/CanvasBoard'
 import LocalFiles from './pages/LocalFiles'
 import YouTubeSources from './pages/YouTubeSources'
 import SettingsPage from './pages/Settings'
@@ -54,6 +56,8 @@ export default function App() {
           <Route path="/projects" element={<Projects />} />
           <Route path="/project/:id" element={<ProjectDetail />} />
           <Route path="/games" element={<Games />} />
+          <Route path="/canvas" element={<Canvas />} />
+          <Route path="/canvas/:id" element={<CanvasBoard />} />
           <Route path="/tree" element={lazyPage(<MemoryTree />)} />
           <Route path="/local" element={<LocalFiles />} />
           <Route path="/youtube" element={<YouTubeSources />} />

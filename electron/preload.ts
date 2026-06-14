@@ -49,6 +49,13 @@ const api = {
     running: () => invoke('games:running'),
     pickExe: () => invoke('games:pickExe'),
   },
+  canvas: {
+    list: () => invoke('canvas:list'),
+    get: (id: number) => invoke('canvas:get', id),
+    create: (name: string) => invoke('canvas:create', name),
+    update: (id: number, patch: unknown) => invoke('canvas:update', id, patch),
+    remove: (id: number) => invoke('canvas:remove', id),
+  },
   util: {
     // resolves a dropped File to its absolute path (File.path was removed in Electron 32+)
     pathForFile: (file: File) => webUtils.getPathForFile(file),

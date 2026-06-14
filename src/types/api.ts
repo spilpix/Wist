@@ -1,5 +1,7 @@
 import type {
   AppSettings,
+  Canvas,
+  CanvasData,
   ContinueItem,
   Episode,
   Game,
@@ -89,6 +91,13 @@ export interface WistApi {
     remove(id: number): Promise<void>
     open(path: string): Promise<string>
     startDrag(path: string): void
+  }
+  canvas: {
+    list(): Promise<Canvas[]>
+    get(id: number): Promise<Canvas | null>
+    create(name: string): Promise<Canvas>
+    update(id: number, patch: { name?: string; data?: CanvasData }): Promise<Canvas>
+    remove(id: number): Promise<void>
   }
   games: {
     list(): Promise<Game[]>
