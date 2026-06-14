@@ -411,6 +411,12 @@ const ru: Record<keyof typeof en, string> = {
   // vault
   'vault.add': 'Добавить файлы',
   'vault.addFolder': 'Добавить папку',
+  'vault.newFolder': 'Новая папка',
+  'vault.folder': 'Папка',
+  'vault.live': 'Живая папка',
+  'vault.folderEmpty': 'Эта папка пуста',
+  'vault.folderNamePh': 'Название папки',
+  'vault.rename': 'Переименовать',
   'vault.noNew': 'Нечего добавить',
   'vault.intro': 'Хранилище для всего важного: документы, архивы, картинки. Файлы остаются на своих местах — Bard ведёт упорядоченный каталог. Drag & drop работает.',
   'vault.search': 'Поиск по файлам…',

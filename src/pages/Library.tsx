@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   Archive,
   ArrowDownAZ,
@@ -9,6 +9,7 @@ import {
   FileText,
   FileVideo,
   Film,
+  Folder,
   Image as ImageIcon,
   LayoutGrid,
   Library as LibraryIcon,
@@ -393,6 +394,7 @@ function MusicTab({ t }: { t: TFn }) {
 
 // ---------------- Files tab ----------------
 function FilesTab({ t }: { t: TFn }) {
+  const navigate = useNavigate()
   const [files, setFiles] = useState<VaultFile[] | null>(null)
   const load = useCallback(() => window.wist.vault.list().then(setFiles), [])
   useEffect(() => {
@@ -418,15 +420,16 @@ function FilesTab({ t }: { t: TFn }) {
       ) : (
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-4">
           {files.map((f) => {
-            const Icon = KIND_ICON[f.kind] ?? FileIcon
+            const isFolder = f.kind === 'folder' || f.kind === 'diskfolder'
+            const Icon = isFolder ? Folder : KIND_ICON[f.kind as VaultKind] ?? FileIcon
             return (
               <div key={f.id} className="group flex items-center gap-3 rounded-xl border border-edge/50 bg-surface p-3 transition-colors hover:border-edge">
                 <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-raised text-accent-bright">
                   <Icon size={20} />
                 </span>
-                <button onClick={() => window.wist.vault.open(f.path)} className="min-w-0 flex-1 text-left">
+                <button onClick={() => (isFolder ? navigate('/vault') : window.wist.vault.open(f.path))} className="min-w-0 flex-1 text-left">
                   <div className="truncate text-[13px] font-medium text-zinc-200 group-hover:text-white">{f.name}</div>
-                  <div className="text-xs text-zinc-500">{formatBytes(f.size)}</div>
+                  <div className="text-xs text-zinc-500">{isFolder ? t('nav.vault') : formatBytes(f.size)}</div>
                 </button>
                 <button
                   className="shrink-0 text-zinc-600 opacity-0 transition-all hover:text-red-400 group-hover:opacity-100"

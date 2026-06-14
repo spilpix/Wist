@@ -409,6 +409,12 @@ const en = {
   // vault
   'vault.add': 'Add files',
   'vault.addFolder': 'Add folder',
+  'vault.newFolder': 'New folder',
+  'vault.folder': 'Folder',
+  'vault.live': 'Live folder',
+  'vault.folderEmpty': 'This folder is empty',
+  'vault.folderNamePh': 'Folder name',
+  'vault.rename': 'Rename',
   'vault.noNew': 'Nothing new to add',
   'vault.intro': 'A vault for anything that matters: documents, archives, pictures. Files stay where they are — Bard keeps an organized index. Drag & drop works.',
   'vault.search': 'Search files…',

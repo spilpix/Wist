@@ -111,15 +111,27 @@ export interface Playlist {
 }
 
 export type VaultKind = 'image' | 'video' | 'audio' | 'doc' | 'archive' | 'other'
+// folder = a virtual folder you create; diskfolder = a live link to an OS directory
+export type VaultEntryKind = VaultKind | 'folder' | 'diskfolder'
 
 export interface VaultFile {
   id: number
   name: string
   path: string
   size: number
-  kind: VaultKind
+  kind: VaultEntryKind
   tags: string[]
+  parent_id: number | null
   created_at: string
+}
+
+// a live entry read straight from a real OS directory (browsing inside a diskfolder)
+export interface VaultDiskEntry {
+  name: string
+  path: string
+  isDir: boolean
+  size: number
+  kind: VaultKind
 }
 
 export type ProjectKind = 'video' | 'motion' | 'edit' | '3d' | 'design' | 'other'

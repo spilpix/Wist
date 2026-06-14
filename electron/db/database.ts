@@ -219,6 +219,14 @@ const MIGRATIONS: string[] = [
   ALTER TABLE notes ADD COLUMN project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL;
   ALTER TABLE tasks ADD COLUMN project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL;
   `,
+
+  // 005 — vault becomes a folder tree: parent_id makes nesting possible.
+  // kind gains 'folder' (a virtual folder you create) and 'diskfolder' (a live
+  // link to an OS directory — opening it browses the real contents, no flat dump).
+  `
+  ALTER TABLE vault_files ADD COLUMN parent_id INTEGER REFERENCES vault_files(id) ON DELETE CASCADE;
+  CREATE INDEX idx_vault_parent ON vault_files(parent_id);
+  `,
 ]
 
 function migrate(d: Database.Database) {

@@ -22,6 +22,7 @@ import type {
   TitleFilters,
   TitleType,
   TypeSlice,
+  VaultDiskEntry,
   VaultFile,
   YoutubeSource,
   YoutubeVideo,
@@ -77,10 +78,14 @@ export interface WistApi {
     remove(id: number): Promise<void>
   }
   vault: {
-    list(): Promise<VaultFile[]>
-    addPaths(paths: string[]): Promise<number>
-    pickAndAdd(): Promise<number>
-    addFolder(): Promise<number>
+    list(parentId?: number | null): Promise<VaultFile[]>
+    browse(dir: string): Promise<VaultDiskEntry[]>
+    addPaths(paths: string[], parentId?: number | null): Promise<number>
+    pickAndAdd(parentId?: number | null): Promise<number>
+    addFolder(parentId?: number | null): Promise<number>
+    createFolder(name: string, parentId?: number | null): Promise<VaultFile>
+    rename(id: number, name: string): Promise<void>
+    move(id: number, parentId: number | null): Promise<void>
     remove(id: number): Promise<void>
     open(path: string): Promise<string>
     startDrag(path: string): void

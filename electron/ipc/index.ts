@@ -158,47 +158,31 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('playlists:remove', (_e, id: number) => playlists.deletePlaylist(id))
 
   // --- vault ---
-  ipcMain.handle('vault:list', () => vault.listVaultFiles())
-  ipcMain.handle('vault:addPaths', (_e, paths: string[]) => vault.addVaultFiles(paths ?? []))
-  ipcMain.handle('vault:pickAndAdd', async () => {
+  ipcMain.handle('vault:list', (_e, parentId?: number | null) => vault.listVaultFiles(parentId ?? null))
+  ipcMain.handle('vault:browse', (_e, dir: string) => vault.browseDir(dir))
+  ipcMain.handle('vault:addPaths', (_e, paths: string[], parentId?: number | null) =>
+    vault.addVaultFiles(paths ?? [], parentId ?? null)
+  )
+  ipcMain.handle('vault:createFolder', (_e, name: string, parentId?: number | null) =>
+    vault.createVaultFolder(name, parentId ?? null)
+  )
+  ipcMain.handle('vault:rename', (_e, id: number, name: string) => vault.renameVaultItem(id, name))
+  ipcMain.handle('vault:move', (_e, id: number, parentId: number | null) => vault.moveVaultItem(id, parentId ?? null))
+  ipcMain.handle('vault:pickAndAdd', async (_e, parentId?: number | null) => {
     const res = await dialog.showOpenDialog(BrowserWindow.getAllWindows()[0]!, {
       properties: ['openFile', 'multiSelections'],
     })
     if (res.canceled || !res.filePaths.length) return 0
-    return vault.addVaultFiles(res.filePaths)
+    return vault.addVaultFiles(res.filePaths, parentId ?? null)
   })
-  ipcMain.handle('vault:addFolder', async () => {
+  ipcMain.handle('vault:addFolder', async (_e, parentId?: number | null) => {
     const res = await dialog.showOpenDialog(BrowserWindow.getAllWindows()[0]!, {
-      properties: ['openDirectory'],
+      properties: ['openDirectory', 'multiSelections'],
     })
     if (res.canceled || !res.filePaths.length) return 0
-    // async breadth-first walk so the main process never blocks the UI; hard caps on
-    // files AND directories keep a stray pick of C:\ or a huge tree from hanging.
-    const MAX_FILES = 5000
-    const MAX_DIRS = 20000
-    const SKIP = new Set(['node_modules', 'dist', 'build', '$RECYCLE.BIN', 'System Volume Information'])
-    const files: string[] = []
-    const queue: Array<{ dir: string; depth: number }> = [{ dir: res.filePaths[0], depth: 0 }]
-    let dirsVisited = 0
-    while (queue.length && files.length < MAX_FILES && dirsVisited < MAX_DIRS) {
-      const { dir, depth } = queue.shift()!
-      dirsVisited++
-      if (depth > 12) continue
-      let entries: import('node:fs').Dirent[]
-      try {
-        entries = await fs.promises.readdir(dir, { withFileTypes: true })
-      } catch {
-        continue
-      }
-      for (const ent of entries) {
-        if (files.length >= MAX_FILES) break
-        if (ent.name.startsWith('.') || SKIP.has(ent.name)) continue
-        const p = path.join(dir, ent.name)
-        if (ent.isDirectory()) queue.push({ dir: p, depth: depth + 1 })
-        else if (ent.isFile()) files.push(p)
-      }
-    }
-    return vault.addVaultFiles(files)
+    // add each picked directory as ONE live folder link — opening it browses the real
+    // contents on demand (no recursive flatten, no thousands of imported rows).
+    return vault.addDiskFolders(res.filePaths, parentId ?? null)
   })
   ipcMain.handle('vault:remove', (_e, id: number) => vault.removeVaultFile(id))
   ipcMain.handle('vault:open', (_e, p: string) => shell.openPath(p))
