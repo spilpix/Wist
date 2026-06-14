@@ -222,19 +222,18 @@ export default function Home() {
 
   return (
     <div className="page space-y-10">
-      <header className="relative flex items-start justify-between">
-        <div className="pointer-events-none absolute -top-28 left-1/4 h-64 w-[460px] rounded-full bg-accent/10 blur-3xl" />
-        <div className="relative">
+      <header className="flex items-start justify-between">
+        <div>
           <h1 className="text-3xl font-bold tracking-tight text-white">{t(greetingKey())}</h1>
           <p className="mt-1 text-sm capitalize text-zinc-500">{dateStr}</p>
         </div>
         <Link
           to="/tree"
-          className="relative flex items-center gap-2 rounded-xl border border-accent/30 bg-accent/10 px-3 py-2 text-sm text-accent-bright transition-colors hover:bg-accent/20"
+          className="flex items-center gap-2 rounded-xl border border-edge/70 bg-surface px-3 py-2 text-sm text-accent-bright transition-colors hover:border-edge hover:bg-raised"
         >
           <Sparkles size={15} />
           <span className="font-semibold">{t('home.spiritLevel', { n: spiritLevel(spiritXp) })}</span>
-          <span className="text-xs opacity-70">· {t('world.light')}: {spiritXp}</span>
+          <span className="text-xs text-zinc-500">· {spiritXp}</span>
         </Link>
       </header>
 

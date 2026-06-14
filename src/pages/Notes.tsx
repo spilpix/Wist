@@ -1,6 +1,22 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Link2, PenLine, Pin, Plus, Search, Trash2 } from 'lucide-react'
+import {
+  Code,
+  Heading1,
+  Heading2,
+  Heading3,
+  Link2,
+  List,
+  ListChecks,
+  ListOrdered,
+  Minus,
+  PenLine,
+  Pin,
+  Plus,
+  Quote,
+  Search,
+  Trash2,
+} from 'lucide-react'
 import ChipsInput from '../components/ui/ChipsInput'
 import ConfirmDialog from '../components/ui/ConfirmDialog'
 import EmptyState from '../components/ui/EmptyState'
@@ -40,6 +56,21 @@ const emptyDraft = (projectId: number | null = null): Draft => ({
 
 type SaveState = 'idle' | 'saving' | 'saved'
 
+// Notion-style "/" block commands — insert markdown for the chosen block
+const SLASH_COMMANDS = [
+  { id: 'h1', icon: Heading1, insert: '# ' },
+  { id: 'h2', icon: Heading2, insert: '## ' },
+  { id: 'h3', icon: Heading3, insert: '### ' },
+  { id: 'bullet', icon: List, insert: '- ' },
+  { id: 'numbered', icon: ListOrdered, insert: '1. ' },
+  { id: 'todo', icon: ListChecks, insert: '- [ ] ' },
+  { id: 'quote', icon: Quote, insert: '> ' },
+  { id: 'divider', icon: Minus, insert: '\n---\n' },
+  { id: 'code', icon: Code, insert: '```\n\n```' },
+  { id: 'link', icon: Link2, insert: '[[' },
+] as const
+type SlashCmd = (typeof SLASH_COMMANDS)[number]
+
 export default function Notes() {
   const { t } = useI18n()
   const navigate = useNavigate()
@@ -52,6 +83,8 @@ export default function Notes() {
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [suggest, setSuggest] = useState<{ query: string; items: Array<{ name: string; kind: 'title' | 'note' }> } | null>(null)
   const [suggestIdx, setSuggestIdx] = useState(0)
+  const [slash, setSlash] = useState<{ items: SlashCmd[] } | null>(null)
+  const [slashIdx, setSlashIdx] = useState(0)
 
   const draftRef = useRef<Draft | null>(null)
   draftRef.current = draft
@@ -149,6 +182,7 @@ export default function Notes() {
     })
     setSaveState('saved')
     setSuggest(null)
+    setSlash(null)
   }, [persist])
 
   const newNote = useCallback((projectId?: number) => {
@@ -160,6 +194,7 @@ export default function Notes() {
     setDraft(emptyDraft(pid))
     setSaveState('idle')
     setSuggest(null)
+    setSlash(null)
   }, [persist])
 
   // deep links: ?open=<id> и ?new=1
@@ -220,6 +255,48 @@ export default function Notes() {
     requestAnimationFrame(() => {
       ta.focus()
       ta.selectionStart = ta.selectionEnd = upto.length
+    })
+  }
+
+  // ---------- "/" slash block commands ----------
+  const refreshSlash = (value: string, caret: number) => {
+    // [^\s/] keeps the query going for Cyrillic too (\w is ASCII-only)
+    const m = /(^|\s)\/([^\s/]*)$/.exec(value.slice(0, caret))
+    if (!m) {
+      setSlash(null)
+      return
+    }
+    const q = m[2].toLowerCase()
+    const items = [...SLASH_COMMANDS].filter(
+      (c) => !q || c.id.includes(q) || t(`notes.slash.${c.id}` as 'notes.slash.h1').toLowerCase().includes(q)
+    )
+    if (items.length) {
+      setSuggest(null) // slash wins — never show both menus at once
+      setSlash({ items })
+    } else {
+      setSlash(null)
+    }
+    setSlashIdx(0)
+  }
+
+  const applySlash = (cmd: SlashCmd) => {
+    const ta = contentRef.current
+    const d = draftRef.current
+    if (!ta || !d) return
+    const caret = ta.selectionStart
+    const m = /(^|\s)\/([^\s/]*)$/.exec(d.content.slice(0, caret))
+    if (!m) return
+    const start = caret - m[2].length - 1 // index of the "/"
+    const before = d.content.slice(0, start)
+    const after = d.content.slice(caret)
+    const next = before + cmd.insert + after
+    patchDraft({ content: next })
+    setSlash(null)
+    const caretPos = cmd.id === 'code' ? (before + '```\n').length : (before + cmd.insert).length
+    requestAnimationFrame(() => {
+      ta.focus()
+      ta.selectionStart = ta.selectionEnd = caretPos
+      if (cmd.id === 'link') refreshSuggest(next, caretPos) // chain straight into [[ ]] picker
     })
   }
 
@@ -379,8 +456,24 @@ export default function Notes() {
                 onChange={(e) => {
                   patchDraft({ content: e.target.value })
                   refreshSuggest(e.target.value, e.target.selectionStart)
+                  refreshSlash(e.target.value, e.target.selectionStart)
                 }}
                 onKeyDown={(e) => {
+                  if (slash) {
+                    if (e.key === 'ArrowDown') {
+                      e.preventDefault()
+                      setSlashIdx((i) => Math.min(i + 1, slash.items.length - 1))
+                    } else if (e.key === 'ArrowUp') {
+                      e.preventDefault()
+                      setSlashIdx((i) => Math.max(i - 1, 0))
+                    } else if (e.key === 'Enter' || e.key === 'Tab') {
+                      e.preventDefault()
+                      applySlash(slash.items[slashIdx])
+                    } else if (e.key === 'Escape') {
+                      setSlash(null)
+                    }
+                    return
+                  }
                   if (suggest) {
                     if (e.key === 'ArrowDown') {
                       e.preventDefault()
@@ -396,7 +489,10 @@ export default function Notes() {
                     }
                   }
                 }}
-                onClick={(e) => refreshSuggest(draft.content, e.currentTarget.selectionStart)}
+                onClick={(e) => {
+                  refreshSuggest(draft.content, e.currentTarget.selectionStart)
+                  refreshSlash(draft.content, e.currentTarget.selectionStart)
+                }}
               />
               {suggest && (
                 <div className="absolute left-0 top-0 z-10 w-72 -translate-y-1 rounded-lg border border-edge bg-surface p-1 shadow-none">
@@ -416,6 +512,26 @@ export default function Notes() {
                       </span>
                     </button>
                   ))}
+                </div>
+              )}
+              {slash && (
+                <div className="absolute left-0 top-0 z-10 w-60 -translate-y-1 rounded-lg border border-edge bg-surface p-1 shadow-lg">
+                  {slash.items.map((cmd, i) => {
+                    const Icon = cmd.icon
+                    return (
+                      <button
+                        key={cmd.id}
+                        onMouseMove={() => setSlashIdx(i)}
+                        onClick={() => applySlash(cmd)}
+                        className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-xs ${
+                          i === slashIdx ? 'bg-accent/15 text-accent-bright' : 'text-zinc-300'
+                        }`}
+                      >
+                        <Icon size={14} className="shrink-0 text-zinc-500" />
+                        <span>{t(`notes.slash.${cmd.id}` as 'notes.slash.h1')}</span>
+                      </button>
+                    )
+                  })}
                 </div>
               )}
             </div>
