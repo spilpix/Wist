@@ -105,6 +105,12 @@ const ru: Record<keyof typeof en, string> = {
   'project.reveal': 'Показать в проводнике',
   'project.removeAsset': 'Убрать',
   'project.notFound': 'Проект не найден',
+  'project.newNote': 'Новая заметка',
+  'project.noTasks': 'Пока нет задач',
+  'project.noNotes': 'Пока нет заметок',
+  'project.badge': 'Проект',
+  'home.activeProjects': 'Активные проекты',
+  'cmdk.newProject': 'Новый проект',
 
   // the world
   'world.light': 'Свет духа',

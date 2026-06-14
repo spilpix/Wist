@@ -45,7 +45,7 @@ export interface WistApi {
     streak(): Promise<number>
   }
   tasks: {
-    list(filters?: { done?: boolean }): Promise<Task[]>
+    list(filters?: { done?: boolean; projectId?: number }): Promise<Task[]>
     create(data: Partial<Task>): Promise<Task>
     update(id: number, patch: Partial<Task>): Promise<Task>
     remove(id: number): Promise<void>
@@ -137,7 +137,7 @@ export interface WistApi {
     exportAll(): Promise<{ exported: number; dir: string } | null>
   }
   notes: {
-    list(filters?: { search?: string; tag?: string }): Promise<Note[]>
+    list(filters?: { search?: string; tag?: string; projectId?: number }): Promise<Note[]>
     get(id: number): Promise<Note | null>
     create(data: Partial<Note>): Promise<Note>
     update(id: number, patch: Partial<Note>): Promise<Note>

@@ -21,17 +21,19 @@ interface Draft {
   content: string
   tags: string[]
   linked_title_id: number | null
+  project_id: number | null
   pinned: boolean
   token: number // stable per editing session — binds autosaves to one note, even before its DB id exists
 }
 
 let draftToken = 0
-const emptyDraft = (): Draft => ({
+const emptyDraft = (projectId: number | null = null): Draft => ({
   id: null,
   title: '',
   content: '',
   tags: [],
   linked_title_id: null,
+  project_id: projectId,
   pinned: false,
   token: ++draftToken,
 })
@@ -84,6 +86,7 @@ export default function Notes() {
         content: d.content,
         tags: d.tags,
         linked_title_id: d.linked_title_id,
+        project_id: d.project_id,
         pinned: (d.pinned ? 1 : 0) as 0 | 1,
       }
       let savedId: number
@@ -140,6 +143,7 @@ export default function Notes() {
       content: nt.content,
       tags: nt.tags,
       linked_title_id: nt.linked_title_id,
+      project_id: nt.project_id,
       pinned: !!nt.pinned,
       token: ++draftToken,
     })
@@ -147,11 +151,13 @@ export default function Notes() {
     setSuggest(null)
   }, [persist])
 
-  const newNote = useCallback(() => {
+  const newNote = useCallback((projectId?: number) => {
+    // guard: onClick passes a MouseEvent — only honour a real numeric project id
+    const pid = typeof projectId === 'number' ? projectId : null
     if (saveTimer.current) clearTimeout(saveTimer.current)
     const prev = draftRef.current
     if (prev && (prev.title.trim() || prev.content.trim())) persist(prev)
-    setDraft(emptyDraft())
+    setDraft(emptyDraft(pid))
     setSaveState('idle')
     setSuggest(null)
   }, [persist])
@@ -165,7 +171,8 @@ export default function Notes() {
       if (nt) openNote(nt)
       setSearchParams({}, { replace: true })
     } else if (searchParams.get('new') === '1') {
-      newNote() // flushes any dirty draft before clearing
+      const proj = searchParams.get('project')
+      newNote(proj ? Number(proj) : undefined) // flushes any dirty draft before clearing; seeds project link
       setSearchParams({}, { replace: true })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -268,7 +275,7 @@ export default function Notes() {
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
-            <button className="btn-accent !px-2.5 !py-1.5" title={t('notes.new')} onClick={newNote}>
+            <button className="btn-accent !px-2.5 !py-1.5" title={t('notes.new')} onClick={() => newNote()}>
               <Plus size={14} />
             </button>
           </div>
@@ -310,7 +317,7 @@ export default function Notes() {
             title={t('notes.selectPrompt')}
             subtitle={t('notes.emptySubtitle')}
             action={
-              <button className="btn-accent" onClick={newNote}>
+              <button className="btn-accent" onClick={() => newNote()}>
                 <Plus size={16} /> {t('notes.new')}
               </button>
             }

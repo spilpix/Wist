@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
   ArrowLeft,
+  Check,
   ExternalLink,
   Eye,
   FilePlus2,
@@ -10,14 +11,17 @@ import {
   FolderPlus,
   ImagePlus,
   Link2,
+  ListTodo,
   Pencil,
+  Plus,
+  StickyNote,
   Trash2,
 } from 'lucide-react'
 import Spinner from '../components/ui/Spinner'
 import Modal from '../components/ui/Modal'
 import ProjectModal from '../components/ProjectModal'
 import { daysUntil } from './Projects'
-import { PROJECT_STATUS_COLORS, type Project, type ProjectAsset } from '../types/models'
+import { PROJECT_STATUS_COLORS, type Note, type Project, type ProjectAsset, type Task } from '../types/models'
 import { useI18n } from '../i18n'
 
 export default function ProjectDetail() {
@@ -28,6 +32,9 @@ export default function ProjectDetail() {
 
   const [project, setProject] = useState<Project | null>(null)
   const [assets, setAssets] = useState<ProjectAsset[]>([])
+  const [tasks, setTasks] = useState<Task[]>([])
+  const [notes, setNotes] = useState<Note[]>([])
+  const [newTask, setNewTask] = useState('')
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState(false)
   const [linkOpen, setLinkOpen] = useState(false)
@@ -35,11 +42,33 @@ export default function ProjectDetail() {
 
   const loadProject = useCallback(() => window.wist.projects.get(projectId).then(setProject), [projectId])
   const loadAssets = useCallback(() => window.wist.projects.assets(projectId).then(setAssets), [projectId])
+  const loadTasks = useCallback(() => window.wist.tasks.list({ projectId }).then(setTasks), [projectId])
+  const loadNotes = useCallback(() => window.wist.notes.list({ projectId }).then(setNotes), [projectId])
 
   useEffect(() => {
     setLoading(true)
-    Promise.all([loadProject(), loadAssets()]).finally(() => setLoading(false))
-  }, [loadProject, loadAssets])
+    Promise.all([loadProject(), loadAssets(), loadTasks(), loadNotes()]).finally(() => setLoading(false))
+  }, [loadProject, loadAssets, loadTasks, loadNotes])
+
+  const addTask = async () => {
+    const title = newTask.trim()
+    if (!title) return
+    setNewTask('')
+    await window.wist.tasks.create({ title, project_id: projectId })
+    loadTasks()
+  }
+  const toggleTask = async (task: Task) => {
+    await window.wist.tasks.update(task.id, { done: task.done ? 0 : 1 })
+    loadTasks()
+  }
+  const removeTask = async (task: Task) => {
+    await window.wist.tasks.remove(task.id)
+    loadTasks()
+  }
+  const newNote = () => {
+    // lazy create: the editor only writes a row once the user types (matches the rest of the app)
+    navigate(`/notes?new=1&project=${projectId}`)
+  }
 
   const addFiles = async () => {
     if (await window.wist.projects.addFiles(projectId)) loadAssets()
@@ -232,6 +261,85 @@ export default function ProjectDetail() {
           )}
         </div>
       )}
+
+      {/* tasks + notes */}
+      <div className="mt-9 grid grid-cols-1 gap-7 lg:grid-cols-2">
+        {/* tasks */}
+        <section>
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-zinc-400">{t('nav.tasks')}</h2>
+          <div className="mb-3 flex gap-2">
+            <input
+              className="input !py-2 text-sm"
+              placeholder={t('tasks.placeholder')}
+              value={newTask}
+              onChange={(e) => setNewTask(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && addTask()}
+            />
+            <button className="btn-accent shrink-0 !px-3" onClick={addTask}>
+              <Plus size={16} />
+            </button>
+          </div>
+          {!tasks.length ? (
+            <p className="px-1 text-xs text-zinc-600">{t('project.noTasks')}</p>
+          ) : (
+            <div className="card divide-y divide-edge/40">
+              {tasks.map((task) => (
+                <div key={task.id} className="group flex items-center gap-3 px-4 py-2.5">
+                  <button
+                    onClick={() => toggleTask(task)}
+                    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-colors ${
+                      task.done ? 'border-accent bg-accent text-[#fff]' : 'border-edge text-transparent hover:border-accent'
+                    }`}
+                  >
+                    <Check size={12} />
+                  </button>
+                  <span className={`min-w-0 flex-1 truncate text-sm ${task.done ? 'text-zinc-600 line-through decoration-zinc-700' : 'text-zinc-200'}`}>
+                    {task.title}
+                  </span>
+                  <button
+                    className="shrink-0 rounded-lg p-1.5 text-zinc-600 opacity-0 transition-all hover:text-red-400 group-hover:opacity-100"
+                    onClick={() => removeTask(task)}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* notes */}
+        <section>
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-400">{t('nav.notes')}</h2>
+            <button className="btn-ghost !py-1.5 text-xs" onClick={newNote}>
+              <Plus size={14} /> {t('project.newNote')}
+            </button>
+          </div>
+          {!notes.length ? (
+            <p className="px-1 text-xs text-zinc-600">{t('project.noNotes')}</p>
+          ) : (
+            <div className="space-y-2">
+              {notes.map((n) => {
+                const label = n.title.trim() || n.content.trim().split('\n')[0].slice(0, 80) || '—'
+                return (
+                  <button
+                    key={n.id}
+                    onClick={() => navigate(`/notes?open=${n.id}`)}
+                    className="card group flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:border-edge"
+                  >
+                    <StickyNote size={15} className="mt-0.5 shrink-0 text-accent-bright" />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-medium text-zinc-200 group-hover:text-white">{label}</div>
+                      {n.content.trim() && <div className="line-clamp-1 text-xs text-zinc-500">{n.content.trim()}</div>}
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </section>
+      </div>
 
       {editing && (
         <ProjectModal

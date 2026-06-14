@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Bot, Check, ChevronDown, ChevronRight, Flag, ListTodo, Plus, Trash2 } from 'lucide-react'
+import { Bot, Check, ChevronDown, ChevronRight, Flag, FolderKanban, ListTodo, Plus, Trash2 } from 'lucide-react'
 import EmptyState from '../components/ui/EmptyState'
 import Spinner from '../components/ui/Spinner'
 import type { Task, TaskPriority } from '../types/models'
@@ -88,6 +88,11 @@ export default function Tasks() {
       {task.source !== 'user' && (
         <span className="flex shrink-0 items-center gap-1 rounded-md bg-accent/15 px-1.5 py-0.5 text-[10px] font-semibold text-accent-bright" title={t('tasks.bySource', { source: task.source })}>
           <Bot size={11} /> {task.source}
+        </span>
+      )}
+      {task.project_name && (
+        <span className="flex shrink-0 items-center gap-1 rounded-md bg-raised px-1.5 py-0.5 text-[10px] font-medium text-zinc-400" title={t('project.badge')}>
+          <FolderKanban size={10} /> {task.project_name}
         </span>
       )}
       {task.due_date && !task.done && (

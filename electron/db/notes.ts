@@ -16,12 +16,13 @@ function rowToNote(row: any): Note {
 }
 
 const SELECT = `
-  SELECT n.*, t.title AS linked_title_name
+  SELECT n.*, t.title AS linked_title_name, p.name AS project_name
   FROM notes n
   LEFT JOIN titles t ON t.id = n.linked_title_id
+  LEFT JOIN projects p ON p.id = n.project_id
 `
 
-export function listNotes(filters: { search?: string; tag?: string } = {}): Note[] {
+export function listNotes(filters: { search?: string; tag?: string; projectId?: number } = {}): Note[] {
   const where: string[] = []
   const params: any[] = []
   if (filters.search) {
@@ -32,6 +33,10 @@ export function listNotes(filters: { search?: string; tag?: string } = {}): Note
   if (filters.tag) {
     where.push('n.tags LIKE ?')
     params.push(`%${JSON.stringify(filters.tag)}%`)
+  }
+  if (filters.projectId !== undefined) {
+    where.push('n.project_id = ?')
+    params.push(filters.projectId)
   }
   const sql = `${SELECT} ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY n.pinned DESC, n.updated_at DESC`
   return (db().prepare(sql).all(...params) as any[]).map(rowToNote)
@@ -44,19 +49,20 @@ export function getNote(id: number): Note | null {
 
 export function createNote(data: Partial<Note>): Note {
   const info = db()
-    .prepare('INSERT INTO notes (title, content, tags, linked_title_id, pinned, source) VALUES (?, ?, ?, ?, ?, ?)')
+    .prepare('INSERT INTO notes (title, content, tags, linked_title_id, project_id, pinned, source) VALUES (?, ?, ?, ?, ?, ?, ?)')
     .run(
       data.title ?? '',
       data.content ?? '',
       JSON.stringify(Array.isArray(data.tags) ? data.tags : []),
       data.linked_title_id ?? null,
+      data.project_id ?? null,
       data.pinned ? 1 : 0,
       typeof data.source === 'string' && data.source ? data.source.slice(0, 64) : 'user'
     )
   return getNote(Number(info.lastInsertRowid))!
 }
 
-const WRITABLE = ['title', 'content', 'tags', 'linked_title_id', 'pinned'] as const
+const WRITABLE = ['title', 'content', 'tags', 'linked_title_id', 'project_id', 'pinned'] as const
 
 export function updateNote(id: number, patch: Partial<Note>): Note {
   const sets: string[] = []

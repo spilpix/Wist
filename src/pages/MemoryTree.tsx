@@ -13,7 +13,7 @@ import {
   type WorldTip,
 } from '../world/createGalaxy'
 import { useSettingsStore, resolvedTheme } from '../store/settingsStore'
-import type { JournalEntry, MemoryKind, Moment, Note, Title } from '../types/models'
+import type { JournalEntry, MemoryKind, Moment, Note, Project, Title } from '../types/models'
 import { useI18n, type TKey } from '../i18n'
 
 const KIND_HEX: Record<MemoryKind, string> = {
@@ -25,13 +25,14 @@ const KIND_HEX: Record<MemoryKind, string> = {
   project: '#ec4899',
 }
 
-const KIND_ORDER: MemoryKind[] = ['title', 'book', 'note', 'moment', 'journal']
+const KIND_ORDER: MemoryKind[] = ['title', 'book', 'note', 'moment', 'journal', 'project']
 
 interface SourceData {
   titles: Title[]
   notes: Note[]
   moments: Moment[]
   journal: JournalEntry[]
+  projects: Project[]
 }
 
 interface ViewOpts {
@@ -120,6 +121,22 @@ function buildGraph(
     }
   }
 
+  if (!hidden.has('project')) {
+    for (const pr of src.projects) {
+      add({
+        id: `pr${pr.id}`,
+        kind: 'project',
+        label: pr.name,
+        sub: pr.client ?? kindNames.project,
+        route: `/project/${pr.id}`,
+      })
+    }
+    // notes carry a project_id → connect them to their project node
+    for (const nt of src.notes) {
+      if (nt.project_id != null) link(`n${nt.id}`, `pr${nt.project_id}`)
+    }
+  }
+
   // search filter (Obsidian: non-matching nodes disappear)
   let keep = nodes.map((_, i) => i)
   const q = query.trim().toLowerCase()
@@ -177,7 +194,8 @@ export default function MemoryTree() {
       window.wist.notes.list({}),
       window.wist.moments.list({}),
       window.wist.journal.list(),
-    ]).then(([titles, notes, moments, journal]) => setSrc({ titles, notes, moments, journal }))
+      window.wist.projects.list(),
+    ]).then(([titles, notes, moments, journal, projects]) => setSrc({ titles, notes, moments, journal, projects }))
   }, [])
 
   const kindNames = useMemo<Record<MemoryKind, string>>(
@@ -200,7 +218,7 @@ export default function MemoryTree() {
       note: src.notes.length,
       moment: src.moments.length,
       journal: src.journal.length,
-      project: 0, // projects join the graph in M4
+      project: src.projects.length,
     }
   }, [src])
 

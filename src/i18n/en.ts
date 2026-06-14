@@ -103,6 +103,12 @@ const en = {
   'project.reveal': 'Show in Explorer',
   'project.removeAsset': 'Remove',
   'project.notFound': 'Project not found',
+  'project.newNote': 'New note',
+  'project.noTasks': 'No tasks yet',
+  'project.noNotes': 'No notes yet',
+  'project.badge': 'Project',
+  'home.activeProjects': 'Active projects',
+  'cmdk.newProject': 'New project',
 
   // the world
   'world.light': 'Spirit Light',

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { CalendarClock, FolderKanban, Paperclip, Pencil, Pin, Plus, StickyNote, ListTodo, Trash2 } from 'lucide-react'
 import EmptyState from '../components/ui/EmptyState'
 import Spinner from '../components/ui/Spinner'
@@ -21,6 +21,7 @@ export function daysUntil(d: string): number {
 export default function Projects() {
   const { t } = useI18n()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { projects, loading, load } = useProjectStore()
   const [editing, setEditing] = useState<Project | null>(null)
   const [creating, setCreating] = useState(false)
@@ -29,6 +30,14 @@ export default function Projects() {
   useEffect(() => {
     load()
   }, [load])
+
+  // command palette deep link: /projects?new=1 opens the create modal
+  useEffect(() => {
+    if (searchParams.get('new') === '1') {
+      setCreating(true)
+      setSearchParams({}, { replace: true })
+    }
+  }, [searchParams, setSearchParams])
 
   const togglePin = async (p: Project) => {
     await window.wist.projects.update(p.id, { pinned: p.pinned ? 0 : 1 })
