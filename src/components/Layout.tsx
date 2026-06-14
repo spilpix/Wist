@@ -1,5 +1,6 @@
 import { Outlet } from 'react-router-dom'
-import { Moon, Play, Search, Sun } from 'lucide-react'
+import { Moon, Search, Sun } from 'lucide-react'
+import BardLogo from './BardLogo'
 import Sidebar from './Sidebar'
 import Toaster from './ui/Toaster'
 import CommandPalette from './CommandPalette'
@@ -17,10 +18,8 @@ function TitleBar() {
 
   return (
     <header className="app-drag relative flex h-9 shrink-0 items-center gap-2 border-b border-edge/60 bg-surface px-4">
-      <span className="flex h-5 w-5 items-center justify-center rounded-md bg-accent">
-        <Play size={10} className="fill-[#fff] text-[#fff]" />
-      </span>
-      <span className="text-[13px] font-semibold tracking-tight text-zinc-300">Wist</span>
+      <BardLogo size={18} />
+      <span className="text-[13px] font-semibold tracking-tight text-zinc-300">Bard</span>
 
       {/* command palette trigger, Notion-style */}
       <button

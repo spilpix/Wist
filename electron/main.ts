@@ -94,7 +94,7 @@ function createWindow() {
     backgroundColor: dark ? '#0d0d14' : '#f7f7fa',
     autoHideMenuBar: true,
     show: false,
-    title: 'Wist',
+    title: 'Bard',
     // frameless titlebar with native Windows window controls drawn on top
     titleBarStyle: 'hidden',
     titleBarOverlay: dark

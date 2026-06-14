@@ -1,9 +1,9 @@
 {
   "name": "wist",
-  "productName": "Wist",
-  "version": "0.4.0",
-  "description": "Personal media hub — track, discover and relive everything you watch.",
-  "author": "Wist",
+  "productName": "Bard",
+  "version": "0.5.0",
+  "description": "Bard — your everyday super app: watch, listen, read, organize. A media hub and second brain in one.",
+  "author": "Bard",
   "private": true,
   "main": "dist-electron/main.js",
   "scripts": {
@@ -46,7 +46,7 @@
   },
   "build": {
     "appId": "com.wist.app",
-    "productName": "Wist",
+    "productName": "Bard",
     "npmRebuild": false,
     "directories": {
       "output": "release",
@@ -73,7 +73,7 @@
         "en_US",
         "ru_RU"
       ],
-      "shortcutName": "Wist"
+      "shortcutName": "Bard"
     }
   }
 }

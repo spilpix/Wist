@@ -143,6 +143,44 @@ video::-webkit-media-controls {
   display: none !important;
 }
 
+/* ---------- YouTube-style player ---------- */
+/* glassy capsule island that floats the controls over the video */
+.yt-glass {
+  background: rgba(20, 20, 26, 0.55);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.yt-menu {
+  background: rgba(22, 22, 28, 0.92);
+  backdrop-filter: blur(18px) saturate(150%);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+/* ambient backdrop sits behind the video and bleeds its colours onto the page */
+.yt-ambient {
+  filter: blur(70px) saturate(180%);
+  opacity: 0.55;
+  transition: opacity 0.6s ease;
+}
+/* double-tap seek ripple */
+@keyframes seekRipple {
+  0% { opacity: 0; transform: scale(0.6); }
+  35% { opacity: 1; }
+  100% { opacity: 0; transform: scale(1.15); }
+}
+.animate-seek {
+  animation: seekRipple 0.55s ease-out forwards;
+}
+/* the red YouTube progress thumb — only paints on hover/scrub */
+.yt-thumb {
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+}
+/* caption sizing — ::cue scales relative to the video region */
+.cap-sm::cue { font-size: 80%; }
+.cap-md::cue { font-size: 100%; }
+.cap-lg::cue { font-size: 135%; }
+
 /* memory tree: living lo-fi animations */
 .tree-leaf {
   animation: leafSway 5s ease-in-out infinite alternate;
