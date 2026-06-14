@@ -79,18 +79,24 @@ interface SimLink {
   weak: boolean
 }
 
+export interface GraphPalette {
+  bg: string
+  edge: string
+  text: string
+  linkBoost?: number // multiply edge alpha — light backgrounds need stronger edges to read
+}
+
 interface Props {
   data: GraphData
   accent: string // hex like #7c6af7
   colorOf: (kind: MemoryKind) => string
   view: GraphView
+  palette: GraphPalette
   onNavigate: (route: string) => void
   onTip: (tip: GraphTip | null) => void
 }
 
-const BG = '#1e1e2e'
-const EDGE = '#3b3b54'
-const TEXT = '#c9c9da'
+const DEFAULT_PALETTE: GraphPalette = { bg: '#1e1e2e', edge: '#3b3b54', text: '#c9c9da' }
 
 function hexA(hex: string, a: number): string {
   const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
@@ -100,7 +106,7 @@ function hexA(hex: string, a: number): string {
 const radiusFor = (deg: number) => Math.min(16, 5 + Math.sqrt(deg) * 2.4)
 
 const GraphCanvasImpl = forwardRef<GraphHandle, Props>(function GraphCanvas(
-  { data, accent, colorOf, view, onNavigate, onTip },
+  { data, accent, colorOf, view, palette, onNavigate, onTip },
   ref
 ) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -118,6 +124,7 @@ const GraphCanvasImpl = forwardRef<GraphHandle, Props>(function GraphCanvas(
     extHover: null as string | null,
     view,
     accent,
+    palette: palette ?? DEFAULT_PALETTE,
     colorOf,
     onNavigate,
     onTip,
@@ -130,6 +137,7 @@ const GraphCanvasImpl = forwardRef<GraphHandle, Props>(function GraphCanvas(
   // refresh latest props into the engine each render without restarting physics
   eng.current.view = view
   eng.current.accent = accent
+  eng.current.palette = palette ?? DEFAULT_PALETTE
   eng.current.colorOf = colorOf
   eng.current.onNavigate = onNavigate
   eng.current.onTip = onTip
@@ -248,11 +256,11 @@ const GraphCanvasImpl = forwardRef<GraphHandle, Props>(function GraphCanvas(
 
     // ---- draw ----
     const draw = () => {
-      const { cam, hover, extHover, accent: acc } = e
+      const { cam, hover, extHover, accent: acc, palette: pal } = e
       const focus = hover ?? extHover
       const W = cv.clientWidth, H = cv.clientHeight
       ctx.setTransform(e.dpr, 0, 0, e.dpr, 0, 0)
-      ctx.fillStyle = BG
+      ctx.fillStyle = pal.bg
       ctx.fillRect(0, 0, W, H)
       ctx.translate(W / 2 + cam.x, H / 2 + cam.y)
       ctx.scale(cam.k, cam.k)
@@ -265,7 +273,8 @@ const GraphCanvasImpl = forwardRef<GraphHandle, Props>(function GraphCanvas(
       for (const l of e.links) {
         const touches = focus && (l.source.id === focus || l.target.id === focus)
         const dim = focus && !touches
-        ctx.strokeStyle = touches ? hexA(acc, 0.9) : hexA(EDGE, dim ? 0.05 : l.weak ? 0.16 : 0.3)
+        const ea = Math.min(0.95, (dim ? 0.05 : l.weak ? 0.16 : 0.3) * (pal.linkBoost ?? 1))
+        ctx.strokeStyle = touches ? hexA(acc, 0.9) : hexA(pal.edge, ea)
         ctx.lineWidth = (touches ? 1.8 : 1) * e.view.linkWidth
         ctx.beginPath()
         ctx.moveTo(l.source.x, l.source.y)
@@ -290,7 +299,7 @@ const GraphCanvasImpl = forwardRef<GraphHandle, Props>(function GraphCanvas(
         ctx.shadowBlur = 0
         if (n.id === focus) {
           ctx.lineWidth = 2 / cam.k
-          ctx.strokeStyle = '#fff'
+          ctx.strokeStyle = pal.text
           ctx.stroke()
         }
       }
@@ -309,7 +318,7 @@ const GraphCanvasImpl = forwardRef<GraphHandle, Props>(function GraphCanvas(
           if (!show && n.id !== focus && !(neigh?.has(n.id) ?? false)) continue
           const r = radiusFor(n.deg) * e.view.nodeScale * (n.id === focus ? 1.4 : 1)
           ctx.globalAlpha = focus ? (lit ? 1 : 0.15) : Math.min(1, cam.k * labelK - 0.4)
-          ctx.fillStyle = TEXT
+          ctx.fillStyle = pal.text
           const label = n.node.label.length > 24 ? n.node.label.slice(0, 23) + '…' : n.node.label
           ctx.fillText(label, n.x, n.y + r + 3)
         }

@@ -12,8 +12,12 @@ import GraphCanvas, {
   type GraphTip,
   type GraphView,
 } from '../components/GraphCanvas'
+import { useSettingsStore, resolvedTheme } from '../store/settingsStore'
 import type { JournalEntry, MemoryKind, Moment, Note, Project, Title } from '../types/models'
 import { useI18n, type TKey } from '../i18n'
+
+const GRAPH_DARK = { bg: '#1e1e2e', edge: '#3b3b54', text: '#c9c9da', linkBoost: 1 }
+const GRAPH_LIGHT = { bg: '#ffffff', edge: '#9b99ab', text: '#3a3744', linkBoost: 2.3 }
 
 const KIND_HEX: Record<MemoryKind, string> = {
   moment: '#a888f0',
@@ -160,6 +164,9 @@ export default function MemoryTree() {
   const navigate = useNavigate()
   const containerRef = useRef<HTMLDivElement>(null)
   const graphRef = useRef<GraphHandle | null>(null)
+  const themeSetting = useSettingsStore((s) => s.settings?.theme)
+  const dark = (themeSetting === 'system' ? resolvedTheme() : themeSetting ?? 'light') === 'dark'
+  const palette = dark ? GRAPH_DARK : GRAPH_LIGHT
 
   const [src, setSrc] = useState<SourceData | null>(null)
   const [hidden, setHidden] = useState<Set<MemoryKind>>(new Set())
@@ -251,7 +258,7 @@ export default function MemoryTree() {
   )
 
   return (
-    <div className="force-dark flex h-full flex-col bg-bg text-zinc-200">
+    <div className="flex h-full flex-col">
       {/* slim header */}
       <div className="flex items-baseline justify-between px-6 pb-2.5 pt-4">
         <h1 className="text-xl font-semibold text-white">{t('nav.tree')}</h1>
@@ -284,10 +291,9 @@ export default function MemoryTree() {
                       else next.add(kind)
                       setHidden(next)
                     }}
-                    className={`flex items-center gap-1.5 rounded-xl px-2 py-0.5 text-[11px] font-medium transition-all ${
+                    className={`flex items-center gap-1.5 rounded-xl border border-edge/60 bg-raised px-2 py-0.5 text-[11px] font-medium transition-all ${
                       off ? 'text-zinc-600 opacity-50' : 'text-zinc-300'
                     }`}
-                    style={{ background: 'rgba(255,255,255,0.07)' }}
                   >
                     <span className="h-2 w-2 rounded-full" style={{ backgroundColor: off ? '#555' : KIND_HEX[kind] }} />
                     {kindCounts[kind] ?? 0}
@@ -335,8 +341,8 @@ export default function MemoryTree() {
         </aside>
 
         {/* graph canvas */}
-        <div ref={containerRef} className="relative min-w-0 flex-1 overflow-hidden" style={{ background: '#1e1e2e' }}>
-          <GraphCanvas ref={graphRef} data={graph} accent="#7c6af7" colorOf={colorOf} view={view} onNavigate={onNavigate} onTip={onTip} />
+        <div ref={containerRef} className="relative min-w-0 flex-1 overflow-hidden" style={{ background: palette.bg }}>
+          <GraphCanvas ref={graphRef} data={graph} accent="#7c6af7" colorOf={colorOf} view={view} palette={palette} onNavigate={onNavigate} onTip={onTip} />
 
           <div className="absolute right-3 top-3 flex gap-1.5">
             <button

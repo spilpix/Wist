@@ -14,9 +14,11 @@ import {
   ListTodo,
   Music,
   PenLine,
+  Search,
   Settings,
   Share2,
 } from 'lucide-react'
+import BardLogo from './BardLogo'
 import { useUiStore } from '../store/uiStore'
 import { useI18n, type TKey } from '../i18n'
 
@@ -26,7 +28,6 @@ interface Link {
   icon: typeof Home
 }
 
-// Home stands alone at the top; everything else lives in a labelled domain group
 const topLinks: Link[] = [{ to: '/', key: 'nav.home', icon: Home }]
 
 const GROUPS: Array<{ key: TKey; id: string; links: Link[] }> = [
@@ -70,7 +71,7 @@ function linkClass(isActive: boolean, compact = false): string {
   return [
     'flex items-center rounded-md text-[13px] font-medium transition-colors duration-150',
     compact ? 'justify-center px-0 py-2' : 'gap-2.5 px-2.5 py-[7px]',
-    isActive ? 'bg-accent/15 text-accent-bright' : 'text-zinc-400 hover:bg-white/[0.04] hover:text-zinc-200',
+    isActive ? 'bg-accent/15 text-accent-bright' : 'text-zinc-400 hover:bg-white/[0.05] hover:text-zinc-200',
   ].join(' ')
 }
 
@@ -89,9 +90,9 @@ export default function Sidebar() {
   const pathname = useLocation().pathname
   const onLibrary = pathname.split('?')[0].endsWith('/library')
   const compact = useUiStore((s) => s.sidebarCollapsed)
+  const setPalette = useUiStore((s) => s.setPalette)
   const [collapsed, setCollapsed] = useState<Set<string>>(loadCollapsed)
 
-  // Library and Books share the /library route — disambiguate active state by ?type
   const activeClass = (to: string, isActive: boolean, isCompact = false): string => {
     if (to === '/library') return linkClass(onLibrary && activeType !== 'book', isCompact)
     if (to === '/library?type=book') return linkClass(onLibrary && activeType === 'book', isCompact)
@@ -113,18 +114,15 @@ export default function Sidebar() {
   // ---- compact icon rail ----
   if (compact) {
     const railLink = ({ to, key, icon: Icon }: Link) => (
-      <NavLink
-        key={to}
-        to={to}
-        end={to === '/'}
-        title={t(key)}
-        className={({ isActive }) => activeClass(to, isActive, true)}
-      >
+      <NavLink key={to} to={to} end={to === '/'} title={t(key)} className={({ isActive }) => activeClass(to, isActive, true)}>
         <Icon size={18} />
       </NavLink>
     )
     return (
       <aside className="flex h-full w-[56px] shrink-0 flex-col border-r border-edge/60 bg-surface transition-all duration-200">
+        <div className="flex h-12 items-center justify-center border-b border-edge/50">
+          <BardLogo size={20} />
+        </div>
         <nav className="flex-1 space-y-1 overflow-y-auto px-2 pb-4 pt-3">
           {topLinks.map(railLink)}
           {GROUPS.map((group) => (
@@ -140,8 +138,17 @@ export default function Sidebar() {
 
   // ---- full sidebar ----
   return (
-    <aside className="flex h-full w-[212px] shrink-0 flex-col border-r border-edge/60 bg-surface transition-all duration-200">
-      <nav className="flex-1 space-y-5 overflow-y-auto px-3 pb-4 pt-3">
+    <aside className="flex h-full w-[224px] shrink-0 flex-col border-r border-edge/60 bg-surface transition-all duration-200">
+      {/* workspace header */}
+      <div className="px-3 pt-3">
+        <div className="flex items-center gap-2 rounded-lg px-2 py-1.5">
+          <BardLogo size={20} />
+          <span className="text-[15px] font-bold tracking-tight text-white">Bard</span>
+        </div>
+      </div>
+
+      <nav className="flex-1 space-y-5 overflow-y-auto px-3 pb-4 pt-2">
+        {/* quick row */}
         <div className="space-y-0.5">
           {topLinks.map(({ to, key, icon: Icon }) => (
             <NavLink key={to} to={to} end={to === '/'} className={({ isActive }) => activeClass(to, isActive)}>
@@ -149,6 +156,13 @@ export default function Sidebar() {
               {t(key)}
             </NavLink>
           ))}
+          <button
+            onClick={() => setPalette(true)}
+            className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-[7px] text-[13px] font-medium text-zinc-400 transition-colors duration-150 hover:bg-white/[0.05] hover:text-zinc-200"
+          >
+            <Search size={16} />
+            {t('cmdk.searchHint')}
+          </button>
         </div>
 
         {GROUPS.map((group) => {
@@ -157,14 +171,11 @@ export default function Sidebar() {
             <div key={group.id}>
               <button
                 onClick={() => toggleGroup(group.id)}
-                className="group/header mb-1 flex w-full items-center gap-1.5 rounded-md px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-zinc-500 transition-colors hover:text-zinc-400"
+                className="mb-1 flex w-full items-center gap-1.5 rounded-md px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-zinc-500 transition-colors hover:text-zinc-400"
               >
                 <span className="h-1.5 w-1.5 rounded-full bg-accent/70" />
                 {t(group.key)}
-                <ChevronDown
-                  size={11}
-                  className={`ml-auto text-zinc-600 transition-transform duration-150 ${isCollapsed ? '-rotate-90' : ''}`}
-                />
+                <ChevronDown size={11} className={`ml-auto text-zinc-600 transition-transform duration-150 ${isCollapsed ? '-rotate-90' : ''}`} />
               </button>
               {!isCollapsed && (
                 <div className="space-y-0.5">
