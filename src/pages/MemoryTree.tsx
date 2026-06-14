@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Maximize2, RotateCcw, Search, Settings2, Share2 } from 'lucide-react'
+import { Maximize2, RotateCcw, Search, Settings2, Share2, X } from 'lucide-react'
 import EmptyState from '../components/ui/EmptyState'
 import Spinner from '../components/ui/Spinner'
 import GraphCanvas, {
   GRAPH_DEFAULTS,
   type GraphData,
   type GraphEdge,
+  type GraphGroup,
   type GraphHandle,
   type GraphNode,
   type GraphTip,
@@ -18,6 +19,7 @@ import { useI18n, type TKey } from '../i18n'
 
 const GRAPH_DARK = { bg: '#1e1e2e', edge: '#3b3b54', text: '#c9c9da', linkBoost: 1 }
 const GRAPH_LIGHT = { bg: '#ffffff', edge: '#9b99ab', text: '#3a3744', linkBoost: 2.3 }
+const GROUP_COLORS = ['#ef4444', '#4ade80', '#f472b6', '#60a5fa', '#facc15', '#a888f0', '#fb923c', '#14b8a6']
 
 const KIND_HEX: Record<MemoryKind, string> = {
   moment: '#a888f0',
@@ -175,6 +177,22 @@ export default function MemoryTree() {
   const [panelOpen, setPanelOpen] = useState(false)
   const [view, setView] = useState<GraphView>({ ...GRAPH_DEFAULTS })
   const [tip, setTip] = useState<(GraphTip & { x: number; y: number }) | null>(null)
+  const [groups, setGroups] = useState<GraphGroup[]>(() => {
+    try {
+      const raw = JSON.parse(localStorage.getItem('wist.graphGroups') ?? '[]')
+      return Array.isArray(raw) ? raw : []
+    } catch {
+      return []
+    }
+  })
+  const saveGroups = (next: GraphGroup[]) => {
+    setGroups(next)
+    try {
+      localStorage.setItem('wist.graphGroups', JSON.stringify(next))
+    } catch {
+      /* storage unavailable */
+    }
+  }
 
   useEffect(() => {
     Promise.all([
@@ -241,7 +259,7 @@ export default function MemoryTree() {
     )
   }
 
-  type NumKey = 'nodeScale' | 'linkWidth' | 'linkDistance' | 'repel' | 'labelFade'
+  type NumKey = 'nodeScale' | 'linkWidth' | 'linkDistance' | 'repel' | 'labelFade' | 'centerForce' | 'linkForce'
   const slider = (labelKey: TKey, key: NumKey, min: number, max: number, step: number) => (
     <label className="block">
       <span className="mb-1 flex items-center justify-between text-[11px] text-zinc-500">{t(labelKey)}</span>
@@ -342,7 +360,7 @@ export default function MemoryTree() {
 
         {/* graph canvas */}
         <div ref={containerRef} className="relative min-w-0 flex-1 overflow-hidden" style={{ background: palette.bg }}>
-          <GraphCanvas ref={graphRef} data={graph} accent="#7c6af7" colorOf={colorOf} view={view} palette={palette} onNavigate={onNavigate} onTip={onTip} />
+          <GraphCanvas ref={graphRef} data={graph} accent="#7c6af7" colorOf={colorOf} groups={groups} view={view} palette={palette} onNavigate={onNavigate} onTip={onTip} />
 
           <div className="absolute right-3 top-3 flex gap-1.5">
             <button
@@ -364,7 +382,7 @@ export default function MemoryTree() {
           </div>
 
           {panelOpen && (
-            <div className="absolute right-3 top-14 w-56 space-y-2.5 rounded-xl border border-edge bg-surface/95 p-3.5 backdrop-blur">
+            <div className="absolute right-3 top-14 max-h-[82vh] w-64 space-y-4 overflow-y-auto rounded-xl border border-edge bg-surface/95 p-3.5 backdrop-blur">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-zinc-300">{t('world.view')}</span>
                 <button
@@ -374,20 +392,74 @@ export default function MemoryTree() {
                   <RotateCcw size={11} /> {t('world.reset')}
                 </button>
               </div>
-              <label className="flex cursor-pointer items-center justify-between text-[11px] text-zinc-500">
-                {t('world.colors')}
-                <input
-                  type="checkbox"
-                  checked={view.colorful}
-                  onChange={(e) => setView((v) => ({ ...v, colorful: e.target.checked }))}
-                  className="h-3.5 w-3.5 accent-[var(--accent)]"
-                />
-              </label>
-              {slider('world.nodeSize', 'nodeScale', 0.5, 2, 0.05)}
-              {slider('world.linkWidth', 'linkWidth', 0.4, 2.5, 0.05)}
-              {slider('world.linkDist', 'linkDistance', 40, 200, 5)}
-              {slider('world.repel', 'repel', 100, 1200, 25)}
-              {slider('world.labels', 'labelFade', 0, 2, 0.05)}
+
+              {/* Groups — colour rules by query (kind:, tag:, or text) */}
+              <div className="space-y-1.5">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-zinc-500">{t('world.groups')}</div>
+                {groups.map((g) => (
+                  <div key={g.id} className="flex items-center gap-1.5">
+                    <input
+                      className="input !py-1 text-[11px]"
+                      placeholder={t('world.groupQueryPh')}
+                      value={g.query}
+                      onChange={(e) => saveGroups(groups.map((x) => (x.id === g.id ? { ...x, query: e.target.value } : x)))}
+                    />
+                    <label
+                      className="relative h-5 w-5 shrink-0 cursor-pointer rounded-full border border-edge"
+                      style={{ backgroundColor: g.color }}
+                      title={t('world.groupColor')}
+                    >
+                      <input
+                        type="color"
+                        value={g.color}
+                        onChange={(e) => saveGroups(groups.map((x) => (x.id === g.id ? { ...x, color: e.target.value } : x)))}
+                        className="absolute inset-0 cursor-pointer opacity-0"
+                      />
+                    </label>
+                    <button className="shrink-0 text-zinc-600 transition-colors hover:text-red-400" onClick={() => saveGroups(groups.filter((x) => x.id !== g.id))}>
+                      <X size={13} />
+                    </button>
+                  </div>
+                ))}
+                <button
+                  className="w-full rounded-md border border-edge bg-raised py-1 text-[11px] text-zinc-400 transition-colors hover:text-zinc-200"
+                  onClick={() => saveGroups([...groups, { id: Math.random().toString(36).slice(2), query: '', color: GROUP_COLORS[groups.length % GROUP_COLORS.length] }])}
+                >
+                  + {t('world.newGroup')}
+                </button>
+              </div>
+
+              {/* Display */}
+              <div className="space-y-2.5 border-t border-edge/50 pt-3">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-zinc-500">{t('world.display')}</div>
+                <label className="flex cursor-pointer items-center justify-between text-[11px] text-zinc-500">
+                  {t('world.arrows')}
+                  <input
+                    type="checkbox"
+                    checked={view.arrows}
+                    onChange={(e) => setView((v) => ({ ...v, arrows: e.target.checked }))}
+                    className="h-3.5 w-3.5 accent-[var(--accent)]"
+                  />
+                </label>
+                {slider('world.labels', 'labelFade', 0, 2, 0.05)}
+                {slider('world.nodeSize', 'nodeScale', 0.5, 2, 0.05)}
+                {slider('world.linkWidth', 'linkWidth', 0.4, 2.5, 0.05)}
+                <button
+                  className="w-full rounded-md bg-accent/15 py-1 text-[11px] font-medium text-accent-bright transition-colors hover:bg-accent/25"
+                  onClick={() => graphRef.current?.animate()}
+                >
+                  {t('world.animate')}
+                </button>
+              </div>
+
+              {/* Forces */}
+              <div className="space-y-2.5 border-t border-edge/50 pt-3">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-zinc-500">{t('world.forces')}</div>
+                {slider('world.centerForce', 'centerForce', 0, 0.3, 0.01)}
+                {slider('world.repel', 'repel', 100, 1200, 25)}
+                {slider('world.linkForce', 'linkForce', 0, 0.3, 0.01)}
+                {slider('world.linkDist', 'linkDistance', 40, 300, 5)}
+              </div>
             </div>
           )}
 

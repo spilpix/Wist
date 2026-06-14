@@ -11,6 +11,8 @@ import {
   type ForceManyBody,
   type ForceLink,
   type ForceCollide,
+  type ForceX,
+  type ForceY,
 } from 'd3-force'
 import type { MemoryKind } from '../types/models'
 
@@ -32,20 +34,30 @@ export interface GraphData {
   kindNames: Record<MemoryKind, string>
 }
 export interface GraphView {
-  colorful: boolean
+  arrows: boolean
   nodeScale: number
   linkWidth: number
   linkDistance: number
   repel: number
+  linkForce: number
+  centerForce: number
   labelFade: number
 }
 export const GRAPH_DEFAULTS: GraphView = {
-  colorful: true,
+  arrows: false,
   nodeScale: 1,
   linkWidth: 1,
   linkDistance: 120,
   repel: 300,
+  linkForce: 0.06,
+  centerForce: 0.05,
   labelFade: 1,
+}
+// Obsidian-style colour group: nodes matching `query` are painted `color`
+export interface GraphGroup {
+  id: string
+  query: string // "tag:foo", "kind:note", or plain text matched against the label
+  color: string
 }
 export interface GraphTip {
   head: string
@@ -59,6 +71,7 @@ export interface GraphHandle {
   highlight(id: string | null): void
   focus(id: string): void
   fit(): void
+  animate(): void
 }
 
 interface SimNode {
@@ -90,6 +103,7 @@ interface Props {
   data: GraphData
   accent: string // hex like #7c6af7
   colorOf: (kind: MemoryKind) => string
+  groups: GraphGroup[]
   view: GraphView
   palette: GraphPalette
   onNavigate: (route: string) => void
@@ -105,8 +119,21 @@ function hexA(hex: string, a: number): string {
 }
 const radiusFor = (deg: number) => Math.min(16, 5 + Math.sqrt(deg) * 2.4)
 
+// Obsidian-style group matcher: kind:x, tag:x, or plain label substring
+function matchGroup(query: string, node: GraphNode): boolean {
+  const q = query.trim().toLowerCase()
+  if (!q) return false
+  if (q.startsWith('kind:')) return node.kind === q.slice(5).trim()
+  if (q.startsWith('tag:')) return (node.sub ?? '').toLowerCase().includes('#' + q.slice(4).trim())
+  return node.label.toLowerCase().includes(q)
+}
+function resolveColor(node: GraphNode, groups: GraphGroup[], base: (k: MemoryKind) => string): string {
+  for (const g of groups) if (matchGroup(g.query, node)) return g.color
+  return base(node.kind)
+}
+
 const GraphCanvasImpl = forwardRef<GraphHandle, Props>(function GraphCanvas(
-  { data, accent, colorOf, view, palette, onNavigate, onTip },
+  { data, accent, colorOf, groups, view, palette, onNavigate, onTip },
   ref
 ) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -126,6 +153,7 @@ const GraphCanvasImpl = forwardRef<GraphHandle, Props>(function GraphCanvas(
     accent,
     palette: palette ?? DEFAULT_PALETTE,
     colorOf,
+    groups,
     onNavigate,
     onTip,
     raf: 0,
@@ -139,6 +167,7 @@ const GraphCanvasImpl = forwardRef<GraphHandle, Props>(function GraphCanvas(
   eng.current.accent = accent
   eng.current.palette = palette ?? DEFAULT_PALETTE
   eng.current.colorOf = colorOf
+  eng.current.groups = groups
   eng.current.onNavigate = onNavigate
   eng.current.onTip = onTip
   eng.current.dirty = true // props (view/colors) may have changed → repaint next frame
@@ -161,6 +190,11 @@ const GraphCanvasImpl = forwardRef<GraphHandle, Props>(function GraphCanvas(
     },
     fit() {
       fitView()
+      eng.current.dirty = true
+    },
+    animate() {
+      // re-run the layout from a hot state (Obsidian's "Animate")
+      eng.current.sim?.alpha(1)
       eng.current.dirty = true
     },
   }))
@@ -195,7 +229,7 @@ const GraphCanvasImpl = forwardRef<GraphHandle, Props>(function GraphCanvas(
       return {
         id: node.id,
         deg: 0,
-        color: colorOf(node.kind),
+        color: resolveColor(node, e.groups, colorOf),
         node,
         x: prev?.x ?? (Math.random() - 0.5) * 400,
         y: prev?.y ?? (Math.random() - 0.5) * 400,
@@ -221,11 +255,11 @@ const GraphCanvasImpl = forwardRef<GraphHandle, Props>(function GraphCanvas(
     const v = e.view
     const sim = forceSimulation<SimNode, SimLink>(nodes)
       .force('charge', forceManyBody<SimNode>().strength(-v.repel))
-      .force('link', forceLink<SimNode, SimLink>(links).distance(v.linkDistance).strength(0.06))
+      .force('link', forceLink<SimNode, SimLink>(links).distance(v.linkDistance).strength(v.linkForce))
       .force('collide', forceCollide<SimNode>((d) => radiusFor(d.deg) * v.nodeScale + 6))
       .force('center', forceCenter(0, 0))
-      .force('x', forceX(0).strength(0.03))
-      .force('y', forceY(0).strength(0.03))
+      .force('x', forceX(0).strength(v.centerForce))
+      .force('y', forceY(0).strength(v.centerForce))
       // a remembered layout barely re-relaxes on filter toggles; a fresh graph cools from 1
       .alpha(e.pos.size ? 0.2 : 1)
       .alphaDecay(0.025)
@@ -280,6 +314,20 @@ const GraphCanvasImpl = forwardRef<GraphHandle, Props>(function GraphCanvas(
         ctx.moveTo(l.source.x, l.source.y)
         ctx.lineTo(l.target.x, l.target.y)
         ctx.stroke()
+        if (e.view.arrows && !dim) {
+          const tr = radiusFor(l.target.deg) * e.view.nodeScale + 2
+          const ang = Math.atan2(l.target.y - l.source.y, l.target.x - l.source.x)
+          const ax = l.target.x - Math.cos(ang) * tr
+          const ay = l.target.y - Math.sin(ang) * tr
+          const h = 5
+          ctx.fillStyle = ctx.strokeStyle
+          ctx.beginPath()
+          ctx.moveTo(ax, ay)
+          ctx.lineTo(ax - Math.cos(ang - 0.42) * h, ay - Math.sin(ang - 0.42) * h)
+          ctx.lineTo(ax - Math.cos(ang + 0.42) * h, ay - Math.sin(ang + 0.42) * h)
+          ctx.closePath()
+          ctx.fill()
+        }
       }
 
       // nodes
@@ -288,7 +336,7 @@ const GraphCanvasImpl = forwardRef<GraphHandle, Props>(function GraphCanvas(
         const op = focus ? (lit ? 1 : 0.15) : 1
         let r = radiusFor(n.deg) * e.view.nodeScale
         if (n.id === focus) r *= 1.4
-        const col = e.view.colorful ? n.color : '#8a85b8'
+        const col = n.color
         ctx.globalAlpha = op
         ctx.shadowBlur = lit ? 15 : 0
         ctx.shadowColor = col
@@ -495,12 +543,21 @@ const GraphCanvasImpl = forwardRef<GraphHandle, Props>(function GraphCanvas(
     const charge = sim.force('charge') as ForceManyBody<SimNode> | undefined
     charge?.strength(-view.repel)
     const link = sim.force('link') as ForceLink<SimNode, SimLink> | undefined
-    link?.distance(view.linkDistance)
+    link?.distance(view.linkDistance).strength(view.linkForce)
     const collide = sim.force('collide') as ForceCollide<SimNode> | undefined
     collide?.radius((d) => radiusFor(d.deg) * view.nodeScale + 6)
+    ;(sim.force('x') as ForceX<SimNode> | undefined)?.strength(view.centerForce)
+    ;(sim.force('y') as ForceY<SimNode> | undefined)?.strength(view.centerForce)
     sim.alpha(Math.max(sim.alpha(), 0.3))
     e.dirty = true
-  }, [view.repel, view.linkDistance, view.nodeScale])
+  }, [view.repel, view.linkDistance, view.nodeScale, view.linkForce, view.centerForce])
+
+  // recolour nodes when the colour groups change (no rebuild)
+  useEffect(() => {
+    const e = eng.current
+    for (const n of e.nodes) n.color = resolveColor(n.node, groups, e.colorOf)
+    e.dirty = true
+  }, [groups])
 
   return (
     <div ref={wrapRef} className="h-full w-full">
