@@ -68,24 +68,27 @@ const bottomLinks: Link[] = [
   { to: '/settings', key: 'nav.settings', icon: Settings },
 ]
 
-/** Row style for a navigation item (full sidebar). */
+/** Row style for a navigation item (full sidebar). Monochrome, Notion-style:
+ *  a quiet neutral highlight when active — the accent is reserved for signals. */
 function rowClass(active: boolean): string {
   return [
     'group/i flex items-center gap-2.5 rounded-md px-2 py-1 text-[14px] transition-colors duration-150',
-    active ? 'bg-accent/15 font-medium text-zinc-100' : 'text-zinc-300 hover:bg-white/[0.05] hover:text-zinc-100',
+    // zinc-500 alpha flips with the theme (lightens on dark, darkens on light) so the
+    // neutral highlight stays perceptible in BOTH themes — unlike a fixed white alpha.
+    active ? 'bg-zinc-500/[0.18] font-medium text-zinc-100' : 'text-zinc-300 hover:bg-zinc-500/[0.12] hover:text-zinc-100',
   ].join(' ')
 }
 
 /** Icon style inside a row / rail item. */
 function iconClass(active: boolean): string {
-  return active ? 'shrink-0 text-accent-bright' : 'shrink-0 text-zinc-500 group-hover/i:text-zinc-300'
+  return active ? 'shrink-0 text-zinc-200' : 'shrink-0 text-zinc-500 group-hover/i:text-zinc-300'
 }
 
 /** Square icon button for the collapsed rail. */
 function railClass(active: boolean): string {
   return [
     'group/i relative flex h-9 w-9 items-center justify-center rounded-lg transition-colors',
-    active ? 'bg-accent/15 text-accent-bright' : 'text-zinc-400 hover:bg-white/[0.06] hover:text-zinc-100',
+    active ? 'bg-zinc-500/[0.22] text-zinc-100' : 'text-zinc-400 hover:bg-zinc-500/[0.12] hover:text-zinc-100',
   ].join(' ')
 }
 
@@ -195,7 +198,7 @@ export default function Sidebar() {
         <button
           onClick={() => setPalette(true)}
           title={t('cmdk.searchHint')}
-          className="group flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-white/[0.05]"
+          className="group flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-zinc-500/[0.12]"
         >
           <BardLogo size={20} />
           <span className="text-[14px] font-semibold tracking-tight text-zinc-100">Bard</span>
@@ -211,7 +214,7 @@ export default function Sidebar() {
             title={tab.label}
             onClick={() => (tab.to ? navigate(tab.to) : tab.action?.())}
             className={`relative flex h-9 flex-1 items-center justify-center rounded-lg transition-colors ${
-              tab.active ? 'bg-accent/15 text-accent-bright' : 'text-zinc-400 hover:bg-white/[0.06] hover:text-zinc-100'
+              tab.active ? 'bg-zinc-500/[0.22] text-zinc-100' : 'text-zinc-400 hover:bg-zinc-500/[0.12] hover:text-zinc-100'
             }`}
           >
             <tab.icon size={17} />

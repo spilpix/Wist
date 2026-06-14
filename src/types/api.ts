@@ -194,7 +194,6 @@ export interface WistApi {
     pickImage(): Promise<string | null>
     saveCoverFromPath(srcPath: string): Promise<string>
     saveCoverFromBytes(name: string, bytes: ArrayBuffer): Promise<string>
-    worldAssets(): Promise<Record<string, string>>
   }
   media: {
     fileUrl(path: string): string

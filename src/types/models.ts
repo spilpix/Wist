@@ -81,12 +81,14 @@ export interface JournalEntry {
 }
 
 export type TaskPriority = 'none' | 'low' | 'high'
+export type TaskStatus = 'todo' | 'doing' | 'done'
 
 export interface Task {
   id: number
   title: string
   note: string | null
   done: 0 | 1
+  status: TaskStatus
   priority: TaskPriority
   due_date: string | null
   tags: string[]
@@ -96,6 +98,14 @@ export interface Task {
   completed_at: string | null
   // derived
   project_name?: string | null
+}
+
+// kanban columns, in pipeline order
+export const TASK_STATUSES: TaskStatus[] = ['todo', 'doing', 'done']
+export const TASK_STATUS_COLORS: Record<TaskStatus, string> = {
+  todo: '#8a8278', // text-2 gray
+  doing: '#d4813a', // accent — actively in progress
+  done: '#6fb06f', // active green
 }
 
 export type MusicService = 'spotify' | 'youtube' | 'yandex' | 'soundcloud' | 'apple' | 'other'

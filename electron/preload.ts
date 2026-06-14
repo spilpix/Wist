@@ -150,7 +150,6 @@ const api = {
     pickImage: () => invoke('files:pickImage'),
     saveCoverFromPath: (src: string) => invoke('files:saveCoverFromPath', src),
     saveCoverFromBytes: (name: string, bytes: ArrayBuffer) => invoke('files:saveCoverFromBytes', name, bytes),
-    worldAssets: () => invoke('files:worldAssets'),
   },
   media: {
     fileUrl: (p: string) => `media://local/?p=${encodeURIComponent(p)}`,

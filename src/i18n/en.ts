@@ -16,6 +16,9 @@ const en = {
   'app.toggleSidebar': 'Toggle sidebar',
   'app.back': 'Back',
   'app.forward': 'Forward',
+  'error.title': 'Something went wrong',
+  'error.body': 'This screen hit an unexpected error. Your data is safe — try again or switch pages.',
+  'error.retry': 'Try again',
 
   // navigation / sidebar
   'nav.home': 'Home',
@@ -439,6 +442,12 @@ const en = {
   'tasks.emptyTitle': 'No tasks yet',
   'tasks.emptySubtitle': 'Capture work here — or let your AI agents post tasks and reports through the local API (Settings → API).',
   'tasks.bySource': 'Created by {source}',
+  'tasks.viewList': 'List',
+  'tasks.viewBoard': 'Board',
+  'tasks.status.todo': 'To-do',
+  'tasks.status.doing': 'In progress',
+  'tasks.status.done': 'Done',
+  'tasks.newInColumn': 'New task…',
 
   // music
   'music.intro': 'Your playlists from every service in one shelf. Paste a link — Bard pulls the title and cover automatically (Spotify, YouTube, SoundCloud).',

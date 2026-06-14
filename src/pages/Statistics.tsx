@@ -82,6 +82,7 @@ export default function Statistics() {
         setHeat(hm)
         setFavorites(fav.slice(0, 5))
       })
+      .catch((e) => console.error('stats load failed', e))
       .finally(() => setLoading(false))
   }, [])
 
@@ -99,10 +100,13 @@ export default function Statistics() {
     )
   }
 
-  const monthData = months.map((m) => ({
-    name: `${MONTHS_SHORT[lang][parseInt(m.month.slice(5), 10) - 1]}`,
-    hours: +(m.seconds / 3600).toFixed(1),
-  }))
+  const monthData = months.map((m) => {
+    const idx = parseInt(m.month.slice(5), 10) - 1
+    return {
+      name: MONTHS_SHORT[lang][idx] ?? m.month,
+      hours: +(m.seconds / 3600).toFixed(1),
+    }
+  })
   const typeData = types.map((ty) => ({ name: t(`type.${ty.type}`), value: ty.count }))
 
   return (

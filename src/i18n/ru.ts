@@ -18,6 +18,9 @@ const ru: Record<keyof typeof en, string> = {
   'app.toggleSidebar': 'Свернуть панель',
   'app.back': 'Назад',
   'app.forward': 'Вперёд',
+  'error.title': 'Что-то пошло не так',
+  'error.body': 'На этом экране произошла непредвиденная ошибка. Ваши данные в безопасности — попробуйте снова или перейдите на другую страницу.',
+  'error.retry': 'Повторить',
 
   // navigation / sidebar
   'nav.home': 'Главная',
@@ -441,6 +444,12 @@ const ru: Record<keyof typeof en, string> = {
   'tasks.emptyTitle': 'Задач пока нет',
   'tasks.emptySubtitle': 'Записывайте дела сюда — или пусть ваши ИИ-агенты добавляют задачи и отчёты через локальный API (Настройки → API).',
   'tasks.bySource': 'Создано: {source}',
+  'tasks.viewList': 'Список',
+  'tasks.viewBoard': 'Доска',
+  'tasks.status.todo': 'К выполнению',
+  'tasks.status.doing': 'В работе',
+  'tasks.status.done': 'Готово',
+  'tasks.newInColumn': 'Новая задача…',
 
   // music
   'music.intro': 'Ваши плейлисты со всех сервисов на одной полке. Вставьте ссылку — Bard сам подтянет название и обложку (Spotify, YouTube, SoundCloud).',

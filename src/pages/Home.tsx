@@ -193,6 +193,7 @@ export default function Home() {
         setSpiritXp(mem.length)
         setActiveProjects(projects.filter((p) => p.status === 'active' || p.status === 'review'))
       })
+      .catch((e) => console.error('home load failed', e))
       .finally(() => setLoading(false))
     // agents can add tasks while the app is open
     return window.wist.events.onDataChanged((kind) => {
@@ -275,7 +276,7 @@ export default function Home() {
             {todayEntry?.content ? (
               <>
                 <div className="text-sm text-zinc-300">
-                  {todayEntry.mood ? `${MOODS[todayEntry.mood - 1]} ` : ''}
+                  {todayEntry.mood && MOODS[todayEntry.mood - 1] ? `${MOODS[todayEntry.mood - 1]} ` : ''}
                   {t('home.journalDone')}
                 </div>
                 <p className="mt-1 line-clamp-2 text-xs text-zinc-500">{todayEntry.content}</p>

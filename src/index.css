@@ -22,7 +22,7 @@
   --ink-300: 171 161 147;
   --ink-400: 138 130 120; /* #8a8278 secondary text */
   --ink-500: 106 100 92;
-  --ink-600: 74 71 68; /* #4a4744 placeholders / hints */
+  --ink-600: 92 87 80; /* tertiary text / hints — lifted for legibility on the dark canvas */
   --ink-700: 60 57 52;
   --ink-800: 46 43 38; /* #2e2b26 */
 
@@ -58,6 +58,8 @@
 
 [data-theme='light'] {
   /* Notion-warm light: white canvas, soft off-white panels, warm-gray ink */
+  /* accent-bright fallback for first paint (JS recomputes it per accent in applyAccent) */
+  --accent-bright-rgb: 148 90 41;
   --bg: 255 255 255;
   --surface: 251 251 250;
   --raised: 246 246 244;
@@ -115,6 +117,9 @@ body,
 body {
   @apply bg-bg text-zinc-200 antialiased;
   font-family: 'Inter Variable', Inter, 'Segoe UI', system-ui, sans-serif;
+  /* Notion/Claude crispness: slightly negative tracking + roomy line-height */
+  letter-spacing: -0.011em;
+  line-height: 1.5;
   overflow: hidden;
   transition: background-color 0.25s ease, color 0.25s ease;
 }
@@ -340,10 +345,8 @@ video::-webkit-media-controls {
   .btn-accent {
     @apply btn bg-accent hover:bg-accent/85;
     color: #fff; /* literal: white-on-accent in both themes */
-    box-shadow: 0 1px 2px rgb(var(--accent-rgb) / 0.35), 0 4px 14px rgb(var(--accent-rgb) / 0.22);
-  }
-  .btn-accent:hover:not(:disabled) {
-    box-shadow: 0 2px 5px rgb(var(--accent-rgb) / 0.4), 0 8px 22px rgb(var(--accent-rgb) / 0.3);
+    /* flat & quiet (Notion/Claude) — a hairline, not a glow */
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.18);
   }
   .btn-ghost {
     @apply btn bg-raised text-zinc-300 hover:bg-edge hover:text-white;
@@ -373,10 +376,10 @@ video::-webkit-media-controls {
     box-shadow: var(--card-shadow-hover);
   }
   .page {
-    @apply h-full overflow-y-auto px-10 py-8 animate-fade-in;
+    @apply h-full overflow-y-auto px-12 py-10 animate-fade-in;
   }
   .page-title {
-    @apply mb-6 text-[1.7rem] font-bold tracking-tight text-white;
+    @apply mb-7 text-[1.7rem] font-bold tracking-tight text-white;
   }
   .section-title {
     @apply mb-3 text-sm font-semibold uppercase tracking-wider text-zinc-500;

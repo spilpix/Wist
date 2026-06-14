@@ -260,6 +260,15 @@ const MIGRATIONS: string[] = [
     updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
   );
   `,
+
+  // 008 — tasks gain a kanban 'status' (To-do / In progress / Done). Pure additive;
+  // 'done' is kept in sync with status by the db layer for backward compatibility
+  // (Home, the sidebar badge and the agent API all still read 'done').
+  `
+  ALTER TABLE tasks ADD COLUMN status TEXT NOT NULL DEFAULT 'todo';
+  UPDATE tasks SET status = 'done' WHERE done = 1;
+  CREATE INDEX idx_tasks_status ON tasks(status, created_at);
+  `,
 ]
 
 function migrate(d: Database.Database) {

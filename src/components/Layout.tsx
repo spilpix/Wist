@@ -1,6 +1,7 @@
-import { Outlet, useNavigate } from 'react-router-dom'
+import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { ArrowLeft, ArrowRight, Moon, PanelLeft, Search, Sun } from 'lucide-react'
 import Sidebar from './Sidebar'
+import ErrorBoundary from './ErrorBoundary'
 import Toaster from './ui/Toaster'
 import CommandPalette from './CommandPalette'
 import { useUiStore } from '../store/uiStore'
@@ -55,13 +56,18 @@ function TitleBar() {
 }
 
 export default function Layout() {
+  const pathname = useLocation().pathname
   return (
     <div className="flex h-full flex-col">
       <TitleBar />
       <div className="flex min-h-0 flex-1">
         <Sidebar />
         <main className="min-w-0 flex-1 bg-bg">
-          <Outlet />
+          {/* a page crash shows a fallback instead of white-screening the app;
+              keying by route auto-clears the error when the user navigates away */}
+          <ErrorBoundary resetKey={pathname}>
+            <Outlet />
+          </ErrorBoundary>
         </main>
         <Toaster />
       </div>

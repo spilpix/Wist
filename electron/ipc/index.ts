@@ -205,30 +205,6 @@ export function registerIpcHandlers(): void {
     }
   })
 
-  // --- world art layers (user-painted PNGs in %APPDATA%/Wist/world) ---
-  ipcMain.handle('files:worldAssets', () => {
-    const dir = path.join(app.getPath('userData'), 'world')
-    fs.mkdirSync(dir, { recursive: true })
-    const layers: Record<string, string> = {
-      sky: 'sky',
-      hillsFar: 'hills-far',
-      hillsNear: 'hills-near',
-      tree: 'tree',
-      foreground: 'foreground',
-    }
-    const out: Record<string, string> = { _dir: dir }
-    for (const [key, base] of Object.entries(layers)) {
-      for (const ext of ['.png', '.webp', '.jpg']) {
-        const p = path.join(dir, base + ext)
-        if (fs.existsSync(p)) {
-          out[key] = p
-          break
-        }
-      }
-    }
-    return out
-  })
-
   // --- games (Steam-style auto playtime tracking) ---
   ipcMain.handle('games:list', () => gamesDb.listGames())
   ipcMain.handle('games:get', (_e, id: number) => gamesDb.getGame(id))

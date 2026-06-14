@@ -85,7 +85,7 @@ export default function Moments() {
           <button
             onClick={() => setTagFilter(null)}
             className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-              !tagFilter ? 'bg-accent text-[#fff]' : 'bg-raised text-zinc-400 hover:text-zinc-200'
+              !tagFilter ? 'bg-accent/15 text-accent-bright' : 'bg-raised text-zinc-400 hover:text-zinc-200'
             }`}
           >
             {t('common.all')}

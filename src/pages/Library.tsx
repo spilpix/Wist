@@ -142,7 +142,7 @@ export default function Library() {
             onClick={() => setTab(id)}
             className={`flex shrink-0 items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-[13px] font-medium transition-colors ${
               tab === id
-                ? 'bg-accent text-[#fff]'
+                ? 'bg-accent/15 text-accent-bright'
                 : 'bg-raised text-zinc-400 hover:bg-edge hover:text-zinc-200'
             }`}
           >
