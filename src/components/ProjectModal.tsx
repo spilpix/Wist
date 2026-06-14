@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { ImagePlus, Plus, X } from 'lucide-react'
 import Modal from './ui/Modal'
 import ChipsInput from './ui/ChipsInput'
 import ProjectCover from './ProjectCover'
+import { toast } from '../store/toastStore'
 import { useI18n } from '../i18n'
 import {
   COVER_TEMPLATES,
@@ -35,6 +36,7 @@ export default function ProjectModal({
   const [cover, setCover] = useState<string | null>(project?.cover_path ?? null)
   const [description, setDescription] = useState(project?.description ?? '')
   const [saving, setSaving] = useState(false)
+  const nameRef = useRef<HTMLInputElement>(null)
 
   const pickCover = async () => {
     const src = await window.wist.files.pickImage()
@@ -43,7 +45,12 @@ export default function ProjectModal({
   }
 
   const save = async () => {
-    if (!name.trim() || saving) return
+    if (saving) return
+    if (!name.trim()) {
+      // never look broken — focus the required field instead of being silently disabled
+      nameRef.current?.focus()
+      return
+    }
     setSaving(true)
     const data = {
       name: name.trim(),
@@ -59,7 +66,10 @@ export default function ProjectModal({
     try {
       const saved = project ? await window.wist.projects.update(project.id, data) : await window.wist.projects.create(data)
       onSaved(saved)
-    } finally {
+    } catch (e) {
+      // surface the failure instead of silently doing nothing (the global handler swallows it)
+      console.error('project save failed', e)
+      toast(t('project.saveFailed'), 'error')
       setSaving(false)
     }
   }
@@ -110,6 +120,7 @@ export default function ProjectModal({
         <div>
           <label className="mb-1 block text-xs font-medium text-zinc-400">{t('project.name')}</label>
           <input
+            ref={nameRef}
             autoFocus
             className="input"
             placeholder={t('project.namePh')}
@@ -241,7 +252,7 @@ export default function ProjectModal({
           <button className="btn-ghost" onClick={onClose}>
             {t('common.cancel')}
           </button>
-          <button className="btn-accent" disabled={!name.trim() || saving} onClick={save}>
+          <button className="btn-accent" disabled={saving} onClick={() => save()}>
             {project ? t('common.save') : t('project.create')}
           </button>
         </div>
