@@ -70,6 +70,12 @@ export interface WistApi {
     removeAsset(id: number): Promise<void>
     reorderAssets(ids: number[]): Promise<void>
   }
+  trash: {
+    list(): Promise<{ projects: Project[]; notes: Note[]; tasks: Task[] }>
+    restore(kind: 'project' | 'note' | 'task', id: number): Promise<void>
+    purge(kind: 'project' | 'note' | 'task', id: number): Promise<void>
+    empty(): Promise<number>
+  }
   util: {
     pathForFile(file: File): string
   }

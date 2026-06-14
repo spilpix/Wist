@@ -6,7 +6,6 @@ import {
   Check,
   Clock,
   Flame,
-  FolderKanban,
   Library as LibraryIcon,
   ListTodo,
   PenLine,
@@ -20,9 +19,7 @@ import CoverImage from '../components/CoverImage'
 import TitleCard from '../components/TitleCard'
 import EmptyState from '../components/ui/EmptyState'
 import Spinner from '../components/ui/Spinner'
-import type { ContinueItem, HeatmapDay, JournalEntry, Note, Project, StatsSummary, Task, Title } from '../types/models'
-import { PROJECT_STATUS_COLORS } from '../types/models'
-import { daysUntil } from './Projects'
+import type { ContinueItem, HeatmapDay, JournalEntry, Note, StatsSummary, Task, Title } from '../types/models'
 import { formatDurationHuman, formatHours, formatRelative, formatTimestamp } from '../utils/formatters'
 import { useI18n, DATE_LOCALE, type TKey } from '../i18n'
 
@@ -164,7 +161,6 @@ export default function Home() {
   const [todayEntry, setTodayEntry] = useState<JournalEntry | null>(null)
   const [streak, setStreak] = useState(0)
   const [spiritXp, setSpiritXp] = useState(0)
-  const [activeProjects, setActiveProjects] = useState<Project[]>([])
 
   const loadTasks = useCallback(() => window.wist.tasks.list({ done: false }).then(setOpenTasks), [])
 
@@ -179,9 +175,8 @@ export default function Home() {
       window.wist.journal.get(todayKey()),
       window.wist.journal.streak(),
       window.wist.stats.memories(),
-      window.wist.projects.list(),
     ])
-      .then(([cw, rec, sum, hm, tasks, notes, entry, st, mem, projects]) => {
+      .then(([cw, rec, sum, hm, tasks, notes, entry, st, mem]) => {
         setContinueItems(cw)
         setRecent(rec)
         setSummary(sum)
@@ -191,7 +186,6 @@ export default function Home() {
         setTodayEntry(entry)
         setStreak(st)
         setSpiritXp(mem.length)
-        setActiveProjects(projects.filter((p) => p.status === 'active' || p.status === 'review'))
       })
       .catch((e) => console.error('home load failed', e))
       .finally(() => setLoading(false))
@@ -242,7 +236,6 @@ export default function Home() {
       {/* quick actions */}
       <div className="-mt-4 flex flex-wrap gap-2">
         {[
-          { icon: FolderKanban, label: t('cmdk.newProject'), to: '/projects?new=1' },
           { icon: Plus, label: t('cmdk.addTitle'), to: '/library?add=1' },
           { icon: ListTodo, label: t('cmdk.newTask'), to: '/tasks?focus=1' },
           { icon: PenLine, label: t('cmdk.newNote'), to: '/notes?new=1' },
@@ -357,38 +350,6 @@ export default function Home() {
       </section>
 
       {heroItem && <HeroCard item={heroItem} />}
-
-      {activeProjects.length > 0 && (
-        <section>
-          <h2 className="section-title">{t('home.activeProjects')}</h2>
-          <div className="no-scrollbar flex gap-4 overflow-x-auto pb-1">
-            {activeProjects.map((p) => {
-              const accent = p.color || PROJECT_STATUS_COLORS[p.status]
-              const left = p.deadline ? daysUntil(p.deadline) : null
-              const dueColor = left === null ? 'text-zinc-500' : left < 0 ? 'text-red-400' : left <= 3 ? 'text-amber-400' : 'text-zinc-500'
-              return (
-                <button
-                  key={p.id}
-                  onClick={() => navigate(`/project/${p.id}`)}
-                  className="group w-56 shrink-0 overflow-hidden rounded-xl border border-edge/60 bg-surface text-left transition-colors hover:border-edge"
-                >
-                  <div className="h-1.5 w-full" style={{ backgroundColor: accent }} />
-                  <div className="p-3.5">
-                    <div className="mb-1 flex items-center gap-2">
-                      <FolderKanban size={14} className="shrink-0 text-accent-bright" />
-                      <span className="min-w-0 flex-1 truncate text-sm font-semibold text-zinc-100">{p.name}</span>
-                    </div>
-                    <div className="flex items-center justify-between text-[11px] text-zinc-500">
-                      <span className="truncate">{p.client || t(`project.status.${p.status}` as 'project.status.active')}</span>
-                      {p.deadline && <span className={`shrink-0 ${dueColor}`}>{p.deadline}</span>}
-                    </div>
-                  </div>
-                </button>
-              )
-            })}
-          </div>
-        </section>
-      )}
 
       {empty && (
         <EmptyState

@@ -17,14 +17,14 @@ const rowToProject = (row: any): Project => ({ ...row, tools: safeParse(row.tool
 const SELECT = `
   SELECT p.*,
     (SELECT COUNT(*) FROM project_assets a WHERE a.project_id = p.id) AS asset_count,
-    (SELECT COUNT(*) FROM notes n WHERE n.project_id = p.id) AS note_count,
-    (SELECT COUNT(*) FROM tasks t WHERE t.project_id = p.id AND t.done = 0) AS open_task_count
+    (SELECT COUNT(*) FROM notes n WHERE n.project_id = p.id AND n.deleted_at IS NULL) AS note_count,
+    (SELECT COUNT(*) FROM tasks t WHERE t.project_id = p.id AND t.done = 0 AND t.deleted_at IS NULL) AS open_task_count
   FROM projects p
 `
 
 export function listProjects(): Project[] {
   const rows = db()
-    .prepare(`${SELECT} ORDER BY p.pinned DESC, p.sort ASC, p.updated_at DESC`)
+    .prepare(`${SELECT} WHERE p.deleted_at IS NULL ORDER BY p.pinned DESC, p.sort ASC, p.updated_at DESC`)
     .all() as any[]
   return rows.map(rowToProject)
 }
@@ -87,8 +87,8 @@ export function updateProject(id: number, patch: Partial<Project>): Project {
 }
 
 export function deleteProject(id: number): void {
-  // assets cascade; linked notes/tasks keep their rows (project_id → NULL)
-  db().prepare('DELETE FROM projects WHERE id = ?').run(id)
+  // soft-delete → moves to Trash (its assets/notes/tasks are untouched until purge)
+  db().prepare('UPDATE projects SET deleted_at = ? WHERE id = ?').run(now(), id)
 }
 
 export function reorderProjects(ids: number[]): void {

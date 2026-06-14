@@ -40,6 +40,12 @@ const api = {
     removeAsset: (id: number) => invoke('projects:removeAsset', id),
     reorderAssets: (ids: number[]) => invoke('projects:reorderAssets', ids),
   },
+  trash: {
+    list: () => invoke('trash:list'),
+    restore: (kind: string, id: number) => invoke('trash:restore', kind, id),
+    purge: (kind: string, id: number) => invoke('trash:purge', kind, id),
+    empty: () => invoke('trash:empty'),
+  },
   games: {
     list: () => invoke('games:list'),
     get: (id: number) => invoke('games:get', id),

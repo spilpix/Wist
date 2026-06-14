@@ -297,6 +297,17 @@ const MIGRATIONS: string[] = [
   DROP TABLE projects;
   ALTER TABLE projects_new RENAME TO projects;
   `,
+
+  // 010 — Trash (soft-delete) for hubs(projects) / notes / tasks. Additive nullable
+  // columns; list queries filter `deleted_at IS NULL`, the Trash restores/purges.
+  `
+  ALTER TABLE projects ADD COLUMN deleted_at TEXT;
+  ALTER TABLE notes ADD COLUMN deleted_at TEXT;
+  ALTER TABLE tasks ADD COLUMN deleted_at TEXT;
+  CREATE INDEX idx_projects_deleted ON projects(deleted_at);
+  CREATE INDEX idx_notes_deleted ON notes(deleted_at);
+  CREATE INDEX idx_tasks_deleted ON tasks(deleted_at);
+  `,
 ]
 
 function migrate(d: Database.Database) {

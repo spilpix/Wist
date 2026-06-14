@@ -32,7 +32,7 @@ export function memories(): MemoryEvent[] {
     .prepare(
       `SELECT id, created_at AS date,
               CASE WHEN title <> '' THEN title ELSE substr(content, 1, 60) END AS label
-       FROM notes WHERE created_at >= ?`
+       FROM notes WHERE created_at >= ? AND deleted_at IS NULL`
     )
     .all(cutoff) as any[]
   for (const n of notes) {

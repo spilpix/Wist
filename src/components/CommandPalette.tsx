@@ -20,6 +20,7 @@ import {
   Search,
   Settings,
   Sun,
+  Trash2,
   TreePine,
   Tv,
   Youtube,
@@ -67,6 +68,7 @@ const PAGES: Array<{ to: string; key: TKey; icon: typeof Home }> = [
   { to: '/tree', key: 'nav.tree', icon: TreePine },
   { to: '/local', key: 'nav.localFiles', icon: FolderOpen },
   { to: '/youtube', key: 'nav.youtube', icon: Youtube },
+  { to: '/trash', key: 'nav.trash', icon: Trash2 },
   { to: '/stats', key: 'nav.statistics', icon: BarChart3 },
   { to: '/settings', key: 'nav.settings', icon: Settings },
 ]

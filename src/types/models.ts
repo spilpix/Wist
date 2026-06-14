@@ -66,6 +66,7 @@ export interface Note {
   source: string // 'user' or an agent name
   created_at: string
   updated_at: string
+  deleted_at: string | null
   // derived
   linked_title_name?: string | null
   project_name?: string | null
@@ -96,6 +97,7 @@ export interface Task {
   source: string // 'user' or an agent name
   created_at: string
   completed_at: string | null
+  deleted_at: string | null
   // derived
   project_name?: string | null
 }
@@ -163,6 +165,7 @@ export interface Project {
   sort: number
   created_at: string
   updated_at: string
+  deleted_at: string | null
   // derived
   asset_count?: number
   note_count?: number

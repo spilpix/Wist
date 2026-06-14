@@ -9,6 +9,7 @@ import * as notes from '../db/notes'
 import * as journal from '../db/journal'
 import * as tasks from '../db/tasks'
 import * as projects from '../db/projects'
+import * as trash from '../db/trash'
 import * as gamesDb from '../db/games'
 import * as canvases from '../db/canvases'
 import { runningGameIds } from './gameTracker'
@@ -28,6 +29,10 @@ import { restartApiServer } from '../apiServer'
 import type { MomentTag, TitleType } from '../../src/types/models'
 
 export function registerIpcHandlers(): void {
+  // notify the renderer so live surfaces (sidebar task badge + hub list, Home) refresh
+  const emitChange = (kind: string) => BrowserWindow.getAllWindows()[0]?.webContents.send('wist:data-changed', kind)
+  const trashEvent: Record<string, string> = { project: 'projects', note: 'notes', task: 'tasks' }
+
   // --- titles ---
   ipcMain.handle('titles:list', (_e, filters) => titles.listTitles(filters ?? {}))
   ipcMain.handle('titles:get', (_e, id: number) => titles.getTitle(id))
@@ -88,9 +93,20 @@ export function registerIpcHandlers(): void {
   // --- notes ---
   ipcMain.handle('notes:list', (_e, filters) => notes.listNotes(filters ?? {}))
   ipcMain.handle('notes:get', (_e, id: number) => notes.getNote(id))
-  ipcMain.handle('notes:create', (_e, payload) => notes.createNote(payload ?? {}))
-  ipcMain.handle('notes:update', (_e, id: number, patch) => notes.updateNote(id, patch ?? {}))
-  ipcMain.handle('notes:remove', (_e, id: number) => notes.deleteNote(id))
+  ipcMain.handle('notes:create', (_e, payload) => {
+    const r = notes.createNote(payload ?? {})
+    emitChange('notes')
+    return r
+  })
+  ipcMain.handle('notes:update', (_e, id: number, patch) => {
+    const r = notes.updateNote(id, patch ?? {})
+    emitChange('notes')
+    return r
+  })
+  ipcMain.handle('notes:remove', (_e, id: number) => {
+    notes.deleteNote(id)
+    emitChange('notes')
+  })
   ipcMain.handle('notes:tags', () => notes.distinctNoteTags())
 
   // --- journal ---
@@ -102,18 +118,65 @@ export function registerIpcHandlers(): void {
 
   // --- tasks ---
   ipcMain.handle('tasks:list', (_e, filters) => tasks.listTasks(filters ?? {}))
-  ipcMain.handle('tasks:create', (_e, payload) => tasks.createTask(payload ?? {}))
-  ipcMain.handle('tasks:update', (_e, id: number, patch) => tasks.updateTask(id, patch ?? {}))
-  ipcMain.handle('tasks:remove', (_e, id: number) => tasks.deleteTask(id))
-  ipcMain.handle('tasks:clearCompleted', () => tasks.clearCompleted())
+  ipcMain.handle('tasks:create', (_e, payload) => {
+    const r = tasks.createTask(payload ?? {})
+    emitChange('tasks')
+    return r
+  })
+  ipcMain.handle('tasks:update', (_e, id: number, patch) => {
+    const r = tasks.updateTask(id, patch ?? {})
+    emitChange('tasks')
+    return r
+  })
+  ipcMain.handle('tasks:remove', (_e, id: number) => {
+    tasks.deleteTask(id)
+    emitChange('tasks')
+  })
+  ipcMain.handle('tasks:clearCompleted', () => {
+    const n = tasks.clearCompleted()
+    emitChange('tasks')
+    return n
+  })
 
   // --- projects ---
   ipcMain.handle('projects:list', () => projects.listProjects())
   ipcMain.handle('projects:get', (_e, id: number) => projects.getProject(id))
-  ipcMain.handle('projects:create', (_e, payload) => projects.createProject(payload ?? {}))
-  ipcMain.handle('projects:update', (_e, id: number, patch) => projects.updateProject(id, patch ?? {}))
-  ipcMain.handle('projects:remove', (_e, id: number) => projects.deleteProject(id))
-  ipcMain.handle('projects:reorder', (_e, ids: number[]) => projects.reorderProjects(ids ?? []))
+  ipcMain.handle('projects:create', (_e, payload) => {
+    const r = projects.createProject(payload ?? {})
+    emitChange('projects')
+    return r
+  })
+  ipcMain.handle('projects:update', (_e, id: number, patch) => {
+    const r = projects.updateProject(id, patch ?? {})
+    emitChange('projects')
+    return r
+  })
+  ipcMain.handle('projects:remove', (_e, id: number) => {
+    projects.deleteProject(id)
+    emitChange('projects')
+  })
+  ipcMain.handle('projects:reorder', (_e, ids: number[]) => {
+    projects.reorderProjects(ids ?? [])
+    emitChange('projects')
+  })
+
+  // --- trash (soft-deleted hubs / notes / tasks) ---
+  ipcMain.handle('trash:list', () => trash.listTrash())
+  ipcMain.handle('trash:restore', (_e, kind: string, id: number) => {
+    trash.restoreTrash(kind, id)
+    emitChange(trashEvent[kind] ?? kind)
+  })
+  ipcMain.handle('trash:purge', (_e, kind: string, id: number) => {
+    trash.purgeTrash(kind, id)
+    emitChange(trashEvent[kind] ?? kind)
+  })
+  ipcMain.handle('trash:empty', () => {
+    const n = trash.emptyTrash()
+    emitChange('tasks')
+    emitChange('notes')
+    emitChange('projects')
+    return n
+  })
 
   // project assets (folders / files / reference images / links)
   ipcMain.handle('projects:assets', (_e, projectId: number) => projects.listAssets(projectId))

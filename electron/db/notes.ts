@@ -23,7 +23,7 @@ const SELECT = `
 `
 
 export function listNotes(filters: { search?: string; tag?: string; projectId?: number } = {}): Note[] {
-  const where: string[] = []
+  const where: string[] = ['n.deleted_at IS NULL']
   const params: any[] = []
   if (filters.search) {
     where.push('(n.title LIKE ? OR n.content LIKE ?)')
@@ -81,11 +81,12 @@ export function updateNote(id: number, patch: Partial<Note>): Note {
 }
 
 export function deleteNote(id: number): void {
-  db().prepare('DELETE FROM notes WHERE id = ?').run(id)
+  // soft-delete → moves to Trash; purge happens from there
+  db().prepare('UPDATE notes SET deleted_at = ? WHERE id = ?').run(now(), id)
 }
 
 export function distinctNoteTags(): string[] {
-  const rows = db().prepare('SELECT tags FROM notes').all() as Array<{ tags: string }>
+  const rows = db().prepare('SELECT tags FROM notes WHERE deleted_at IS NULL').all() as Array<{ tags: string }>
   const set = new Set<string>()
   for (const row of rows) for (const tag of safeParse(row.tags)) set.add(tag)
   return [...set].sort((a, b) => a.localeCompare(b))

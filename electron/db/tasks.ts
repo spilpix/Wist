@@ -31,7 +31,7 @@ const rowToTask = (row: any): Task => ({
 const SELECT = `SELECT t.*, p.name AS project_name FROM tasks t LEFT JOIN projects p ON p.id = t.project_id`
 
 export function listTasks(filters: { done?: boolean; projectId?: number } = {}): Task[] {
-  const where: string[] = []
+  const where: string[] = ['t.deleted_at IS NULL']
   const params: any[] = []
   if (filters.done !== undefined) {
     where.push('t.done = ?')
@@ -41,7 +41,7 @@ export function listTasks(filters: { done?: boolean; projectId?: number } = {}):
     where.push('t.project_id = ?')
     params.push(filters.projectId)
   }
-  const sql = `${SELECT} ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
+  const sql = `${SELECT} WHERE ${where.join(' AND ')}
        ORDER BY t.done ASC,
                 CASE t.priority WHEN 'high' THEN 0 WHEN 'low' THEN 1 ELSE 2 END ASC,
                 t.created_at DESC`
@@ -121,9 +121,11 @@ export function updateTask(id: number, patch: Partial<Task>): Task {
 }
 
 export function deleteTask(id: number): void {
-  db().prepare('DELETE FROM tasks WHERE id = ?').run(id)
+  // soft-delete → moves to Trash
+  db().prepare('UPDATE tasks SET deleted_at = ? WHERE id = ?').run(now(), id)
 }
 
 export function clearCompleted(): number {
-  return db().prepare('DELETE FROM tasks WHERE done = 1').run().changes
+  // clearing completed tasks moves them to Trash (recoverable), not a hard delete
+  return db().prepare('UPDATE tasks SET deleted_at = ? WHERE done = 1 AND deleted_at IS NULL').run(now()).changes
 }
