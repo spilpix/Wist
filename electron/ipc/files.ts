@@ -109,6 +109,45 @@ export function importEpisodes(groups: ImportGroup[]): { createdTitles: number; 
   return { createdTitles, createdEpisodes }
 }
 
+/**
+ * Auto-import every video under the given folders into the Library/Video section
+ * with NO manual grouping: a loose file in the folder root becomes a movie, and
+ * each top-level subfolder (a series, possibly with season subdirs) becomes one
+ * title whose videos are its episodes. Already-imported paths are skipped.
+ */
+export function autoImportVideos(folders: string[]): { createdTitles: number; createdEpisodes: number; scanned: number } {
+  const known = new Set(existingFilePaths().map((p) => p.toLowerCase()))
+  let scanned = 0
+  const groups = new Map<string, { name: string; series: boolean; files: string[] }>()
+  for (const folder of folders) {
+    for (const file of listVideosInFolder(folder)) {
+      scanned++
+      if (known.has(file.toLowerCase())) continue
+      const seg = path.relative(folder, file).split(path.sep)
+      const loose = seg.length <= 1
+      const name = loose ? path.basename(file, path.extname(file)) : seg[0]
+      const key = `${folder}|${name}`.toLowerCase()
+      let g = groups.get(key)
+      if (!g) {
+        g = { name, series: !loose, files: [] }
+        groups.set(key, g)
+      }
+      g.files.push(file)
+      if (g.files.length > 1) g.series = true // a folder with several files is a series
+    }
+  }
+  const importGroups: ImportGroup[] = []
+  for (const g of groups.values()) {
+    g.files.sort()
+    importGroups.push({
+      newTitle: { title: g.name || 'Video', type: g.series ? 'series' : 'movie' },
+      episodes: g.files.map((f, i) => ({ path: f, episode: i + 1, season: 1 })),
+    })
+  }
+  const res = importEpisodes(importGroups)
+  return { ...res, scanned }
+}
+
 export function saveCoverFromPath(srcPath: string): string {
   const ext = path.extname(srcPath).toLowerCase() || '.png'
   const dest = path.join(coversDir(), `${crypto.randomUUID()}${ext}`)

@@ -10,6 +10,7 @@ let store: Store<AppSettings> | null = null
 function defaults(): AppSettings {
   return {
     mediaFolders: [],
+    musicFolders: [],
     screenshotsDir: path.join(app.getPath('userData'), 'screenshots'),
     defaultSubtitleLang: 'en',
     autoPlayNext: true,
@@ -22,6 +23,9 @@ function defaults(): AppSettings {
     apiEnabled: false,
     apiPort: 7459,
     apiToken: '',
+    brainFolder: '',
+    profileName: '',
+    profileAvatar: '',
   }
 }
 

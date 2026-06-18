@@ -2,70 +2,44 @@ import { lazy, Suspense, useEffect } from 'react'
 import { HashRouter, Navigate, Route, Routes } from 'react-router-dom'
 import Layout from './components/Layout'
 import Spinner from './components/ui/Spinner'
-import Home from './pages/Home'
-import Library from './pages/Library'
-import TitleDetail from './pages/TitleDetail'
-import ContinueWatching from './pages/ContinueWatching'
-import Favorites from './pages/Favorites'
-import Moments from './pages/Moments'
-import Notes from './pages/Notes'
-import Journal from './pages/Journal'
-import Tasks from './pages/Tasks'
-import Music from './pages/Music'
-import Vault from './pages/Vault'
-import Projects from './pages/Projects'
-import ProjectDetail from './pages/ProjectDetail'
-import Games from './pages/Games'
-import Trash from './pages/Trash'
-import Canvas from './pages/Canvas'
-import CanvasBoard from './pages/CanvasBoard'
-import LocalFiles from './pages/LocalFiles'
-import YouTubeSources from './pages/YouTubeSources'
-import SettingsPage from './pages/Settings'
+import { pageRouteElements } from './routes'
+import { physKey } from './lib/keyboard'
 import { useSettingsStore } from './store/settingsStore'
+import { useWorkspaceStore } from './store/workspaceStore'
 
-// heavy pages load on demand — keeps startup instant (recharts stays out of the main chunk)
-const Statistics = lazy(() => import('./pages/Statistics'))
-const MemoryTree = lazy(() => import('./pages/MemoryTree'))
+// the player is a full-screen route (outside Layout) — load on demand
 const Player = lazy(() => import('./pages/Player'))
 
 export default function App() {
   const loadSettings = useSettingsStore((s) => s.load)
+  const initWorkspace = useWorkspaceStore((s) => s.init)
 
   useEffect(() => {
     loadSettings()
   }, [loadSettings])
 
-  // per-route Suspense keeps the sidebar mounted while a lazy chunk loads
-  const lazyPage = (el: React.ReactNode) => <Suspense fallback={<Spinner />}>{el}</Suspense>
+  useEffect(() => {
+    initWorkspace()
+  }, [initWorkspace])
+
+  // Ctrl/Cmd+A must never "select all the page" — only act inside a real text field.
+  // Page-specific handlers (e.g. the canvas "select all nodes") still run; we only
+  // suppress the browser's native select-all default when focus isn't in an input.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || physKey(e) !== 'a') return
+      const el = e.target as HTMLElement | null
+      const editable = !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)
+      if (!editable) e.preventDefault()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
   return (
     <HashRouter>
       <Routes>
-        <Route element={<Layout />}>
-          <Route path="/" element={<Home />} />
-          <Route path="/library" element={<Library />} />
-          <Route path="/title/:id" element={<TitleDetail />} />
-          <Route path="/continue" element={<ContinueWatching />} />
-          <Route path="/favorites" element={<Favorites />} />
-          <Route path="/moments" element={<Moments />} />
-          <Route path="/notes" element={<Notes />} />
-          <Route path="/journal" element={<Journal />} />
-          <Route path="/tasks" element={<Tasks />} />
-          <Route path="/music" element={<Music />} />
-          <Route path="/vault" element={<Vault />} />
-          <Route path="/projects" element={<Projects />} />
-          <Route path="/project/:id" element={<ProjectDetail />} />
-          <Route path="/games" element={<Games />} />
-          <Route path="/trash" element={<Trash />} />
-          <Route path="/canvas" element={<Canvas />} />
-          <Route path="/canvas/:id" element={<CanvasBoard />} />
-          <Route path="/tree" element={lazyPage(<MemoryTree />)} />
-          <Route path="/local" element={<LocalFiles />} />
-          <Route path="/youtube" element={<YouTubeSources />} />
-          <Route path="/stats" element={lazyPage(<Statistics />)} />
-          <Route path="/settings" element={<SettingsPage />} />
-        </Route>
+        <Route element={<Layout />}>{pageRouteElements()}</Route>
         <Route
           path="/player/:episodeId"
           element={

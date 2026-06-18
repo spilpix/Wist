@@ -41,13 +41,13 @@ export default function ContinueWatching() {
               <button
                 key={item.id}
                 onClick={() => navigate(`/player/${item.id}`)}
-                className="group flex w-full items-center gap-4 rounded-xl bg-surface px-4 py-3 text-left transition-colors hover:bg-raised"
+                className="group flex w-full items-center gap-4 rounded-lg px-4 py-3 text-left transition-colors hover:bg-highlight"
               >
                 <CoverImage
                   coverPath={item.cover_path}
                   title={item.title_name}
                   type={item.title_type}
-                  className="h-14 w-10 shrink-0 rounded-md"
+                  className="h-14 w-10 shrink-0 rounded-xl"
                   iconSize={16}
                 />
                 <div className="min-w-0 flex-1">
@@ -55,7 +55,7 @@ export default function ContinueWatching() {
                   <div className="mt-0.5 text-xs text-zinc-500">
                     {t('home.episodeN', { n: item.episode_number })} · {formatRelative(item.watch_date)}
                   </div>
-                  <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-raised">
+                  <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-edge">
                     <div className="h-full bg-accent" style={{ width: `${progress * 100}%` }} />
                   </div>
                 </div>
@@ -65,7 +65,7 @@ export default function ContinueWatching() {
                       {t('home.timeLeft', { time: formatTimestamp(duration - item.watch_position_seconds) })}
                     </div>
                   )}
-                  <span className="mt-1 inline-flex h-8 w-8 items-center justify-center rounded-full bg-accent/15 text-accent-bright transition-colors group-hover:bg-accent group-hover:text-[#fff]">
+                  <span className="mt-1 inline-flex h-8 w-8 items-center justify-center rounded-full bg-raised text-zinc-400 transition-colors group-hover:bg-accent group-hover:text-[#fff]">
                     <Play size={14} className="ml-0.5 fill-current" />
                   </span>
                 </div>

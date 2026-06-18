@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Bookmark, Download, Play, Trash2 } from 'lucide-react'
 import MomentCard from '../components/MomentCard'
+import Chip from '../components/ui/Chip'
 import Modal from '../components/ui/Modal'
 import EmptyState from '../components/ui/EmptyState'
 import Spinner from '../components/ui/Spinner'
@@ -81,21 +82,16 @@ export default function Moments() {
       </div>
 
       {moments.length > 0 && (
-        <div className="mb-6 flex flex-wrap items-center gap-2">
-          <button
-            onClick={() => setTagFilter(null)}
-            className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-              !tagFilter ? 'bg-accent/15 text-accent-bright' : 'bg-raised text-zinc-400 hover:text-zinc-200'
-            }`}
-          >
+        <div className="mb-6 flex flex-wrap items-center gap-1.5">
+          <Chip active={!tagFilter} onClick={() => setTagFilter(null)}>
             {t('common.all')}
-          </button>
+          </Chip>
           {MOMENT_TAGS.map((tag) => (
             <button
               key={tag}
               onClick={() => setTagFilter(tagFilter === tag ? null : tag)}
-              className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                tagFilter === tag ? 'text-black' : 'bg-raised text-zinc-400 hover:text-zinc-200'
+              className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors duration-150 ${
+                tagFilter === tag ? 'text-black' : 'bg-raised text-zinc-400 hover:bg-edge hover:text-zinc-200'
               }`}
               style={tagFilter === tag ? { backgroundColor: MOMENT_TAG_COLORS[tag] } : undefined}
             >
@@ -146,7 +142,7 @@ export default function Moments() {
             <span className="font-mono text-zinc-300">{formatTimestamp(selected.timestamp_seconds)}</span>
             {selected.tag && (
               <span
-                className="rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-black/80"
+                className="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-black/80"
                 style={{ backgroundColor: MOMENT_TAG_COLORS[selected.tag] }}
               >
                 {t(`tag.${selected.tag}`)}

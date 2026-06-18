@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { Star } from 'lucide-react'
 import CoverImage from './CoverImage'
+import { setMediaDrag } from '../lib/mediaDrag'
 import { progressLabel } from './TitleCard'
 import { formatRelative } from '../utils/formatters'
 import { STATUS_COLORS, type Title } from '../types/models'
@@ -12,13 +13,15 @@ export default function TitleRow({ title }: { title: Title }) {
   return (
     <button
       onClick={() => navigate(`/title/${title.id}`)}
-      className="flex w-full items-center gap-4 rounded-xl px-3 py-2 text-left transition-colors hover:bg-raised"
+      draggable
+      onDragStart={(e) => setMediaDrag(e, { source: 'library', kind: 'title', title: title.title, path: title.cover_path, cover: title.cover_path }, e.currentTarget)}
+      className="flex w-full items-center gap-4 rounded-lg px-3 py-2 text-left transition-colors hover:bg-highlight"
     >
       <CoverImage
         coverPath={title.cover_path}
         title={title.title}
         type={title.type}
-        className="h-16 w-11 shrink-0 rounded-md"
+        className="h-16 w-11 shrink-0 rounded-xl"
         iconSize={18}
       />
       <div className="min-w-0 flex-1">
@@ -36,7 +39,7 @@ export default function TitleRow({ title }: { title: Title }) {
         {t(`status.${title.status}`)}
       </div>
       <div className="w-20 text-xs text-zinc-400">{progressLabel(title, t)}</div>
-      <div className="flex w-12 items-center gap-1 text-xs text-amber-500">
+      <div className="flex w-12 items-center gap-1 text-xs text-[var(--c-yellow-text)]">
         {title.rating != null && (
           <>
             <Star size={11} className="fill-amber-500" /> {title.rating}

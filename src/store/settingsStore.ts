@@ -10,29 +10,30 @@ interface SettingsState {
 
 function hexToRgb(hex: string): string {
   const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
-  if (!m) return '212 129 58'
+  if (!m) return '35 131 225' // #2383E1 brand blue
   return `${parseInt(m[1], 16)} ${parseInt(m[2], 16)} ${parseInt(m[3], 16)}`
 }
 
 function lighten(hex: string, amount = 0.35): string {
   const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
-  if (!m) return '227 173 127'
+  if (!m) return '74 155 232' // #4A9BE8
   const ch = (v: string) => Math.min(255, Math.round(parseInt(v, 16) + (255 - parseInt(v, 16)) * amount))
   return `${ch(m[1])} ${ch(m[2])} ${ch(m[3])}`
 }
 
 function darken(hex: string, amount = 0.3): string {
   const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
-  if (!m) return '148 90 41'
+  if (!m) return '26 115 201' // #1A73C9
   const ch = (v: string) => Math.max(0, Math.round(parseInt(v, 16) * (1 - amount)))
   return `${ch(m[1])} ${ch(m[2])} ${ch(m[3])}`
 }
 
-// Claude brand accent is theme-specific: Crail on light, Tangerine on dark.
-// An empty accentColor means "brand" (use these); a hex is a user override.
+// Brand accent is Notion blue (#2383E1) — same hue in both themes, with a
+// theme-tuned hover/foreground so it stays legible. An empty accentColor means
+// "brand" (use these); a hex is a user override.
 const BRAND = {
-  light: { accent: '#c15f3c', hover: '#a84f30', bright: '#a84f30' },
-  dark: { accent: '#e67d22', hover: '#ffa45c', bright: '#ffa45c' },
+  light: { accent: '#2383e1', hover: '#1a73c9', bright: '#1768bd' },
+  dark: { accent: '#2383e1', hover: '#4a9be8', bright: '#5fa8ec' },
 } as const
 
 let currentAccent = ''
@@ -90,12 +91,14 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   settings: null,
   load: async () => {
     let settings = await window.wist.settings.get()
-    // migration to the Claude brand palette (v0.23):
-    //  • accent — self-healing: any legacy default accent → '' (brand = theme-specific
-    //    Crail/Tangerine). Custom accents the user explicitly picked are left untouched.
+    // migration:
+    //  • accent — self-healing: any legacy auto-default accent → '' (brand = Notion blue
+    //    #2383E1). Custom accents the user explicitly picked are left untouched.
     //  • theme — one-time flip of legacy installs to dark; future manual toggles stick.
     try {
       const patch: Partial<AppSettings> = {}
+      // legacy auto-defaults only — NOT colours still offered as presets (#c15f3c/#e67d22
+      // stay user-pickable, so they must never be in this self-heal list)
       const OLD_DEFAULTS = ['#d4813a', '#7c6af7', '#7c5cbf', '#6366f1']
       if (settings.accentColor && OLD_DEFAULTS.includes(settings.accentColor.toLowerCase())) {
         patch.accentColor = ''

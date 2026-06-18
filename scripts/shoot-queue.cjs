@@ -1,0 +1,27 @@
+const { app, BrowserWindow } = require('electron')
+const path = require('node:path')
+const fs = require('node:fs')
+const wait = (ms) => new Promise((r) => setTimeout(r, ms))
+require(path.join(__dirname, '..', 'dist-electron', 'main.js'))
+const TEST = path.join(__dirname, 'testmusic')
+const gesture = (win, code) => win.webContents.executeJavaScript(code, true)
+
+app.whenReady().then(() => {
+  setTimeout(async () => {
+    const win = BrowserWindow.getAllWindows()[0]
+    win.setSize(1340, 900)
+    await win.webContents.executeJavaScript(`(async () => { await window.wist.settings.set({ musicFolders: [${JSON.stringify(TEST)}] }); await window.wist.music.scan(); })()`)
+    await win.webContents.executeJavaScript(`location.hash='#/music'`)
+    await wait(1000)
+    // play, then open the queue from the BAR (no Now Playing overlay)
+    await gesture(win, `(() => { const b=[...document.querySelectorAll('button')].find(x=>/First Light/.test(x.textContent||'')); if(b) b.click(); })()`)
+    await wait(300)
+    await gesture(win, `(() => { const b=[...document.querySelectorAll('footer [title]')].find(x=>/Очередь/.test(x.getAttribute('title')||'')); if(b) b.click(); })()`)
+    await wait(400)
+    const img = (await win.webContents.capturePage()).resize({ width: 1080 })
+    fs.writeFileSync(path.join(__dirname, 'music2-queue.png'), img.toPNG())
+    console.log('shot queue')
+    await win.webContents.executeJavaScript(`window.wist.music.removeFolder(${JSON.stringify(TEST)})`)
+    app.exit(0)
+  }, 2400)
+})

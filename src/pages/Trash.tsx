@@ -83,23 +83,23 @@ export default function Trash() {
               <h2 className="section-title">
                 {g.label} · {g.items.length}
               </h2>
-              <div className="card divide-y divide-edge/40">
+              <div className="card divide-y divide-edge">
                 {g.items.map((item) => (
-                  <div key={item.id} className="group flex items-center gap-3 px-4 py-2.5">
+                  <div key={item.id} className="group flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-highlight">
                     <g.icon size={15} className="shrink-0 text-zinc-500" />
                     <span className="min-w-0 flex-1 truncate text-sm text-zinc-300">{item.title}</span>
                     <span className="shrink-0 text-[11px] text-zinc-500">{item.when ? formatRelative(item.when) : ''}</span>
                     <button
                       onClick={() => restore(g.kind, item.id)}
                       title={t('trash.restore')}
-                      className="shrink-0 rounded-lg p-1.5 text-zinc-500 transition-colors hover:bg-zinc-500/15 hover:text-accent-bright"
+                      className="shrink-0 rounded-lg p-1.5 text-zinc-500 transition-colors hover:bg-raised hover:text-zinc-200"
                     >
                       <RotateCcw size={14} />
                     </button>
                     <button
                       onClick={() => purge(g.kind, item.id)}
                       title={t('trash.deleteForever')}
-                      className="shrink-0 rounded-lg p-1.5 text-zinc-500 opacity-0 transition-all hover:text-red-400 group-hover:opacity-100"
+                      className="shrink-0 rounded-lg p-1.5 text-zinc-500 opacity-0 transition-all hover:bg-raised hover:text-danger group-hover:opacity-100"
                     >
                       <Trash2 size={14} />
                     </button>

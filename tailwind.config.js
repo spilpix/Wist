@@ -7,10 +7,12 @@ module.exports = {
         // semantic surfaces — driven by CSS variables, themeable (dark/light)
         bg: 'rgb(var(--bg) / <alpha-value>)',
         surface: 'rgb(var(--surface) / <alpha-value>)',
+        sidebar: 'rgb(var(--sidebar) / <alpha-value>)',
         card: 'rgb(var(--card) / <alpha-value>)',
         raised: 'rgb(var(--raised) / <alpha-value>)',
         field: 'rgb(var(--input-bg) / <alpha-value>)',
         highlight: 'rgb(var(--highlight) / <alpha-value>)',
+        'sidebar-active': 'rgb(var(--sidebar-active) / <alpha-value>)',
         edge: 'rgb(var(--edge) / <alpha-value>)',
         accent: 'rgb(var(--accent-rgb) / <alpha-value>)',
         'accent-hover': 'rgb(var(--accent-hover-rgb) / <alpha-value>)',
@@ -42,11 +44,29 @@ module.exports = {
       },
       animation: {
         'fade-in': 'fadeIn 0.18s ease-out',
+        'slide-in-right': 'slideInRight 0.22s cubic-bezier(0.2, 0, 0, 1)',
         'slide-up': 'slideUp 0.22s ease-out',
         'scale-in': 'scaleIn 0.16s ease-out',
+        'check-pop': 'checkPop 0.42s cubic-bezier(0.34, 1.56, 0.64, 1)',
+        'task-leave': 'taskLeave 0.46s cubic-bezier(0.4, 0, 0.2, 1) forwards',
+        // staggered list entrances (backwards fill = no flash during the per-item delay)
+        'fade-up': 'fadeUp 0.42s cubic-bezier(0.2, 0, 0, 1) backwards',
+        'pop-in': 'popIn 0.34s cubic-bezier(0.34, 1.56, 0.64, 1) backwards',
       },
       keyframes: {
         fadeIn: { from: { opacity: '0' }, to: { opacity: '1' } },
+        fadeUp: {
+          from: { opacity: '0', transform: 'translateY(8px)' },
+          to: { opacity: '1', transform: 'translateY(0)' },
+        },
+        popIn: {
+          from: { opacity: '0', transform: 'scale(0.85)' },
+          to: { opacity: '1', transform: 'scale(1)' },
+        },
+        slideInRight: {
+          from: { opacity: '0', transform: 'translateX(16px)' },
+          to: { opacity: '1', transform: 'translateX(0)' },
+        },
         slideUp: {
           from: { opacity: '0', transform: 'translateY(10px)' },
           to: { opacity: '1', transform: 'translateY(0)' },
@@ -54,6 +74,19 @@ module.exports = {
         scaleIn: {
           from: { opacity: '0', transform: 'scale(0.98) translateY(-6px)' },
           to: { opacity: '1', transform: 'scale(1) translateY(0)' },
+        },
+        // the completion circle springs as it fills, then settles
+        checkPop: {
+          '0%': { transform: 'scale(0.5)' },
+          '45%': { transform: 'scale(1.18)' },
+          '72%': { transform: 'scale(0.94)' },
+          '100%': { transform: 'scale(1)' },
+        },
+        // a checked row holds briefly (so the fill is visible) then fades + glides out
+        taskLeave: {
+          '0%': { opacity: '1' },
+          '38%': { opacity: '1', transform: 'none' },
+          '100%': { opacity: '0', transform: 'translateX(6px) scale(0.985)' },
         },
       },
     },

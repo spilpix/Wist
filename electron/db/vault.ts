@@ -87,6 +87,13 @@ export function addDiskFolders(paths: string[], parentId: number | null = null):
   return added
 }
 
+/** Absolute paths of every live OS-folder link in the vault (for media re-sync). */
+export function diskFolderPaths(): string[] {
+  return (db().prepare("SELECT path FROM vault_files WHERE kind = 'diskfolder'").all() as Array<{ path: string }>).map(
+    (r) => r.path
+  )
+}
+
 /** Create a virtual folder inside parentId. */
 export function createVaultFolder(name: string, parentId: number | null = null): VaultFile {
   const info = db()

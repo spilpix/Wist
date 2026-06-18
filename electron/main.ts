@@ -1,18 +1,29 @@
-import { app, BrowserWindow, nativeTheme, protocol } from 'electron'
+import { app, BrowserWindow, Menu, nativeTheme, protocol } from 'electron'
 import path from 'node:path'
 import fs from 'node:fs'
 import { Readable } from 'node:stream'
-import { openDatabase } from './db/database'
+import { openDatabase, closeDatabase } from './db/database'
+import { seedDemoContent } from './db/seed'
+import { syncBrain } from './ipc/brain'
 import { registerIpcHandlers } from './ipc'
-import { getSettings } from './settings'
+import { registerMusicHandlers } from './ipc/music'
+import { getSettings, setSettings } from './settings'
 import { restartApiServer, setApiNotifier } from './apiServer'
-import { startGameTracker } from './ipc/gameTracker'
+import { startReminders } from './reminders'
+import { initAutoUpdater } from './updater'
+
+// Baked in at build time by Vite's `define` (see vite.config.ts). True only in the
+// dedicated "Testing Bard" build, which is fully isolated from real data and ships
+// pre-filled with demo content.
+declare const __BARD_TESTING__: boolean
+const TESTING = typeof __BARD_TESTING__ !== 'undefined' && __BARD_TESTING__
 
 // Keep reading the original "Wist" data folder after the Bard rebrand.
 // app.getName() now returns "Bard" (productName), which would otherwise move
 // userData to %APPDATA%/Bard and orphan the existing database, settings,
 // covers, screenshots and world art. Pin it before anything touches the path.
-app.setPath('userData', path.join(app.getPath('appData'), 'Wist'))
+// The Testing build points at a SEPARATE folder so it can never touch real data.
+app.setPath('userData', path.join(app.getPath('appData'), TESTING ? 'WistTesting' : 'Wist'))
 
 // Custom scheme that streams local media (video, covers, screenshots) into the
 // renderer with Range support — file:// is blocked by web security.
@@ -36,6 +47,15 @@ const MIME: Record<string, string> = {
   '.gif': 'image/gif',
   '.bmp': 'image/bmp',
   '.avif': 'image/avif',
+  // audio (local music library)
+  '.mp3': 'audio/mpeg',
+  '.flac': 'audio/flac',
+  '.m4a': 'audio/mp4',
+  '.aac': 'audio/aac',
+  '.ogg': 'audio/ogg',
+  '.opus': 'audio/ogg',
+  '.wav': 'audio/wav',
+  '.wma': 'audio/x-ms-wma',
 }
 
 function registerMediaProtocol() {
@@ -90,6 +110,7 @@ function registerMediaProtocol() {
 }
 
 let mainWindow: BrowserWindow | null = null
+let reminderTimer: NodeJS.Timeout | null = null
 
 function createWindow() {
   const themeSetting = getSettings().theme
@@ -100,15 +121,15 @@ function createWindow() {
     height: 920,
     minWidth: 1080,
     minHeight: 640,
-    backgroundColor: dark ? '#1e1a17' : '#faf9f5',
+    backgroundColor: dark ? '#191919' : '#ffffff',
     autoHideMenuBar: true,
     show: false,
-    title: 'Bard',
+    title: TESTING ? 'Testing Bard' : 'Bard',
     // frameless titlebar with native Windows window controls drawn on top
     titleBarStyle: 'hidden',
     titleBarOverlay: dark
-      ? { color: '#252018', symbolColor: '#b1ada1', height: 36 }
-      : { color: '#faf9f5', symbolColor: '#847a6d', height: 36 },
+      ? { color: '#202020', symbolColor: '#9b9b99', height: 42 }
+      : { color: '#f7f7f5', symbolColor: '#787774', height: 42 },
     // packaged builds inherit the window icon from the exe resource
     ...(app.isPackaged ? {} : { icon: path.join(__dirname, '../build/icon.png') }),
     webPreferences: {
@@ -121,29 +142,83 @@ function createWindow() {
   mainWindow.once('ready-to-show', () => mainWindow?.show())
   mainWindow.on('closed', () => (mainWindow = null))
 
+  // Drop the default application menu. Its native accelerators were shadowing the app's
+  // own shortcuts: the Edit roles (Ctrl+Z/Y/X/C/V/A) hijacked the canvas's undo/redo/
+  // clipboard, and Window→Close (Ctrl+W) closed the whole window. With no menu the
+  // renderer owns every shortcut; standard text-field editing still works natively.
+  Menu.setApplicationMenu(null)
+  // keep reload / devtools reachable in development (no menu to provide them)
+  if (!app.isPackaged) {
+    mainWindow.webContents.on('before-input-event', (_e, input) => {
+      if (input.type !== 'keyDown') return
+      const ctrl = input.control || input.meta
+      const key = input.key.toLowerCase()
+      if (input.key === 'F12' || (ctrl && input.shift && key === 'i')) mainWindow?.webContents.toggleDevTools()
+      else if (ctrl && key === 'r') mainWindow?.webContents.reload()
+    })
+  }
+
   if (process.env.VITE_DEV_SERVER_URL) {
     mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL)
   } else {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'))
   }
+  return mainWindow
 }
 
 app.whenReady().then(() => {
-  app.setAppUserModelId('com.wist.app') // proper taskbar identity on Windows
+  app.setAppUserModelId(TESTING ? 'com.wist.testing' : 'com.wist.app') // proper taskbar identity on Windows
   registerMediaProtocol()
   openDatabase()
+  // Testing build: fill an empty database with demo content and switch to the
+  // Russian demo persona on first run, so the app shows off end-to-end.
+  if (TESTING) {
+    try {
+      if (seedDemoContent()) setSettings({ profileName: 'Эрадж', language: 'ru', theme: 'dark' })
+    } catch (e) {
+      console.error('[seed] demo content seeding failed', e)
+    }
+  }
   registerIpcHandlers()
+  registerMusicHandlers()
   createWindow()
+
+  // auto-update: silent background check → download → install on next quit (packaged only)
+  initAutoUpdater()
 
   // local HTTP API for AI agents (off by default; Settings → API)
   setApiNotifier((kind) => mainWindow?.webContents.send('wist:data-changed', kind))
   restartApiServer()
-  // Steam-style background playtime tracking for the Games module
-  startGameTracker(() => mainWindow?.webContents.send('wist:data-changed', 'games'))
+
+  // task reminders → native OS notifications; clicking one brings Bard to the front
+  reminderTimer = startReminders(() => {
+    if (!mainWindow) {
+      const w = createWindow()
+      // wait for the renderer before navigating, else the message is dropped
+      w.webContents.once('did-finish-load', () => w.webContents.send('wist:navigate', '/tasks'))
+      return
+    }
+    if (mainWindow.isMinimized()) mainWindow.restore()
+    mainWindow.show()
+    mainWindow.focus()
+    mainWindow.webContents.send('wist:navigate', '/tasks')
+  })
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
+})
+
+app.on('will-quit', () => {
+  if (reminderTimer) clearInterval(reminderTimer)
+  // mirror the brain to its portable folder so the knowledge survives a reinstall
+  try {
+    syncBrain()
+  } catch (e) {
+    console.error('[brain] sync on quit failed', e)
+  }
+  // checkpoint + close the db so the WAL is never left desynced across exit
+  closeDatabase()
 })
 
 app.on('window-all-closed', () => {

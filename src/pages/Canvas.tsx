@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Frame, Pencil, Plus, Trash2 } from 'lucide-react'
+import { Frame, Pencil, Plus, Star, Trash2 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import Button from '../components/ui/Button'
 import EmptyState from '../components/ui/EmptyState'
 import Spinner from '../components/ui/Spinner'
 import Modal from '../components/ui/Modal'
 import ConfirmDialog from '../components/ui/ConfirmDialog'
+import BoardThumb from '../components/BoardThumb'
 import { toast } from '../store/toastStore'
+import { useFavoritesStore } from '../store/favoritesStore'
 import type { Canvas as CanvasT } from '../types/models'
 import { formatRelative } from '../utils/formatters'
 import { useI18n } from '../i18n'
@@ -18,11 +20,15 @@ export default function Canvas() {
   const [list, setList] = useState<CanvasT[] | null>(null)
   const [renaming, setRenaming] = useState<CanvasT | null>(null)
   const [confirm, setConfirm] = useState<CanvasT | null>(null)
+  const loadFavs = useFavoritesStore((s) => s.load)
+  const toggleFav = useFavoritesStore((s) => s.toggle)
+  const isFav = useFavoritesStore((s) => s.isPinned)
 
   const load = () => window.wist.canvas.list().then(setList)
   useEffect(() => {
     load()
-  }, [])
+    loadFavs()
+  }, [loadFavs])
 
   const create = async () => {
     const c = await window.wist.canvas.create(t('canvas.untitled'))
@@ -63,17 +69,26 @@ export default function Canvas() {
         />
       ) : (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+          {/* new-board card (Figma-style) */}
+          <button
+            onClick={create}
+            className="group flex aspect-[4/3] flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-edge text-zinc-500 transition-colors hover:border-accent hover:text-accent-bright"
+          >
+            <Plus size={22} />
+            <span className="text-xs font-semibold">{t('canvas.new')}</span>
+          </button>
+
           {list.map((c) => (
             <button
               key={c.id}
               onClick={() => navigate(`/canvas/${c.id}`)}
-              className="tile group relative flex flex-col overflow-hidden text-left"
+              className="group relative flex flex-col overflow-hidden rounded-xl border border-edge bg-card text-left transition-all hover:-translate-y-0.5 hover:shadow-[var(--card-shadow-hover)]"
             >
-              <div className="flex h-28 items-center justify-center bg-raised/60">
-                <Frame size={30} className="text-accent-bright/70" />
+              <div className="aspect-[4/3] overflow-hidden border-b border-edge bg-bg p-2">
+                <BoardThumb data={c.data} />
               </div>
-              <div className="p-3">
-                <div className="truncate text-sm font-semibold text-zinc-100">{c.name}</div>
+              <div className="px-3 py-2.5">
+                <div className="truncate text-sm font-semibold text-zinc-100">{c.name || t('canvas.untitled')}</div>
                 <div className="mt-0.5 text-[11px] text-zinc-500">
                   {t('canvas.nodes', { n: c.data.nodes.length })} · {formatRelative(c.updated_at)}
                 </div>
@@ -84,9 +99,23 @@ export default function Canvas() {
                   tabIndex={-1}
                   onClick={(e) => {
                     e.stopPropagation()
+                    toggleFav({ kind: 'canvas', ref: c.id, label: c.name, route: `/canvas/${c.id}` })
+                  }}
+                  className={`rounded-lg bg-black/55 p-1.5 backdrop-blur-sm transition-colors hover:bg-black/75 ${
+                    isFav('canvas', c.id) ? 'text-[var(--c-yellow-text)]' : 'text-[#fff]'
+                  }`}
+                  title={isFav('canvas', c.id) ? t('fav.unpin') : t('fav.pin')}
+                >
+                  <Star size={13} className={isFav('canvas', c.id) ? 'fill-current' : ''} />
+                </span>
+                <span
+                  role="button"
+                  tabIndex={-1}
+                  onClick={(e) => {
+                    e.stopPropagation()
                     setRenaming(c)
                   }}
-                  className="rounded-md bg-black/55 p-1.5 text-zinc-100 backdrop-blur-sm transition-colors hover:bg-black/75"
+                  className="rounded-lg bg-black/55 p-1.5 text-[#fff] backdrop-blur-sm transition-colors hover:bg-black/75"
                   title={t('canvas.rename')}
                 >
                   <Pencil size={13} />
@@ -98,7 +127,7 @@ export default function Canvas() {
                     e.stopPropagation()
                     setConfirm(c)
                   }}
-                  className="rounded-md bg-black/55 p-1.5 text-zinc-100 backdrop-blur-sm transition-colors hover:text-red-400"
+                  className="rounded-lg bg-black/55 p-1.5 text-[#fff] backdrop-blur-sm transition-colors hover:text-danger"
                   title={t('common.delete')}
                 >
                   <Trash2 size={13} />

@@ -1,0 +1,34 @@
+{
+  "extends": null,
+  "appId": "com.wist.testing",
+  "productName": "Testing Bard",
+  "npmRebuild": false,
+  "directories": {
+    "output": "release-testing",
+    "buildResources": "build"
+  },
+  "files": [
+    "dist/**",
+    "dist-electron/**",
+    "build/icon-32.png",
+    "package.json"
+  ],
+  "asarUnpack": [
+    "**/*.node"
+  ],
+  "win": {
+    "target": [
+      "nsis"
+    ],
+    "icon": "build/icon.ico"
+  },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true,
+    "installerLanguages": [
+      "en_US",
+      "ru_RU"
+    ],
+    "shortcutName": "Testing Bard"
+  }
+}

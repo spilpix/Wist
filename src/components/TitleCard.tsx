@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { Star } from 'lucide-react'
 import CoverImage from './CoverImage'
+import { setMediaDrag } from '../lib/mediaDrag'
 import { STATUS_COLORS, type Title } from '../types/models'
 import { useI18n, type TKey, type TParams } from '../i18n'
 
@@ -28,6 +29,8 @@ export default function TitleCard({ title }: { title: Title }) {
   return (
     <button
       onClick={() => navigate(`/title/${title.id}`)}
+      draggable
+      onDragStart={(e) => setMediaDrag(e, { source: 'library', kind: 'title', title: title.title, path: title.cover_path, cover: title.cover_path, ref: { kind: 'title', id: title.id } }, e.currentTarget)}
       className="group w-full text-left transition-transform duration-150 hover:-translate-y-0.5"
     >
       <div className="relative aspect-[2/3] overflow-hidden rounded-xl bg-raised">
@@ -43,8 +46,8 @@ export default function TitleCard({ title }: { title: Title }) {
           title={t(`status.${title.status}`)}
         />
         {title.rating != null && (
-          <span className="absolute right-2 top-2 flex items-center gap-1 rounded-md bg-black/70 px-1.5 py-0.5 text-[11px] font-semibold text-amber-300">
-            <Star size={10} className="fill-amber-300" />
+          <span className="absolute right-2 top-2 flex items-center gap-1 rounded-full bg-black/70 px-1.5 py-0.5 text-[11px] font-semibold text-[var(--c-yellow-text)]">
+            <Star size={10} className="fill-[var(--c-yellow-text)]" />
             {title.rating}
           </span>
         )}

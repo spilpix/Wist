@@ -1,7 +1,7 @@
 {
   "name": "wist",
   "productName": "Bard",
-  "version": "0.25.0",
+  "version": "0.73.0",
   "description": "Bard — your everyday super app: watch, listen, read, organize. A media hub and second brain in one.",
   "author": "Bard",
   "private": true,
@@ -12,20 +12,25 @@
     "typecheck": "tsc --noEmit",
     "rebuild": "electron-rebuild -f -w better-sqlite3",
     "icon": "node scripts/make-icon.mjs",
+    "installer-art": "node scripts/make-installer-art.mjs",
     "dist": "npm run build && electron-builder",
-    "dist:dir": "npm run build && electron-builder --dir"
+    "dist:dir": "npm run build && electron-builder --dir",
+    "dist:testing": "node scripts/build-testing.mjs"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.1.0",
+    "@supabase/supabase-js": "^2.108.2",
     "@types/d3-force": "^3.0.10",
     "better-sqlite3": "^11.10.0",
     "d3-force": "^3.0.0",
     "electron-store": "^8.2.0",
+    "electron-updater": "^6.8.9",
     "lucide-react": "^0.469.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.30.0",
     "recharts": "^2.15.0",
+    "trystero": "^0.25.2",
     "zustand": "^4.5.5"
   },
   "devDependencies": {
@@ -50,6 +55,13 @@
     "appId": "com.wist.app",
     "productName": "Bard",
     "npmRebuild": false,
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "spilpix",
+        "repo": "Wist"
+      }
+    ],
     "directories": {
       "output": "release",
       "buildResources": "build"
@@ -70,13 +82,20 @@
       "icon": "build/icon.ico"
     },
     "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
+      "oneClick": true,
+      "perMachine": false,
+      "allowElevation": true,
+      "runAfterFinish": true,
       "installerLanguages": [
         "en_US",
         "ru_RU"
       ],
-      "shortcutName": "Bard"
+      "shortcutName": "Bard",
+      "installerHeaderIcon": "icon.ico",
+      "deleteAppDataOnUninstall": false,
+      "menuCategory": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
     }
   }
 }

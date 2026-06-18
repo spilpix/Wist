@@ -38,6 +38,7 @@ import {
 import { useSettingsStore } from '../store/settingsStore'
 import { toast } from '../store/toastStore'
 import { clamp, formatTimestamp } from '../utils/formatters'
+import { physKey } from '../lib/keyboard'
 import { useI18n, t as tGlobal, type TKey, type TParams } from '../i18n'
 
 type TFn = (key: TKey, params?: TParams) => string
@@ -652,16 +653,18 @@ export default function Player() {
       if (draft) return
       const tag = (e.target as HTMLElement)?.tagName
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
-      switch (e.key) {
+      // physKey → physical key position, so shortcuts work on any layout (Cyrillic etc.)
+      const k = physKey(e)
+      switch (k) {
         case ' ':
         case 'k':
           e.preventDefault()
           togglePlay()
           break
-        case 'ArrowLeft':
+        case 'arrowleft':
           seekBy(-5)
           break
-        case 'ArrowRight':
+        case 'arrowright':
           seekBy(5)
           break
         case 'j':
@@ -672,11 +675,11 @@ export default function Player() {
           seekBy(10)
           flashSeek('fwd')
           break
-        case 'ArrowUp':
+        case 'arrowup':
           e.preventDefault()
           setVol(volume + 0.05)
           break
-        case 'ArrowDown':
+        case 'arrowdown':
           e.preventDefault()
           setVol(volume - 0.05)
           break
@@ -701,10 +704,10 @@ export default function Player() {
         case 'b':
           openMomentPanel()
           break
-        case '>':
+        case '.':
           setSpeed(Math.round((rate + 0.25) * 100) / 100)
           break
-        case '<':
+        case ',':
           setSpeed(Math.round((rate - 0.25) * 100) / 100)
           break
         case 'n':
@@ -713,11 +716,11 @@ export default function Player() {
         case 'p':
           if (prevEp) navigate(`/player/${prevEp.id}`, { replace: true })
           break
-        case 'Escape':
+        case 'escape':
           if (!document.fullscreenElement) navigate(-1)
           break
         default:
-          if (/^[0-9]$/.test(e.key) && duration) seekTo((Number(e.key) / 10) * duration)
+          if (/^[0-9]$/.test(k) && duration) seekTo((Number(k) / 10) * duration)
       }
       pokeControls()
     }
@@ -867,8 +870,8 @@ export default function Player() {
 
         {/* next episode countdown */}
         {nextCountdown !== null && nextEp && (
-          <div className="absolute bottom-28 right-6 z-[5] flex items-center gap-3 rounded-xl border border-edge bg-surface/95 px-4 py-3 animate-slide-up">
-            <SkipForward size={16} className="text-accent-bright" />
+          <div className="absolute bottom-28 right-6 z-[5] flex items-center gap-3 rounded-2xl border border-edge bg-card px-4 py-3 shadow-[var(--float-shadow)] animate-slide-up">
+            <SkipForward size={16} className="text-zinc-300" />
             <span className="text-sm text-zinc-200">{t('player.nextIn', { n: nextCountdown })}</span>
             <button className="btn-ghost !px-2.5 !py-1 text-xs" onClick={() => setNextCountdown(null)}>
               {t('common.cancel')}
@@ -1136,7 +1139,7 @@ export default function Player() {
             <div className="w-full max-w-lg rounded-2xl border border-edge bg-surface p-5 animate-slide-up">
               <div className="mb-4 flex items-center justify-between">
                 <h3 className="text-base font-semibold text-white">{t('player.saveMoment')}</h3>
-                <span className="font-mono text-sm text-accent-bright">{formatTimestamp(draft.timestamp)}</span>
+                <span className="font-mono text-sm text-zinc-300">{formatTimestamp(draft.timestamp)}</span>
               </div>
               {draft.dataUrl ? (
                 <img src={draft.dataUrl} alt="frame" className="mb-4 w-full rounded-xl" />
@@ -1218,8 +1221,8 @@ interface PanelProps {
 
 function EpisodesPanel({ title, coverPath, type, episodes, currentId, index, total, onPick, onClose, t }: PanelProps) {
   return (
-    <aside className="flex w-[400px] shrink-0 flex-col border-l border-edge/60 bg-surface">
-      <div className="flex items-start justify-between gap-2 border-b border-edge/60 p-4">
+    <aside className="flex w-[400px] shrink-0 flex-col border-l border-edge bg-surface">
+      <div className="flex items-start justify-between gap-2 border-b border-edge p-4">
         <div className="min-w-0">
           <div className="truncate text-[15px] font-semibold text-white">{title}</div>
           <div className="mt-0.5 text-xs text-zinc-400">
@@ -1241,14 +1244,14 @@ function EpisodesPanel({ title, coverPath, type, episodes, currentId, index, tot
             <button
               key={ep.id}
               onClick={() => onPick(ep.id)}
-              className={`group flex w-full items-center gap-3 rounded-xl p-2 text-left transition-colors ${
-                active ? 'bg-accent/15' : 'hover:bg-raised'
+              className={`group flex w-full items-center gap-3 rounded-lg p-2 text-left transition-colors ${
+                active ? 'bg-sidebar-active' : 'hover:bg-highlight'
               }`}
             >
               <span className="w-5 shrink-0 text-center text-xs tabular-nums text-zinc-500">
-                {active ? <Sparkles size={13} className="mx-auto text-accent-bright" /> : i + 1}
+                {active ? <Sparkles size={13} className="mx-auto text-zinc-100" /> : i + 1}
               </span>
-              <div className="relative h-[52px] w-[92px] shrink-0 overflow-hidden rounded-lg bg-raised">
+              <div className="relative h-[52px] w-[92px] shrink-0 overflow-hidden rounded-xl bg-raised">
                 <CoverImage
                   coverPath={coverPath}
                   title={title}
@@ -1268,7 +1271,7 @@ function EpisodesPanel({ title, coverPath, type, episodes, currentId, index, tot
                 ) : null}
               </div>
               <div className="min-w-0 flex-1">
-                <div className={`truncate text-[13px] font-medium ${active ? 'text-accent-bright' : 'text-zinc-200'}`}>
+                <div className={`truncate text-[13px] font-medium ${active ? 'text-zinc-100' : 'text-zinc-200'}`}>
                   {ep.name || t('player.episodeN', { n: ep.episode_number })}
                 </div>
                 <div className="truncate text-[11px] text-zinc-500">
@@ -1411,7 +1414,7 @@ function SettingsMenu(props: MenuProps) {
               className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-[13px] hover:bg-white/10"
             >
               {label}
-              {i === 0 && <Check size={15} className="text-accent-bright" />}
+              {i === 0 && <Check size={15} className="text-[#fff]" />}
             </button>
           ))}
         </div>
@@ -1427,7 +1430,7 @@ function SettingsMenu(props: MenuProps) {
             className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-[13px] hover:bg-white/10"
           >
             {t('common.off')}
-            {activeTrack === -1 && <Check size={15} className="text-accent-bright" />}
+            {activeTrack === -1 && <Check size={15} className="text-[#fff]" />}
           </button>
           {subtitleTracks.map((tr, i) => (
             <button
@@ -1436,7 +1439,7 @@ function SettingsMenu(props: MenuProps) {
               className="flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-[13px] hover:bg-white/10"
             >
               <span className="truncate">{tr.label}</span>
-              {activeTrack === i && <Check size={15} className="shrink-0 text-accent-bright" />}
+              {activeTrack === i && <Check size={15} className="shrink-0 text-[#fff]" />}
             </button>
           ))}
           {!subtitleTracks.length && (

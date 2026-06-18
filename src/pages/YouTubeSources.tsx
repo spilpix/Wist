@@ -77,7 +77,7 @@ export default function YouTubeSources() {
             const watchedCount = videos.filter((v) => v.watched).length
             return (
               <div key={source.id} className="card overflow-hidden">
-                <div className="flex items-center gap-3 border-b border-edge/60 bg-raised/50 px-4 py-3">
+                <div className="flex items-center gap-3 border-b border-edge bg-raised px-4 py-3">
                   <Youtube size={17} className="shrink-0 text-red-400" />
                   <button
                     className="min-w-0 truncate text-left text-sm font-medium text-zinc-200 hover:text-white"
@@ -107,9 +107,9 @@ export default function YouTubeSources() {
                   </div>
                 </div>
                 {videos.length > 0 ? (
-                  <div className="max-h-80 divide-y divide-edge/30 overflow-y-auto">
+                  <div className="max-h-80 divide-y divide-edge overflow-y-auto">
                     {videos.map((video) => (
-                      <div key={video.id} className="flex items-center gap-3 px-4 py-2">
+                      <div key={video.id} className="group flex items-center gap-3 px-4 py-2 transition-colors hover:bg-highlight">
                         <button
                           onClick={() => toggleWatched(video)}
                           title={video.watched ? t('detail.markUnwatched') : t('detail.markWatched')}
@@ -134,7 +134,7 @@ export default function YouTubeSources() {
                           </span>
                         )}
                         <button
-                          className="shrink-0 rounded-lg p-1.5 text-zinc-500 hover:bg-raised hover:text-white"
+                          className="shrink-0 rounded-lg p-1.5 text-zinc-500 opacity-0 transition-all hover:bg-raised hover:text-white group-hover:opacity-100"
                           title={t('yt.watchOnYoutube')}
                           onClick={() => window.wist.shell.openExternal(video.file_path!)}
                         >

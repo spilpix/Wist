@@ -25,7 +25,7 @@ function inline(text: string, onOpenLink?: (n: string) => void): ReactNode[] {
       )
     } else if (m[3]) out.push(<strong key={key++} className="font-semibold text-white">{m[4]}</strong>)
     else if (m[5]) out.push(<em key={key++}>{m[6]}</em>)
-    else if (m[7]) out.push(<code key={key++} className="rounded bg-raised px-1 py-0.5 font-mono text-[0.85em] text-accent-bright">{m[8]}</code>)
+    else if (m[7]) out.push(<code key={key++} className="rounded border border-edge bg-field px-1.5 py-0.5 font-mono text-[0.85em] text-zinc-200">{m[8]}</code>)
     else if (m[9]) {
       const url = m[11]
       const label = m[10]
@@ -61,7 +61,7 @@ export default function MarkdownView({ content, onOpenLink, onToggleCheckbox }: 
       while (i < lines.length && !/^```/.test(lines[i])) buf.push(lines[i++])
       i++ // closing fence
       blocks.push(
-        <pre key={k++} className="overflow-x-auto rounded-lg border border-edge bg-raised p-3 font-mono text-[12.5px] text-zinc-300">
+        <pre key={k++} className="overflow-x-auto rounded-lg border border-edge bg-field p-3.5 font-mono text-[12.5px] text-zinc-200">
           <code>{buf.join('\n')}</code>
         </pre>
       )
@@ -91,7 +91,7 @@ export default function MarkdownView({ content, onOpenLink, onToggleCheckbox }: 
       const buf: string[] = []
       while (i < lines.length && /^>\s?/.test(lines[i])) buf.push(lines[i++].replace(/^>\s?/, ''))
       blocks.push(
-        <blockquote key={k++} className="border-l-2 border-accent/60 pl-3 text-zinc-400">
+        <blockquote key={k++} className="border-l-[3px] border-zinc-600 pl-3.5 text-zinc-300">
           {inline(buf.join(' '), onOpenLink)}
         </blockquote>
       )
@@ -110,8 +110,8 @@ export default function MarkdownView({ content, onOpenLink, onToggleCheckbox }: 
             <li key={it.idx} className="flex items-start gap-2">
               <button
                 onClick={() => onToggleCheckbox?.(it.idx)}
-                className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${
-                  it.checked ? 'border-accent bg-accent text-[#fff]' : 'border-edge hover:border-accent'
+                className={`mt-0.5 flex h-[17px] w-[17px] shrink-0 items-center justify-center rounded-[5px] border-[1.6px] text-[11px] transition-colors ${
+                  it.checked ? 'border-accent bg-accent text-[#fff]' : 'border-zinc-600 hover:border-accent'
                 }`}
               >
                 {it.checked && '✓'}

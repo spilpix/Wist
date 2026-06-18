@@ -2,24 +2,40 @@ import type {
   AppSettings,
   Canvas,
   CanvasData,
+  Collection,
+  CollectionItem,
   ContinueItem,
+  LibrarySummary,
   Episode,
-  Game,
+  Favorite,
+  FavoriteKind,
+  FavoriteInput,
   HeatmapDay,
   ImportGroup,
-  JournalEntry,
   MemoryEvent,
   MetaCandidate,
   Moment,
   MomentTag,
   MonthBar,
+  MusicAlbum,
+  MusicArtist,
+  MusicPlaylist,
   Note,
+  NoteFolder,
   Playlist,
+  Track,
   Project,
   ProjectAsset,
+  ProjectPatch,
+  ProjectSection,
+  ProjectSession,
+  SessionChanges,
   StatsSummary,
   SubtitleTrack,
+  UpdateStatus,
   Task,
+  TaskComment,
+  TaskAttachment,
   Title,
   TitleFilters,
   TitleType,
@@ -39,13 +55,13 @@ export interface EpisodeBundle {
 export interface WistApi {
   events: {
     onDataChanged(cb: (kind: string) => void): () => void
+    onNavigate(cb: (path: string) => void): () => void
   }
-  journal: {
-    list(): Promise<JournalEntry[]>
-    get(day: string): Promise<JournalEntry | null>
-    upsert(day: string, patch: { mood?: number | null; content?: string }): Promise<JournalEntry>
-    remove(day: string): Promise<void>
-    streak(): Promise<number>
+  updates: {
+    check(): Promise<UpdateStatus>
+    status(): Promise<UpdateStatus>
+    install(): Promise<void>
+    onStatus(cb: (status: UpdateStatus) => void): () => void
   }
   tasks: {
     list(filters?: { done?: boolean; projectId?: number }): Promise<Task[]>
@@ -53,6 +69,16 @@ export interface WistApi {
     update(id: number, patch: Partial<Task>): Promise<Task>
     remove(id: number): Promise<void>
     clearCompleted(): Promise<number>
+    reorder(ids: number[]): Promise<void>
+    comments(taskId: number): Promise<TaskComment[]>
+    addComment(taskId: number, body: string): Promise<TaskComment>
+    removeComment(id: number): Promise<void>
+    attachments(taskId: number): Promise<TaskAttachment[]>
+    addAttachment(taskId: number, filePath: string, name: string): Promise<TaskAttachment>
+    removeAttachment(id: number): Promise<void>
+  }
+  clipboard: {
+    copy(payload: { text?: string; imagePaths?: string[] }): Promise<boolean>
   }
   projects: {
     list(): Promise<Project[]>
@@ -62,19 +88,59 @@ export interface WistApi {
     remove(id: number): Promise<void>
     reorder(ids: number[]): Promise<void>
     assets(projectId: number): Promise<ProjectAsset[]>
-    addFiles(projectId: number): Promise<number>
-    addFolder(projectId: number): Promise<number>
-    addImages(projectId: number): Promise<number>
-    addUrl(projectId: number, url: string, label: string | null): Promise<number>
-    addPaths(projectId: number, paths: string[]): Promise<number>
+    addFiles(projectId: number, sectionId?: number | null): Promise<number>
+    addFolder(projectId: number, sectionId?: number | null): Promise<number>
+    addImages(projectId: number, sectionId?: number | null): Promise<number>
+    addUrl(projectId: number, url: string, label: string | null, sectionId?: number | null): Promise<number>
+    addPaths(projectId: number, paths: string[], sectionId?: number | null): Promise<number>
     removeAsset(id: number): Promise<void>
     reorderAssets(ids: number[]): Promise<void>
+    moveAsset(id: number, sectionId: number | null): Promise<void>
+    sections(projectId: number): Promise<ProjectSection[]>
+    createSection(projectId: number, name: string): Promise<ProjectSection>
+    renameSection(id: number, name: string): Promise<void>
+    removeSection(id: number): Promise<void>
+    reorderSections(ids: number[]): Promise<void>
+    dragOut(paths: string[]): void
+    sessions(projectId: number): Promise<ProjectSession[]>
+    createSession(projectId: number, data: Partial<ProjectSession>): Promise<ProjectSession>
+    updateSession(id: number, patch: Partial<ProjectSession>): Promise<ProjectSession>
+    removeSession(id: number): Promise<void>
+    previewChanges(projectId: number): Promise<SessionChanges>
+    snapshot(projectId: number): Promise<void>
+    endSession(projectId: number, data: Partial<ProjectSession>): Promise<ProjectSession>
+    patches(projectId: number): Promise<ProjectPatch[]>
+    createPatch(projectId: number, data: Partial<ProjectPatch>): Promise<ProjectPatch>
+    updatePatch(id: number, patch: Partial<ProjectPatch>): Promise<ProjectPatch>
+    removePatch(id: number): Promise<void>
   }
   trash: {
     list(): Promise<{ projects: Project[]; notes: Note[]; tasks: Task[] }>
     restore(kind: 'project' | 'note' | 'task', id: number): Promise<void>
     purge(kind: 'project' | 'note' | 'task', id: number): Promise<void>
     empty(): Promise<number>
+  }
+  favorites: {
+    list(): Promise<Favorite[]>
+    isFavorite(kind: FavoriteKind, ref: string | number): Promise<boolean>
+    toggle(input: FavoriteInput): Promise<boolean>
+    remove(kind: FavoriteKind, ref: string | number): Promise<void>
+    reorder(ids: number[]): Promise<void>
+  }
+  collections: {
+    list(): Promise<Collection[]>
+    get(id: number): Promise<Collection | null>
+    items(id: number): Promise<CollectionItem[]>
+    create(data: { name?: string; color?: string | null; icon?: string | null }): Promise<Collection>
+    update(id: number, patch: { name?: string; color?: string | null; icon?: string | null }): Promise<Collection | null>
+    remove(id: number): Promise<void>
+    reorder(ids: number[]): Promise<void>
+    addItem(id: number, kind: string, ref: string | number): Promise<void>
+    removeItem(id: number, kind: string, ref: string | number): Promise<void>
+    forItem(kind: string, ref: string | number): Promise<number[]>
+  }
+  library: {
+    summary(): Promise<LibrarySummary>
   }
   util: {
     pathForFile(file: File): string
@@ -85,12 +151,34 @@ export interface WistApi {
     update(id: number, patch: Partial<Playlist>): Promise<void>
     remove(id: number): Promise<void>
   }
+  music: {
+    list(): Promise<Track[]>
+    albums(): Promise<MusicAlbum[]>
+    artists(): Promise<MusicArtist[]>
+    folders(): Promise<string[]>
+    scan(): Promise<{ added: number; scanned: number }>
+    addFolder(): Promise<{ folder: string; added: number; scanned: number } | null>
+    removeFolder(folder: string): Promise<number>
+    setDuration(id: number, seconds: number): Promise<void>
+    setLiked(id: number, liked: boolean): Promise<void>
+    recordPlay(id: number): Promise<void>
+    remove(id: number): Promise<void>
+    playlists(): Promise<MusicPlaylist[]>
+    playlistTracks(id: number): Promise<Track[]>
+    createPlaylist(name: string): Promise<MusicPlaylist>
+    renamePlaylist(id: number, name: string): Promise<void>
+    deletePlaylist(id: number): Promise<void>
+    addToPlaylist(playlistId: number, trackId: number): Promise<void>
+    removeFromPlaylist(playlistId: number, trackId: number): Promise<void>
+    reorderPlaylist(playlistId: number, trackIds: number[]): Promise<void>
+  }
   vault: {
     list(parentId?: number | null): Promise<VaultFile[]>
     browse(dir: string): Promise<VaultDiskEntry[]>
     addPaths(paths: string[], parentId?: number | null): Promise<number>
     pickAndAdd(parentId?: number | null): Promise<number>
-    addFolder(parentId?: number | null): Promise<number>
+    addFolder(parentId?: number | null): Promise<{ folders: number; tracks: number; titles: number; episodes: number }>
+    syncAll(): Promise<{ tracks: number; titles: number; episodes: number }>
     createFolder(name: string, parentId?: number | null): Promise<VaultFile>
     rename(id: number, name: string): Promise<void>
     move(id: number, parentId: number | null): Promise<void>
@@ -98,21 +186,20 @@ export interface WistApi {
     open(path: string): Promise<string>
     startDrag(path: string): void
   }
+  fs: {
+    listDir(dir: string): Promise<Array<{ name: string; path: string; isDir: boolean }>>
+  }
   canvas: {
     list(): Promise<Canvas[]>
     get(id: number): Promise<Canvas | null>
     create(name: string): Promise<Canvas>
     update(id: number, patch: { name?: string; data?: CanvasData }): Promise<Canvas>
     remove(id: number): Promise<void>
-  }
-  games: {
-    list(): Promise<Game[]>
-    get(id: number): Promise<Game | null>
-    create(data: { name?: string; exe_path: string; cover_path?: string | null }): Promise<Game>
-    update(id: number, patch: Partial<Game>): Promise<Game>
-    remove(id: number): Promise<void>
-    running(): Promise<number[]>
-    pickExe(): Promise<string | null>
+    capture(
+      rect: { x: number; y: number; width: number; height: number },
+      format: 'png' | 'jpeg'
+    ): Promise<{ bytes: Uint8Array; width: number; height: number } | null>
+    saveExport(name: string, bytes: ArrayBuffer | Uint8Array): Promise<string | null>
   }
   meta: {
     searchTitles(type: TitleType, query: string): Promise<MetaCandidate[]>
@@ -170,6 +257,14 @@ export interface WistApi {
     remove(id: number): Promise<void>
     tags(): Promise<string[]>
   }
+  noteFolders: {
+    list(): Promise<NoteFolder[]>
+    create(name: string, parentId?: number | null): Promise<NoteFolder>
+    rename(id: number, name: string): Promise<NoteFolder | null>
+    move(id: number, parentId: number | null): Promise<void>
+    remove(id: number): Promise<void>
+    reorder(ids: number[]): Promise<void>
+  }
   youtube: {
     sources(titleId?: number): Promise<YoutubeSource[]>
     addSource(titleId: number, url: string): Promise<YoutubeSource>
@@ -208,10 +303,36 @@ export interface WistApi {
   screenshots: {
     saveDataUrl(dataUrl: string, baseName: string): Promise<string>
   }
+  p2p: {
+    fileMeta(filePath: string): Promise<{ name: string; size: number; sha256: string; path: string } | null>
+    readFile(filePath: string): Promise<ArrayBuffer>
+    saveIncoming(name: string, bytes: ArrayBuffer): Promise<string | null>
+  }
   data: {
     exportAll(): Promise<string | null>
     importAll(): Promise<boolean>
     clearHistory(): Promise<void>
+    clearDatabase(): Promise<void>
+  }
+  brain: {
+    folder(): Promise<string>
+    stats(): Promise<{
+      titles: number
+      titlesDone: number
+      episodes: number
+      episodesWatched: number
+      notes: number
+      tasks: number
+      tasksDone: number
+      journal: number
+      projects: number
+      tracks: number
+      moments: number
+      canvases: number
+    }>
+    sync(): Promise<{ dir: string; records: number }>
+    restore(): Promise<{ restored: number }>
+    open(): Promise<string>
   }
   settings: {
     get(): Promise<AppSettings>
@@ -221,6 +342,7 @@ export interface WistApi {
   }
   window: {
     setTheme(theme: 'dark' | 'light'): Promise<void>
+    capturePreview(rect: { x: number; y: number; width: number; height: number }): Promise<string | null>
   }
   shell: {
     openExternal(url: string): Promise<void>

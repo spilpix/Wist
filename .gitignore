@@ -4,3 +4,4 @@ dist-electron/
 release/
 *.log
 scripts/parser-bundle.mjs
+release-testing/

@@ -29,6 +29,7 @@ import {
   type YoutubeSource,
 } from '../types/models'
 import { formatDate, formatTimestamp } from '../utils/formatters'
+import { useTabTitle } from '../store/tabStore'
 import { useI18n, t as tGlobal } from '../i18n'
 
 export default function TitleDetail() {
@@ -38,6 +39,7 @@ export default function TitleDetail() {
   const { t } = useI18n()
 
   const [title, setTitle] = useState<Title | null>(null)
+  useTabTitle(title?.title)
   const [episodes, setEpisodes] = useState<Episode[]>([])
   const [moments, setMoments] = useState<Moment[]>([])
   const [sources, setSources] = useState<YoutubeSource[]>([])
@@ -48,17 +50,23 @@ export default function TitleDetail() {
   const [syncing, setSyncing] = useState<number | null>(null)
 
   const reload = useCallback(async () => {
-    const [t, eps, ms, srcs] = await Promise.all([
-      window.wist.titles.get(titleId),
-      window.wist.episodes.listByTitle(titleId),
-      window.wist.moments.list({ titleId }),
-      window.wist.youtube.sources(titleId),
-    ])
-    setTitle(t)
-    setEpisodes(eps)
-    setMoments(ms)
-    setSources(srcs)
-    setLoading(false)
+    try {
+      const [t, eps, ms, srcs] = await Promise.all([
+        window.wist.titles.get(titleId),
+        window.wist.episodes.listByTitle(titleId),
+        window.wist.moments.list({ titleId }),
+        window.wist.youtube.sources(titleId),
+      ])
+      setTitle(t)
+      setEpisodes(eps)
+      setMoments(ms)
+      setSources(srcs)
+    } catch (e) {
+      console.error('title load failed', e)
+      setTitle(null)
+    } finally {
+      setLoading(false)
+    }
   }, [titleId])
 
   useEffect(() => {
@@ -121,7 +129,17 @@ export default function TitleDetail() {
     navigate('/library')
   }
 
-  if (loading || !title) return <Spinner />
+  if (loading) return <Spinner />
+  if (!title) {
+    return (
+      <div className="page">
+        <button className="btn-ghost mb-4" onClick={() => navigate('/library')}>
+          <ArrowLeft size={15} /> {t('nav.library')}
+        </button>
+        <p className="text-zinc-500">{t('title.notFound')}</p>
+      </div>
+    )
+  }
 
   const isBook = title.type === 'book'
   const total = Math.max(title.total_episodes, isBook ? 0 : episodes.length, 1)
@@ -138,7 +156,15 @@ export default function TitleDetail() {
   }
 
   return (
-    <div className="page">
+    <div className="page relative">
+      {/* cinematic backdrop — the poster, blurred + faded into the page */}
+      {title.cover_path && (
+        <div className="pointer-events-none absolute -left-12 -right-12 -top-10 z-0 h-[440px] overflow-hidden">
+          <img src={window.wist.media.fileUrl(title.cover_path)} alt="" className="h-full w-full scale-110 object-cover opacity-30 blur-3xl" />
+          <div className="absolute inset-0 bg-gradient-to-b from-bg/30 via-bg/85 to-bg" />
+        </div>
+      )}
+      <div className="relative z-10">
       <button onClick={() => navigate(-1)} className="mb-5 flex items-center gap-1.5 text-sm text-zinc-500 transition-colors hover:text-zinc-200">
         <ArrowLeft size={15} /> {t('common.back')}
       </button>
@@ -216,10 +242,10 @@ export default function TitleDetail() {
           {(title.genres.length > 0 || title.tags.length > 0) && (
             <div className="mt-4 flex flex-wrap gap-1.5">
               {title.genres.map((g) => (
-                <span key={g} className="rounded-md bg-raised px-2 py-1 text-xs text-zinc-400">{g}</span>
+                <span key={g} className="rounded-full bg-raised px-2.5 py-1 text-xs text-zinc-400">{g}</span>
               ))}
               {title.tags.map((t) => (
-                <span key={t} className="rounded-md bg-accent/15 px-2 py-1 text-xs text-accent-bright">#{t}</span>
+                <span key={t} className="rounded-full bg-raised px-2.5 py-1 text-xs text-zinc-400">#{t}</span>
               ))}
             </div>
           )}
@@ -262,7 +288,7 @@ export default function TitleDetail() {
             </div>
             <div className="mt-3 flex justify-end">
               {readingDone >= total && total > 0 ? (
-                <span className="text-xs text-green-400">{t('book.finished')}</span>
+                <span className="text-xs text-success">{t('book.finished')}</span>
               ) : (
                 <button className="btn-ghost !py-1.5 text-xs" onClick={() => setReading(total)}>
                   {t('book.markFinished')}
@@ -287,7 +313,7 @@ export default function TitleDetail() {
             {t('detail.noEpisodes')}
           </div>
         ) : (
-          <div className="card divide-y divide-edge/50">
+          <div className="card divide-y divide-edge">
             {episodes.map((ep) => {
               const isYoutube = ep.file_path?.startsWith('http')
               const progress =
@@ -299,7 +325,7 @@ export default function TitleDetail() {
                   <button
                     onClick={() => toggleWatched(ep)}
                     title={ep.watched ? t('detail.markUnwatched') : t('detail.markWatched')}
-                    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-colors ${
+                    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border transition-colors ${
                       ep.watched
                         ? 'border-accent bg-accent text-[#fff]'
                         : 'border-edge text-transparent hover:border-accent'
@@ -321,7 +347,7 @@ export default function TitleDetail() {
                   <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
                     {isYoutube && (
                       <button
-                        className="rounded-lg p-1.5 text-zinc-400 hover:bg-raised hover:text-white"
+                        className="rounded-lg p-1.5 text-zinc-400 hover:bg-highlight hover:text-white"
                         title={t('detail.openOnYoutube')}
                         onClick={() => window.wist.shell.openExternal(ep.file_path!)}
                       >
@@ -331,14 +357,14 @@ export default function TitleDetail() {
                     {ep.file_path && !isYoutube && (
                       <>
                         <button
-                          className="rounded-lg p-1.5 text-zinc-400 hover:bg-raised hover:text-white"
+                          className="rounded-lg p-1.5 text-zinc-400 hover:bg-highlight hover:text-white"
                           title={t('detail.showInFolder')}
                           onClick={() => window.wist.shell.showItemInFolder(ep.file_path!)}
                         >
                           <FolderOpen size={14} />
                         </button>
                         <button
-                          className="rounded-lg p-1.5 text-accent-bright hover:bg-raised"
+                          className="rounded-lg p-1.5 text-zinc-300 hover:bg-highlight hover:text-white"
                           title={t('detail.play')}
                           onClick={() => navigate(`/player/${ep.id}`)}
                         >
@@ -347,7 +373,7 @@ export default function TitleDetail() {
                       </>
                     )}
                     <button
-                      className="rounded-lg p-1.5 text-zinc-500 hover:bg-raised hover:text-red-400"
+                      className="rounded-lg p-1.5 text-zinc-500 hover:bg-highlight hover:text-danger"
                       title={t('detail.removeEpisode')}
                       onClick={() => removeEpisode(ep)}
                     >
@@ -406,7 +432,7 @@ export default function TitleDetail() {
                       <ExternalLink size={14} />
                     </button>
                     <button
-                      className="btn-ghost !p-1.5 hover:!text-red-400"
+                      className="btn-ghost !p-1.5 hover:!text-danger"
                       title={t('detail.removeSource')}
                       onClick={async () => {
                         await window.wist.youtube.removeSource(s.id)
@@ -453,6 +479,7 @@ export default function TitleDetail() {
           onCancel={() => setConfirmDelete(false)}
         />
       )}
+      </div>
     </div>
   )
 }

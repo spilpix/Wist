@@ -17,7 +17,12 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
   filters: { sort: 'date_added', sortDir: 'desc', type: 'all', status: 'all' },
   view: (localStorage.getItem('wist.libraryView') as 'grid' | 'list') || 'grid',
   setFilters: (patch) => {
-    set((s) => ({ filters: { ...s.filters, ...patch } }))
+    const prev = get().filters
+    const next = { ...prev, ...patch }
+    // skip the reload when nothing actually changed (avoids churn on tab switches / no-op syncs)
+    const changed = (Object.keys(patch) as Array<keyof TitleFilters>).some((k) => prev[k] !== next[k])
+    if (!changed) return
+    set({ filters: next })
     get().load()
   },
   setView: (view) => {

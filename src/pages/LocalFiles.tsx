@@ -180,7 +180,7 @@ export default function LocalFiles() {
           <div className="space-y-5">
             {groups.map((g) => (
               <div key={g.key} className="card overflow-hidden">
-                <div className="flex flex-wrap items-center gap-2 border-b border-edge/60 bg-raised/50 px-4 py-3">
+                <div className="flex flex-wrap items-center gap-2 border-b border-edge bg-raised px-4 py-3">
                   <input
                     className="input !w-64"
                     value={g.suggestedTitle}
@@ -219,7 +219,7 @@ export default function LocalFiles() {
                 <table className="w-full text-sm">
                   <tbody>
                     {g.files.map((f) => (
-                      <tr key={f.path} className={`border-b border-edge/30 last:border-0 ${f.include ? '' : 'opacity-40'}`}>
+                      <tr key={f.path} className={`border-b border-edge last:border-0 ${f.include ? '' : 'opacity-40'}`}>
                         <td className="w-10 px-4 py-2">
                           <input
                             type="checkbox"
@@ -261,7 +261,7 @@ export default function LocalFiles() {
             ))}
           </div>
 
-          <div className="sticky bottom-0 mt-6 flex items-center justify-end gap-2 border-t border-edge/60 bg-bg/95 py-4">
+          <div className="sticky bottom-0 mt-6 flex items-center justify-end gap-2 border-t border-edge bg-bg/95 py-4">
             <button className="btn-ghost" onClick={() => setGroups([])}>
               <X size={15} /> {t('common.cancel')}
             </button>

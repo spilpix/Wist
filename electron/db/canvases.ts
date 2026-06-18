@@ -7,7 +7,22 @@ function parse(v: unknown): CanvasData {
   if (typeof v !== 'string') return { ...EMPTY }
   try {
     const d = JSON.parse(v)
-    return { nodes: Array.isArray(d?.nodes) ? d.nodes : [], edges: Array.isArray(d?.edges) ? d.edges : [] }
+    const out: CanvasData = {
+      nodes: Array.isArray(d?.nodes) ? d.nodes : [],
+      edges: Array.isArray(d?.edges) ? d.edges : [],
+    }
+    // restore the saved camera (viewport) if present
+    if (d?.viewport && typeof d.viewport === 'object') {
+      const { x, y, k } = d.viewport
+      if ([x, y, k].every((n) => typeof n === 'number' && isFinite(n))) out.viewport = { x, y, k }
+    }
+    // restore ruler guides if present
+    if (Array.isArray(d?.guides)) {
+      out.guides = d.guides.filter(
+        (g: any) => g && (g.axis === 'h' || g.axis === 'v') && typeof g.pos === 'number' && isFinite(g.pos)
+      )
+    }
+    return out
   } catch {
     return { ...EMPTY }
   }

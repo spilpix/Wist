@@ -24,10 +24,13 @@ export default function Modal({ title, onClose, children, width = 'max-w-xl' }: 
         if (e.target === e.currentTarget) onClose()
       }}
     >
-      <div className={`w-full ${width} max-h-[88vh] overflow-y-auto rounded-2xl border border-edge bg-surface p-6 animate-slide-up`}>
+      <div
+        className={`w-full ${width} max-h-[88vh] overflow-y-auto rounded-2xl border border-edge bg-card p-6 animate-slide-up`}
+        style={{ boxShadow: 'var(--palette-shadow)' }}
+      >
         <div className="mb-5 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-white">{title}</h2>
-          <button onClick={onClose} className="rounded-lg p-1.5 text-zinc-500 transition-colors hover:bg-raised hover:text-white">
+          <h2 className="text-lg font-semibold tracking-tight text-white">{title}</h2>
+          <button onClick={onClose} className="rounded-lg p-1.5 text-zinc-500 transition-colors duration-150 hover:bg-highlight hover:text-white">
             <X size={18} />
           </button>
         </div>

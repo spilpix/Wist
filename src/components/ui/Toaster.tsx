@@ -1,9 +1,11 @@
 import { useToastStore } from '../../store/toastStore'
 
+// neutral card body in every case; the kind only tints the text/accent so the
+// toast stays calm. Colours come from the theme-correct content-colour vars.
 const KIND_STYLES = {
-  info: 'border-edge bg-raised text-zinc-200',
-  success: 'border-green-500/30 bg-raised text-success',
-  error: 'border-red-500/30 bg-raised text-danger',
+  info: 'text-zinc-200',
+  success: 'text-[color:var(--c-green-text)]',
+  error: 'text-[color:var(--c-red-text)]',
 }
 
 export default function Toaster() {
@@ -16,7 +18,8 @@ export default function Toaster() {
         <button
           key={t.id}
           onClick={() => dismiss(t.id)}
-          className={`animate-slide-up rounded-lg border px-4 py-3 text-left text-sm shadow-none ${KIND_STYLES[t.kind]}`}
+          style={{ boxShadow: 'var(--float-shadow)' }}
+          className={`animate-slide-up rounded-lg border border-edge bg-card px-4 py-3 text-left text-sm font-medium ${KIND_STYLES[t.kind]}`}
         >
           {t.message}
         </button>

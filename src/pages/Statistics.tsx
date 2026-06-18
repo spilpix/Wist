@@ -33,16 +33,17 @@ const CHART_TOOLTIP_STYLE = {
   border: '1px solid rgb(var(--edge))',
   borderRadius: 8,
   fontSize: 12,
+  boxShadow: 'var(--float-shadow)',
 }
 const CHART_ITEM_STYLE = { color: 'rgb(var(--ink-200))' }
-const CHART_TICK = { fill: '#8a8a96', fontSize: 11 } // neutral mid-gray, readable on both themes
+const CHART_TICK = { fill: 'rgb(var(--ink-500))', fontSize: 11 } // tokenised muted ink, readable on both themes
 
 const PIE_COLORS = ['#e67d22', '#6fb06f', '#7aa8c4', '#c9a96b', '#c47a7a']
 
 function OverviewCard({ icon: Icon, value, label }: { icon: typeof Tv; value: string; label: string }) {
   return (
     <div className="card flex items-center gap-4 px-5 py-4">
-      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent/15 text-accent-bright">
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-raised text-zinc-400">
         <Icon size={18} />
       </span>
       <div>
@@ -55,9 +56,9 @@ function OverviewCard({ icon: Icon, value, label }: { icon: typeof Tv; value: st
 
 export default function Statistics() {
   const { t, lang } = useI18n()
-  // brand-default accent ('' ) resolves to the live theme-specific --accent (Crail/Tangerine)
+  // brand-default accent ('') resolves to the live --accent (Notion blue #2383E1)
   const accentSetting = useSettingsStore((s) => s.settings?.accentColor)
-  const accent = accentSetting || getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#e67d22'
+  const accent = accentSetting || getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#2383e1'
   const [loading, setLoading] = useState(true)
   const [summary, setSummary] = useState<StatsSummary | null>(null)
   const [types, setTypes] = useState<TypeSlice[]>([])
@@ -115,14 +116,14 @@ export default function Statistics() {
     <div className="page space-y-10">
       <h1 className="page-title !mb-0">{t('nav.statistics')}</h1>
 
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <OverviewCard icon={LibraryIcon} value={String(summary.titles)} label={t('stats.titlesInLibrary')} />
         <OverviewCard icon={Tv} value={String(summary.episodesWatched)} label={t('stats.episodesWatched')} />
         <OverviewCard icon={Clock} value={t('home.hoursValue', { n: formatHours(summary.secondsWatched) })} label={t('stats.hoursWatched')} />
         <OverviewCard icon={CalendarDays} value={String(summary.daysWithActivity)} label={t('stats.daysWithActivity')} />
       </div>
 
-      <div className="grid grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <section className="card p-5">
           <h2 className="section-title">{t('stats.byType')}</h2>
           {typeData.length ? (
@@ -142,7 +143,7 @@ export default function Statistics() {
                   const pct = Math.round((ty.value / summary.titles) * 100)
                   return (
                     <div key={ty.name} className="flex items-center gap-2 text-sm">
-                      <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }} />
+                      <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }} />
                       <span className="text-zinc-300">{ty.name}</span>
                       <span className="text-zinc-600">{pct}%</span>
                     </div>
@@ -163,7 +164,7 @@ export default function Statistics() {
                 <XAxis dataKey="name" tick={CHART_TICK} axisLine={false} tickLine={false} />
                 <YAxis tick={CHART_TICK} axisLine={false} tickLine={false} width={32} />
                 <Tooltip
-                  cursor={{ fill: 'rgba(138,138,150,0.08)' }}
+                  cursor={{ fill: 'rgb(var(--ink-500) / 0.08)' }}
                   contentStyle={CHART_TOOLTIP_STYLE}
                   itemStyle={CHART_ITEM_STYLE}
                   formatter={(v: number) => [t('stats.hoursShort', { n: v }), t('stats.watchedTooltip')]}
@@ -182,7 +183,7 @@ export default function Statistics() {
           <h2 className="section-title !mb-0">{t('stats.activityYear')}</h2>
           <div className="flex items-center gap-4 text-sm">
             <span className="flex items-center gap-1.5 text-zinc-400">
-              <Flame size={15} className="text-amber-500" />
+              <Flame size={15} style={{ color: 'var(--c-orange-text)' }} />
               {t('stats.current')} <span className="font-semibold text-white">{summary.currentStreak}</span>
             </span>
             <span className="text-zinc-400">
@@ -196,19 +197,19 @@ export default function Statistics() {
       {top.length > 0 && (
         <section>
           <h2 className="section-title">{t('stats.topRated')}</h2>
-          <div className="card divide-y divide-edge/50">
+          <div className="card divide-y divide-edge">
             {top.map((title, i) => (
               <button
                 key={title.id}
                 onClick={() => navigate(`/title/${title.id}`)}
-                className="flex w-full items-center gap-4 px-4 py-2.5 text-left transition-colors hover:bg-raised"
+                className="flex w-full items-center gap-4 px-4 py-2.5 text-left transition-colors hover:bg-highlight"
               >
                 <span className="w-6 text-center text-sm font-semibold text-zinc-600">{i + 1}</span>
-                <CoverImage coverPath={title.cover_path} title={title.title} type={title.type} className="h-12 w-9 rounded" iconSize={14} />
+                <CoverImage coverPath={title.cover_path} title={title.title} type={title.type} className="h-12 w-9 rounded-lg" iconSize={14} />
                 <span className="min-w-0 flex-1 truncate text-sm text-zinc-200">{title.title}</span>
                 <span className="text-xs uppercase tracking-wide text-zinc-600">{t(`type.${title.type}`)}</span>
-                <span className="flex items-center gap-1 text-sm font-semibold text-amber-500">
-                  <Star size={13} className="fill-amber-500" /> {title.rating}
+                <span className="flex items-center gap-1 text-sm font-semibold" style={{ color: 'var(--c-yellow-text)' }}>
+                  <Star size={13} style={{ fill: 'var(--c-yellow-text)' }} /> {title.rating}
                 </span>
               </button>
             ))}
@@ -219,7 +220,7 @@ export default function Statistics() {
       {favorites.length > 0 && (
         <section>
           <h2 className="section-title">{t('stats.favorites')}</h2>
-          <div className="grid grid-cols-5 gap-5">
+          <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 lg:grid-cols-5">
             {favorites.map((title) => (
               <TitleCard key={title.id} title={title} />
             ))}

@@ -23,9 +23,9 @@ export default function AddTitleModal({ existing, onSaved, onClose }: Props) {
   const { t } = useI18n()
   const [title, setTitle] = useState(existing?.title ?? '')
   const [originalTitle, setOriginalTitle] = useState(existing?.original_title ?? '')
-  const [type, setType] = useState<TitleType>(existing?.type ?? 'anime')
+  const [type, setType] = useState<TitleType>(existing?.type ?? 'movie')
   const [status, setStatus] = useState<TitleStatus>(existing?.status ?? 'planned')
-  const [totalEpisodes, setTotalEpisodes] = useState(existing?.total_episodes ?? 12)
+  const [totalEpisodes, setTotalEpisodes] = useState(existing?.total_episodes ?? 1)
   const [year, setYear] = useState<string>(existing?.year ? String(existing.year) : '')
   const [rating, setRating] = useState<number | null>(existing?.rating ?? null)
   const [genres, setGenres] = useState<string[]>(existing?.genres ?? [])
@@ -181,7 +181,7 @@ export default function AddTitleModal({ existing, onSaved, onClose }: Props) {
                 onKeyDown={(e) => e.key === 'Enter' && fetchMeta()}
               />
               <button
-                className="btn-ghost shrink-0 !px-3 text-accent-bright"
+                className="btn-ghost shrink-0 !px-3"
                 title={t('meta.fetch')}
                 onClick={fetchMeta}
                 disabled={metaLoading}
@@ -198,9 +198,9 @@ export default function AddTitleModal({ existing, onSaved, onClose }: Props) {
                     className="flex w-full items-center gap-3 rounded-lg p-1.5 text-left transition-colors hover:bg-surface"
                   >
                     {c.imageUrl ? (
-                      <img src={c.imageUrl} alt="" className="h-14 w-10 shrink-0 rounded object-cover" loading="lazy" />
+                      <img src={c.imageUrl} alt="" className="h-14 w-10 shrink-0 rounded-lg object-cover" loading="lazy" />
                     ) : (
-                      <span className="h-14 w-10 shrink-0 rounded bg-surface" />
+                      <span className="h-14 w-10 shrink-0 rounded-lg bg-surface" />
                     )}
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm text-zinc-200">{c.title}</span>

@@ -4,6 +4,8 @@ export interface Tab {
   id: string
   label: string
   icon?: LucideIcon
+  /** optional trailing count badge (hidden when 0/undefined) */
+  count?: number
 }
 
 interface Props {
@@ -13,20 +15,21 @@ interface Props {
   className?: string
 }
 
-/** Notion-style view tabs: a soft segmented row, active = accent pill. */
+/** Notion view tabs: light text labels, active = ink underline (not a filled pill). */
 export default function Tabs({ tabs, active, onChange, className = '' }: Props) {
   return (
-    <div className={`flex items-center gap-1 ${className}`}>
-      {tabs.map(({ id, label, icon: Icon }) => (
+    <div className={`flex items-center gap-5 ${className}`}>
+      {tabs.map(({ id, label, icon: Icon, count }) => (
         <button
           key={id}
           onClick={() => onChange(id)}
-          className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px] font-medium transition-colors duration-150 ${
-            active === id ? 'bg-accent/15 text-accent-bright' : 'text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-300'
+          className={`flex items-center gap-1.5 border-b-2 pb-2 pt-1 text-sm font-medium transition-colors duration-150 ${
+            active === id ? 'border-white text-white' : 'border-transparent text-zinc-500 hover:text-zinc-200'
           }`}
         >
           {Icon && <Icon size={14} />}
           {label}
+          {count != null && count > 0 && <span className="text-[12px] font-normal text-zinc-500">{count}</span>}
         </button>
       ))}
     </div>

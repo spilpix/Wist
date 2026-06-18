@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "static-docs",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "4621"],
+      "port": 4621
+    }
+  ]
+}

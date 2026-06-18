@@ -2,34 +2,52 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ---------- theme tokens (Claude brand palette) ---------- */
-/* Dark is the default; accent = Tangerine #E67D22. .force-dark pins dark tokens
-   on a subtree (player, hero cards). Light theme uses Crail #C15F3C accent. */
+/* ---------- theme tokens (authentic Notion palette) ---------- */
+/* Dark is the default; accent = Notion blue #2383E1 (signal only), same hue in both
+   themes. .force-dark pins dark tokens on a subtree (player, hero cards).
+   Surfaces follow Notion's real greys: dark canvas #191919 with a LIGHTER #202020
+   sidebar rail; light warm greys with the iconic warm-black ink #37352F. */
 :root,
 .force-dark {
-  --accent: #e67d22; /* Tangerine */
-  --accent-rgb: 230 125 34;
-  --accent-hover-rgb: 255 164 92; /* #FFA45C */
-  --accent-bright-rgb: 255 164 92; /* foreground accent (active labels/icons) */
-  --accent-subtle: 58 32 16; /* #3A2010 badge / tag bg */
+  --accent: #2383e2; /* Notion blue */
+  --accent-rgb: 35 131 226;
+  --accent-hover-rgb: 76 156 232; /* #4C9CE8 */
+  --accent-bright-rgb: 99 169 236; /* #63A9EC foreground accent (active labels/icons) */
+  --accent-subtle: 28 56 80; /* #1C3850 badge / tag bg */
 
-  --bg: 30 26 23; /* #1E1A17 base */
-  --surface: 37 32 24; /* #252018 sidebar / panels */
-  --card: 44 36 24; /* #2C2418 cards / modals */
-  --raised: 50 42 30; /* subtle elevated fill — chips / ghost buttons */
-  --input-bg: 36 30 24; /* #241E18 inputs */
-  --highlight: 42 34 24; /* #2A2218 row hover / selection */
-  --edge: 58 48 40; /* #3A3028 borders / dividers */
+  --bg: 25 25 25; /* #191919 main canvas (authentic Notion dark) */
+  --surface: 32 32 32; /* #202020 panels */
+  --sidebar: 32 32 32; /* #202020 sidebar rail — LIGHTER than the canvas, like Notion */
+  --card: 37 37 37; /* #252525 cards / modals */
+  --raised: 47 47 47; /* #2F2F2F subtle elevated fill — chips / ghost buttons */
+  --input-bg: 38 38 38; /* #262626 inputs */
+  --highlight: 44 44 44; /* #2C2C2C row hover / active selection (content) */
+  --sidebar-active: 56 56 56; /* #383838 active nav row — sidebar only */
+  --edge: 54 54 54; /* #363636 borders / dividers */
 
-  --ink-0: 255 245 225; /* #FFF5E1 primary text / headings */
-  --ink-100: 255 245 225;
-  --ink-200: 237 227 209;
-  --ink-300: 207 198 181;
-  --ink-400: 177 173 161; /* #B1ADA1 secondary text */
-  --ink-500: 140 132 121;
-  --ink-600: 106 96 88; /* #6A6058 muted / placeholders */
-  --ink-700: 84 76 68;
-  --ink-800: 58 48 40; /* #3A3028 */
+  --ink-0: 211 211 209; /* #D3D3D1 primary text / headings (Notion white @ ~81%) */
+  --ink-100: 211 211 209;
+  --ink-200: 178 178 176; /* #B2B2B0 strong secondary */
+  --ink-300: 159 159 156; /* #9F9F9C */
+  --ink-400: 154 154 151; /* #9A9A97 secondary / muted (Notion dark gray) */
+  --ink-500: 138 138 135; /* #8A8A87 */
+  --ink-600: 120 120 117; /* #787875 placeholders */
+  --ink-700: 100 100 97; /* #646461 */
+  --ink-800: 78 78 76; /* #4E4E4C disabled / tracks */
+
+  /* block colours — a semantic name → {text, bg} pair, hand-tuned per theme
+     (Notion's own values). A block stores the NAME; tints derive from these two
+     theme-correct hexes, never from a transparent-mix that drifts across themes. */
+  --c-default-text: #d3d3d1; --c-default-bg: #373737;
+  --c-gray-text: #9b9b9b;   --c-gray-bg: #2f2f2f;
+  --c-brown-text: #ba856a;  --c-brown-bg: #4a3228;
+  --c-orange-text: #c77d48; --c-orange-bg: #5c3b23;
+  --c-yellow-text: #caa23c; --c-yellow-bg: #564a28;
+  --c-green-text: #529e72;  --c-green-bg: #243d30;
+  --c-blue-text: #5e87c9;   --c-blue-bg: #1e3a5f;
+  --c-purple-text: #9d68d3; --c-purple-bg: #3c2d49;
+  --c-pink-text: #d15796;   --c-pink-bg: #4e2c3c;
+  --c-red-text: #df5452;    --c-red-bg: #522e2e;
 
   /* status palette — reference tokens, mirrored by the JS maps in src/types/models.ts */
   --st-active: #6fb06f;
@@ -45,9 +63,11 @@
   --st-render: #3a8a8a;
   --st-archive: #6a6058;
 
-  --scrollbar: #3a3028;
-  --card-shadow: 0 1px 2px rgb(0 0 0 / 0.34), 0 6px 20px rgb(0 0 0 / 0.28);
-  --card-shadow-hover: 0 10px 28px rgb(0 0 0 / 0.36);
+  --scrollbar: #3a3a3a;
+  /* inline surfaces stay nearly flat; real depth is reserved for floating layers */
+  --card-shadow: 0 1px 2px rgb(0 0 0 / 0.20);
+  --card-shadow-hover: 0 4px 16px rgb(0 0 0 / 0.32);
+  --float-shadow: 0 10px 34px rgb(0 0 0 / 0.46);
   --palette-shadow: 0 24px 80px rgb(0 0 0 / 0.55);
   --c-success: 111 176 111;
   --c-danger: 196 122 122;
@@ -61,35 +81,52 @@
 }
 
 [data-theme='light'] {
-  /* Claude light: warm off-white canvas, Crail accent, espresso ink */
-  --accent: #c15f3c; /* Crail */
-  --accent-rgb: 193 95 60;
-  --accent-hover-rgb: 168 79 48; /* #A84F30 */
-  --accent-bright-rgb: 168 79 48; /* darker for legible accent text on white */
-  --accent-subtle: 255 212 168; /* #FFD4A8 */
+  /* Notion light: white canvas, #F7F7F5 sidebar, blue accent, warm #37352F ink */
+  --accent: #2383e2; /* Notion blue */
+  --accent-rgb: 35 131 226;
+  --accent-hover-rgb: 27 114 203; /* #1B72CB */
+  --accent-bright-rgb: 31 111 191; /* #1F6FBF darker for legible accent text on white */
+  --accent-subtle: 231 243 248; /* #E7F3F8 Notion blue bg */
 
-  --bg: 250 249 245; /* #FAF9F5 */
-  --surface: 244 243 238; /* #F4F3EE */
-  --card: 255 255 255; /* #FFFFFF */
-  --raised: 236 234 226; /* subtle elevated fill */
-  --input-bg: 214 211 201; /* #D6D3C9 */
-  --highlight: 255 245 225; /* #FFF5E1 */
-  --edge: 232 228 220; /* #E8E4DC */
+  --bg: 255 255 255; /* #FFFFFF main canvas */
+  --surface: 247 246 243; /* #F7F6F3 panels (Notion) */
+  --sidebar: 247 247 245; /* #F7F7F5 sidebar rail (authentic Notion warm grey) */
+  --card: 255 255 255; /* #FFFFFF cards / modals */
+  --raised: 236 235 233; /* #ECEBE9 elevated fill / hover */
+  --input-bg: 244 243 241; /* #F4F3F1 inputs (the visible --edge border carries the boundary) */
+  --highlight: 239 238 236; /* #EFEEEC row hover / active selection (content) */
+  --sidebar-active: 232 231 228; /* #E8E7E4 active nav row — sidebar only */
+  --edge: 229 228 225; /* #E5E4E1 universal hairline border / divider (Notion warm border) */
 
-  --ink-0: 60 47 35; /* #3C2F23 primary text */
-  --ink-100: 60 47 35;
-  --ink-200: 74 60 48;
-  --ink-300: 95 83 69;
-  --ink-400: 132 122 109; /* #847A6D secondary */
-  --ink-500: 154 145 132;
-  --ink-600: 177 173 161; /* #B1ADA1 muted */
-  --ink-700: 203 199 189;
-  --ink-800: 232 228 220; /* #E8E4DC */
+  --ink-0: 55 53 47; /* #37352F — the iconic Notion warm near-black */
+  --ink-100: 55 53 47;
+  --ink-200: 73 71 64; /* #494740 strong secondary */
+  --ink-300: 96 94 86; /* #605E56 secondary */
+  --ink-400: 120 119 116; /* #787774 muted (Notion gray) */
+  --ink-500: 120 119 116; /* #787774 muted text */
+  --ink-600: 145 144 140; /* #91908C placeholders */
+  --ink-700: 175 174 170; /* #AFAEAA */
+  --ink-800: 222 221 217; /* #DEDDD9 */
 
-  --scrollbar: #d6d3c9;
-  --card-shadow: 0 1px 2px rgb(60 47 35 / 0.05), 0 2px 10px rgb(60 47 35 / 0.05);
-  --card-shadow-hover: 0 6px 20px rgb(60 47 35 / 0.1);
-  --palette-shadow: 0 24px 80px rgb(60 47 35 / 0.18);
+  /* block colours (light) — Notion text (table 2) + background-highlight (table 3) */
+  --c-default-text: #37352f; --c-default-bg: #ffffff;
+  --c-gray-text: #787774;   --c-gray-bg: #f1f1ef;
+  --c-brown-text: #9f6b53;  --c-brown-bg: #f4eeee;
+  --c-orange-text: #d9730d; --c-orange-bg: #faebdd;
+  --c-yellow-text: #cb912f; --c-yellow-bg: #fbf3db;
+  --c-green-text: #448361;  --c-green-bg: #edf3ec;
+  --c-blue-text: #337ea9;   --c-blue-bg: #e7f3f8;
+  --c-purple-text: #9065b0; --c-purple-bg: #f6f3f9;
+  --c-pink-text: #c14c8a;   --c-pink-bg: #faf1f5;
+  --c-red-text: #d44c47;    --c-red-bg: #fdebec;
+
+  --scrollbar: #cbc9c4;
+  /* soft Notion float — a visible hairline (--edge) defines the card; the shadow
+     adds just enough lift so it reads as raised off the white page. */
+  --card-shadow: 0 1px 2px rgb(15 15 15 / 0.05), 0 1px 1px rgb(15 15 15 / 0.04);
+  --card-shadow-hover: 0 6px 18px rgb(15 15 15 / 0.10);
+  --float-shadow: 0 10px 34px rgb(15 15 15 / 0.13);
+  --palette-shadow: 0 24px 80px rgb(15 15 15 / 0.20);
   --c-success: 21 128 61;
   --c-danger: 185 28 28;
   color-scheme: light;
@@ -97,25 +134,38 @@
 
 /* .force-dark must beat [data-theme='light'] inheritance even when nested deep */
 [data-theme='light'] .force-dark {
-  --bg: 30 26 23;
-  --surface: 37 32 24;
-  --card: 44 36 24;
-  --raised: 50 42 30;
-  --input-bg: 36 30 24;
-  --highlight: 42 34 24;
-  --edge: 58 48 40;
+  --bg: 25 25 25;
+  --surface: 32 32 32;
+  --card: 37 37 37;
+  --raised: 47 47 47;
+  --input-bg: 38 38 38;
+  --highlight: 44 44 44;
+  --sidebar-active: 56 56 56;
+  --edge: 54 54 54;
   --ink-0: 255 255 255;
   --ink-100: 244 244 245;
-  --ink-200: 237 227 209;
-  --ink-300: 207 198 181;
-  --ink-400: 177 173 161;
-  --ink-500: 140 132 121;
-  --ink-600: 106 96 88;
-  --ink-700: 84 76 68;
-  --ink-800: 58 48 40;
-  --scrollbar: #3a3028;
-  --card-shadow: 0 1px 2px rgb(0 0 0 / 0.34), 0 6px 20px rgb(0 0 0 / 0.28);
-  --card-shadow-hover: 0 10px 28px rgb(0 0 0 / 0.36);
+  --ink-200: 212 212 211;
+  --ink-300: 181 181 179;
+  --ink-400: 155 155 153;
+  --ink-500: 130 130 128;
+  --ink-600: 110 110 108;
+  --ink-700: 86 86 84;
+  --ink-800: 55 55 53;
+  --c-default-text: #d3d3d1; --c-default-bg: #373737;
+  --c-gray-text: #9b9b9b;   --c-gray-bg: #2f2f2f;
+  --c-brown-text: #ba856a;  --c-brown-bg: #4a3228;
+  --c-orange-text: #c77d48; --c-orange-bg: #5c3b23;
+  --c-yellow-text: #caa23c; --c-yellow-bg: #564a28;
+  --c-green-text: #529e72;  --c-green-bg: #243d30;
+  --c-blue-text: #5e87c9;   --c-blue-bg: #1e3a5f;
+  --c-purple-text: #9d68d3; --c-purple-bg: #3c2d49;
+  --c-pink-text: #d15796;   --c-pink-bg: #4e2c3c;
+  --c-red-text: #df5452;    --c-red-bg: #522e2e;
+  --scrollbar: #3a3a3a;
+  /* inline surfaces stay nearly flat; real depth is reserved for floating layers */
+  --card-shadow: 0 1px 2px rgb(0 0 0 / 0.20);
+  --card-shadow-hover: 0 4px 16px rgb(0 0 0 / 0.32);
+  --float-shadow: 0 10px 34px rgb(0 0 0 / 0.46);
   --palette-shadow: 0 24px 80px rgb(0 0 0 / 0.55);
   --c-success: 111 176 111;
   --c-danger: 196 122 122;
@@ -135,25 +185,62 @@ body {
   letter-spacing: -0.011em;
   line-height: 1.5;
   overflow: hidden;
+  /* desktop-app feel: the UI chrome is NOT text-selectable, so Ctrl+A / drag-select
+     can't highlight buttons, labels, the sidebar or canvas nodes. Real text fields
+     (and anything marked .selectable) re-enable selection just below. */
+  user-select: none;
+  -webkit-user-select: none;
   transition: background-color 0.25s ease, color 0.25s ease;
 }
 
-* {
-  scrollbar-width: thin;
-  scrollbar-color: var(--scrollbar) transparent;
+/* re-enable selection only where it's genuinely editable / copyable text */
+input,
+textarea,
+[contenteditable='true'],
+[contenteditable=''],
+.selectable,
+.selectable * {
+  user-select: text;
+  -webkit-user-select: text;
 }
+
+/* ── custom overlay scrollbars ──────────────────────────────────────────────
+   Our own thin, rounded, theme-aware scrollbar replacing the Windows one. The
+   thumb is invisible at rest and fades in (soft, adaptive) while the area is
+   hovered OR actively scrolling — then fades back out once the wheel goes idle
+   (`.scrolling` is toggled per-element by src/lib/scrollbars.ts). NB: we must
+   NOT set `scrollbar-width` — Chromium 121+ ignores `::-webkit-scrollbar` when
+   it's present, which would bring the native bar back. */
 *::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 12px;
+  height: 12px;
 }
 *::-webkit-scrollbar-thumb {
-  background: var(--scrollbar);
-  border-radius: 6px;
-  border: 2px solid transparent;
+  background-color: transparent;
+  border-radius: 999px;
+  border: 3.5px solid transparent;
   background-clip: content-box;
+  min-height: 40px;
+  transition: background-color 0.35s var(--ease-soft);
 }
-*::-webkit-scrollbar-track {
+*::-webkit-scrollbar-track,
+*::-webkit-scrollbar-corner {
   background: transparent;
+}
+/* reveal softly while the cursor is over the scroll area … */
+*:hover::-webkit-scrollbar-thumb {
+  background-color: color-mix(in srgb, var(--scrollbar) 70%, transparent);
+}
+/* … fully while it is actively being scrolled (wheel / drag / keys) … */
+.scrolling::-webkit-scrollbar-thumb {
+  background-color: var(--scrollbar);
+}
+/* … and a touch stronger when you grab the thumb itself */
+*::-webkit-scrollbar-thumb:hover {
+  background-color: var(--scrollbar);
+}
+*::-webkit-scrollbar-thumb:active {
+  background-color: color-mix(in srgb, var(--scrollbar) 86%, #fff 14%);
 }
 
 input[type='range'] {
@@ -352,9 +439,76 @@ video::-webkit-media-controls {
   }
 }
 
+/* now-playing equalizer bars (music) */
+@keyframes eqBar {
+  0%, 100% { transform: scaleY(0.28); }
+  50% { transform: scaleY(1); }
+}
+.eq-bar {
+  transform-origin: bottom;
+  animation: eqBar 0.9s ease-in-out infinite;
+}
+
+/* ---------- disciplined scales (design system v1) ----------
+   radius roles: control = sm, container = md, floating = lg, pill = full.
+   Tailwind defaults already line up: rounded-md 6 = xs, rounded-lg 8 = sm,
+   rounded-xl 12 = md, rounded-2xl 16 = lg, rounded-full = full. */
+:root {
+  --r-xs: 6px;     /* kbd, inline tag */
+  --r-sm: 8px;     /* buttons, inputs, selects, icon-buttons, menu/list/nav rows */
+  --r-md: 12px;    /* cards, tiles, panels, icon tiles */
+  --r-lg: 16px;    /* modals, popovers, command palette */
+  --r-full: 999px; /* chips, badges, avatars, toggles */
+
+  /* motion — gentle decelerate enter, snappy press, one spring for delight */
+  --ease-soft: cubic-bezier(0.2, 0, 0, 1);
+  --ease-press: ease-out;
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --dur-press: 100ms;
+  --dur-hover: 150ms;
+  --dur-fade: 180ms;
+  --dur-enter: 220ms;
+  --dur-morph: 280ms;
+}
+
 @layer components {
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-all duration-150 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40 disabled:active:scale-100;
+    @apply inline-flex items-center justify-center gap-1.5 rounded-lg px-3.5 py-2 text-[13px] font-medium active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40 disabled:active:scale-100;
+    /* press feedback stays snappy; colour/shadow ease softly (Notion feel) */
+    transition: transform 0.1s ease-out, background-color 0.2s ease-out, box-shadow 0.2s ease-out, color 0.2s ease-out, border-color 0.2s ease-out;
+  }
+  /* sidebar tab pill: the label width animates open/closed instead of snapping */
+  .tab-morph {
+    display: grid;
+    grid-template-columns: 0fr;
+    margin-left: 0;
+    opacity: 0;
+    transition: grid-template-columns 0.28s var(--ease-soft), margin-left 0.28s var(--ease-soft), opacity 0.2s ease;
+  }
+  .tab-morph > span {
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+  .tab-morph.is-open {
+    grid-template-columns: 1fr;
+    margin-left: 0.5rem;
+    opacity: 1;
+  }
+  /* sidebar group body: height eases open/closed instead of popping in/out */
+  .collapse-morph {
+    display: grid;
+    grid-template-rows: 0fr;
+    opacity: 0;
+    transition: grid-template-rows 0.24s var(--ease-soft), opacity 0.18s ease;
+  }
+  .collapse-morph > div {
+    min-height: 0;
+    overflow: hidden;
+  }
+  .collapse-morph.is-open {
+    grid-template-rows: 1fr;
+    opacity: 1;
   }
   .btn-accent {
     @apply btn bg-accent hover:bg-accent-hover;
@@ -363,23 +517,74 @@ video::-webkit-media-controls {
     box-shadow: 0 1px 2px rgb(0 0 0 / 0.18);
   }
   .btn-ghost {
-    @apply btn bg-raised text-zinc-300 hover:bg-edge hover:text-white;
+    @apply btn bg-raised text-zinc-200 hover:bg-highlight hover:text-white;
+  }
+  .btn-subtle {
+    @apply btn bg-transparent text-zinc-400 hover:bg-highlight hover:text-zinc-100;
+  }
+  .btn-outline {
+    @apply btn border-edge bg-transparent text-zinc-200 hover:bg-highlight hover:border-zinc-700;
   }
   .btn-danger {
-    @apply btn bg-red-500/15 text-red-400 hover:bg-red-500/25;
+    @apply btn;
+    color: var(--c-red-text);
+    background: color-mix(in srgb, var(--c-red-text) 15%, transparent);
+  }
+  .btn-danger:hover {
+    background: color-mix(in srgb, var(--c-red-text) 25%, transparent);
   }
   .input {
     @apply w-full rounded-lg border border-edge bg-field px-3 py-2 text-sm text-zinc-200 outline-none transition-all placeholder:text-zinc-500 focus:border-accent;
   }
-  .input:focus,
-  .select:focus {
-    box-shadow: 0 0 0 3px rgb(var(--accent-rgb) / 0.2);
-  }
+  /* Focused fields show ONLY a calm accent border (from `focus:border-accent` on the
+     base classes) — no glow ring and no outline (removed below), so typing never sits
+     inside a harsh blue rectangle. Matches the borderless note editor's quiet feel.
+     The red/green validation rings below are kept — they're meaningful feedback. */
   .select {
     @apply rounded-lg border border-edge bg-field px-2.5 py-2 text-sm text-zinc-300 outline-none transition-all focus:border-accent;
   }
+  /* ---------- field validation states (design-system §Формы и поля) ----------
+     red rim + message on error, green rim on success. Alpha via color-mix
+     because --c-*-text are hex, not bare channels. */
+  .input.invalid {
+    border-color: var(--c-red-text);
+  }
+  .input.invalid:focus {
+    border-color: var(--c-red-text);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--c-red-text) 22%, transparent);
+  }
+  .input.valid {
+    border-color: var(--c-green-text);
+  }
+  .input.valid:focus {
+    border-color: var(--c-green-text);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--c-green-text) 22%, transparent);
+  }
+  /* field = label + control + (hint | error). The semantic wrapper for a form row. */
+  .field {
+    @apply flex flex-col gap-1.5;
+  }
+  .field > label {
+    @apply flex items-center gap-1.5 text-[12.5px] font-medium;
+    color: rgb(var(--ink-200));
+  }
+  .field .req {
+    color: var(--c-red-text);
+  }
+  .field .hint {
+    @apply text-[12px];
+    color: rgb(var(--ink-500));
+  }
+  .field .err {
+    @apply flex items-center gap-1.5 text-[12px];
+    color: var(--c-red-text);
+  }
+  .field .ok {
+    @apply flex items-center gap-1.5 text-[12px];
+    color: var(--c-green-text);
+  }
   .card {
-    @apply rounded-xl border border-edge/60 bg-card transition-all duration-200;
+    @apply rounded-xl border border-edge bg-card transition-all duration-200;
     box-shadow: var(--card-shadow);
   }
   /* an interactive card — lifts and deepens its shadow on hover */
@@ -392,6 +597,82 @@ video::-webkit-media-controls {
   .page {
     @apply h-full overflow-y-auto px-12 py-10 animate-fade-in;
   }
+
+  /* ── drag & drop (design-system states) ────────────────────────────
+     Two systems share these visuals:
+       • native HTML5 drag (cross-section / OS drag-out) → .drag-ghost as a
+         frozen setDragImage, .drag-dim on the source. (lib/mediaDrag.ts)
+       • pointer drag (in-app reorder) → a LIVE .drag-ghost clone follows the
+         cursor, .drag-taken dims the source, .insert-line marks the slot, the
+         landed row plays .drop-settle. (lib/useSortable.ts)
+     Tilt + shadow mirror design-system.html (.dragghost / .draglift). */
+  .drag-ghost {
+    opacity: 0.94;
+    transform: rotate(2.5deg) scale(1.03);
+    box-shadow: var(--float-shadow) !important;
+    border-color: color-mix(in srgb, var(--accent) 35%, rgb(var(--edge))) !important;
+    cursor: grabbing;
+  }
+  .drag-dim {
+    opacity: 0.4 !important;
+  }
+  .drag-taken {
+    opacity: 0.35 !important;
+  }
+  /* the grip you grab to reorder — drag starts here so the row's click survives */
+  .drag-handle {
+    @apply grid place-items-center rounded text-zinc-600 transition-colors;
+    cursor: grab;
+  }
+  .drag-handle:hover {
+    @apply bg-highlight text-zinc-300;
+  }
+  .drag-handle:active {
+    cursor: grabbing;
+  }
+  /* accent line that shows exactly where the row will land */
+  .insert-line {
+    height: 2px;
+    margin: 2px 4px;
+    border-radius: 2px;
+    background: var(--accent);
+    position: relative;
+    animation: insertPop 0.14s var(--ease-soft);
+  }
+  .insert-line::before {
+    content: '';
+    position: absolute;
+    left: -3px;
+    top: -2px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+  }
+  @keyframes insertPop {
+    from {
+      opacity: 0;
+      transform: scaleX(0.6);
+    }
+    to {
+      opacity: 1;
+      transform: scaleX(1);
+    }
+  }
+  /* the row settles in after a drop */
+  .drop-settle {
+    animation: dropSettle 0.34s var(--ease-soft);
+  }
+  @keyframes dropSettle {
+    from {
+      transform: scale(0.94);
+      opacity: 0.5;
+    }
+    to {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
   .page-title {
     @apply mb-7 text-[1.7rem] font-bold tracking-tight text-white;
   }
@@ -401,20 +682,147 @@ video::-webkit-media-controls {
   .kbd {
     @apply inline-flex items-center justify-center rounded border border-edge bg-raised px-1.5 py-px text-[10px] font-semibold text-zinc-500;
   }
+
+  /* ---------- customizable board blocks ----------
+     a column sets --ct (text hue) and --cb (bg hue) from its semantic colour;
+     children inherit. EVERY tint mixes those two HAND-TUNED, theme-correct
+     values — never a transparent-mix that would drift between light/dark. */
+  .block-col {
+    background: color-mix(in srgb, var(--cb) 42%, rgb(var(--bg)));
+  }
+  /* Notion header chip: fill a notch deeper than the column, label in the hue */
+  .block-pill {
+    color: var(--ct);
+    background: color-mix(in srgb, var(--ct) 14%, var(--cb));
+  }
+  .block-pill:hover {
+    background: color-mix(in srgb, var(--ct) 22%, var(--cb));
+  }
+  /* Notion-soft card: solid fill + a hairline border + a whisper shadow (the shadow
+     token is now very faint, so this stays calm/flat while still lifting off a
+     near-white column in light theme). Hover tints gently toward the column hue. */
+  .block-card {
+    background: rgb(var(--card));
+    border: 1px solid rgb(var(--edge));
+    box-shadow: var(--card-shadow);
+    transition: background 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+  }
+  .block-card:hover {
+    background: color-mix(in srgb, var(--cb) 26%, rgb(var(--card)));
+    border-color: color-mix(in srgb, var(--ct) 32%, rgb(var(--edge)));
+    box-shadow: var(--card-shadow-hover);
+  }
+  /* "+ New …" capture: no fill, hairline border, label + icon in the hue */
+  .block-add {
+    color: var(--ct);
+    background: transparent;
+    border: 1px solid rgb(var(--edge));
+  }
+  .block-add:hover {
+    background: color-mix(in srgb, var(--cb) 55%, transparent);
+    border-color: color-mix(in srgb, var(--ct) 22%, rgb(var(--edge)));
+  }
+  /* inline capture input — focus ring borrows the column hue */
+  .block-input:focus {
+    border-color: var(--ct);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--ct) 18%, transparent);
+  }
+  /* task checkbox — visible empty border, fills with the hue on hover */
+  .block-check {
+    border: 1.5px solid color-mix(in srgb, var(--ct) 45%, rgb(var(--edge)));
+    color: transparent;
+  }
+  .block-check:hover {
+    border-color: var(--ct);
+    color: var(--ct);
+    background: color-mix(in srgb, var(--ct) 12%, transparent);
+  }
+}
+
+/* ---------- skeleton loaders (design-system §Скелетоны) ----------
+   show the SHAPE of the content while it loads — a calm shimmer, not a spinning
+   ring. Geometry mirrors the future card. Spinner stays for in-button actions. */
+.skel {
+  background: rgb(var(--raised));
+  border-radius: var(--r-xs);
+  position: relative;
+  overflow: hidden;
+}
+.skel::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgb(var(--ink-0) / 0.07), transparent);
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+.skel.line {
+  height: 11px;
+}
+.skel.circle {
+  border-radius: 50%;
+}
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+/* split pane slides in from the right (Opera/Chrome split-view feel) */
+@keyframes splitIn {
+  from {
+    opacity: 0;
+    transform: translateX(22px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* live-presence dot — a soft breathing ring while a teammate is online (workspace) */
+@keyframes presencePulse {
+  0% {
+    box-shadow: 0 0 0 0 rgb(34 197 94 / 0.45);
+  }
+  70% {
+    box-shadow: 0 0 0 5px rgb(34 197 94 / 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgb(34 197 94 / 0);
+  }
+}
+.presence-online {
+  animation: presencePulse 2.6s var(--ease-soft) infinite;
 }
 
 /* premium base: accent text selection + accessible keyboard focus ring */
 ::selection {
   background: rgb(var(--accent-rgb) / 0.3);
 }
+/* keyboard focus ring for interactive controls only. Text fields (input/select/
+   textarea) are intentionally excluded — they indicate focus with a calm accent
+   border instead of a harsh blue outline that boxes the text while you type. */
 a:focus-visible,
 button:focus-visible,
-input:focus-visible,
-select:focus-visible,
-textarea:focus-visible,
 [tabindex]:focus-visible {
   /* no forced border-radius — the outline follows each element's own rounding,
      so it never looks offset/crooked against the element it wraps */
   outline: 2px solid rgb(var(--accent-rgb) / 0.5);
   outline-offset: 1px;
+}
+
+/* respect the OS "reduce motion" setting — collapse all the soft transitions */
+@media (prefers-reduced-motion: reduce) {
+  .tab-morph,
+  .collapse-morph {
+    transition: none;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
 }

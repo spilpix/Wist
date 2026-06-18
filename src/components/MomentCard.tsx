@@ -28,12 +28,12 @@ export default function MomentCard({ moment, onClick }: Props) {
             <ImageIcon size={28} />
           </div>
         )}
-        <span className="absolute bottom-2 right-2 rounded bg-black/75 px-1.5 py-0.5 font-mono text-[11px] text-[#e4e4e7]">
+        <span className="absolute bottom-2 right-2 rounded bg-black/75 px-1.5 py-0.5 font-mono text-[11px] text-white">
           {formatTimestamp(moment.timestamp_seconds)}
         </span>
         {moment.tag && (
           <span
-            className="absolute left-2 top-2 rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-black/80"
+            className="absolute left-2 top-2 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-black/80"
             style={{ backgroundColor: MOMENT_TAG_COLORS[moment.tag] }}
           >
             {t(`tag.${moment.tag}`)}

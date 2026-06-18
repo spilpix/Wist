@@ -5,8 +5,8 @@ import {
   BarChart3,
   Bookmark,
   BookOpen,
-  CalendarDays,
   Clock,
+  FileText,
   FolderKanban,
   FolderOpen,
   Heart,
@@ -27,12 +27,13 @@ import {
 } from 'lucide-react'
 import { useUiStore } from '../store/uiStore'
 import { useSettingsStore, resolvedTheme } from '../store/settingsStore'
-import type { Note, Title } from '../types/models'
+import type { Note, Project, Task, Title } from '../types/models'
+import { physKey } from '../lib/keyboard'
 import { useI18n, type TKey } from '../i18n'
 
 interface Item {
   id: string
-  group: 'pages' | 'actions' | 'titles' | 'notes'
+  group: 'pages' | 'actions' | 'titles' | 'notes' | 'tasks' | 'projects'
   label: string
   sublabel?: string
   icon: typeof Home
@@ -56,15 +57,16 @@ const PAGES: Array<{ to: string; key: TKey; icon: typeof Home }> = [
   { to: '/', key: 'nav.home', icon: Home },
   { to: '/library', key: 'nav.library', icon: Library },
   { to: '/library?type=book', key: 'nav.books', icon: BookOpen },
+  { to: '/library?cat=documents', key: 'lib.cat.documents', icon: FileText },
   { to: '/continue', key: 'nav.continue', icon: Clock },
   { to: '/favorites', key: 'nav.favorites', icon: Heart },
   { to: '/projects', key: 'nav.projects', icon: FolderKanban },
   { to: '/moments', key: 'nav.moments', icon: Bookmark },
   { to: '/notes', key: 'nav.notes', icon: PenLine },
-  { to: '/journal', key: 'nav.journal', icon: CalendarDays },
   { to: '/tasks', key: 'nav.tasks', icon: ListTodo },
   { to: '/vault', key: 'nav.vault', icon: Archive },
   { to: '/music', key: 'nav.music', icon: Music },
+  { to: '/video', key: 'nav.video', icon: Tv },
   { to: '/tree', key: 'nav.tree', icon: TreePine },
   { to: '/local', key: 'nav.localFiles', icon: FolderOpen },
   { to: '/youtube', key: 'nav.youtube', icon: Youtube },
@@ -84,12 +86,14 @@ export default function CommandPalette() {
   const [active, setActive] = useState(0)
   const [titles, setTitles] = useState<Title[]>([])
   const [notes, setNotes] = useState<Note[]>([])
+  const [tasks, setTasks] = useState<Task[]>([])
+  const [projects, setProjects] = useState<Project[]>([])
   const listRef = useRef<HTMLDivElement>(null)
 
   // global hotkey
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+      if ((e.ctrlKey || e.metaKey) && physKey(e) === 'k') {
         e.preventDefault()
         setPalette(!useUiStore.getState().paletteOpen)
       }
@@ -105,6 +109,8 @@ export default function CommandPalette() {
     setActive(0)
     window.wist.titles.list({}).then(setTitles)
     window.wist.notes.list({}).then(setNotes)
+    window.wist.tasks.list().then(setTasks).catch(() => undefined)
+    window.wist.projects.list().then(setProjects).catch(() => undefined)
   }, [open])
 
   const close = useCallback(() => setPalette(false), [setPalette])
@@ -159,13 +165,6 @@ export default function CommandPalette() {
         run: () => go('/tasks?focus=1'),
       },
       {
-        id: 'a-journal',
-        group: 'actions',
-        label: t('cmdk.journalToday'),
-        icon: CalendarDays,
-        run: () => go('/journal'),
-      },
-      {
         id: 'a-theme',
         group: 'actions',
         label: t('cmdk.toggleTheme'),
@@ -208,9 +207,42 @@ export default function CommandPalette() {
           run: () => go(`/notes?open=${n.id}`),
         })
       }
+
+      const scoredTasks = tasks
+        .filter((tk) => !tk.done)
+        .map((tk) => ({ tk, s: score(tk.title, q) }))
+        .filter((x) => x.s > 0)
+        .sort((a, b) => b.s - a.s)
+        .slice(0, 5)
+      for (const { tk } of scoredTasks) {
+        out.push({
+          id: `tk${tk.id}`,
+          group: 'tasks',
+          label: tk.title,
+          sublabel: tk.status,
+          icon: ListTodo,
+          run: () => go(`/tasks?open=${tk.id}`),
+        })
+      }
+
+      const scoredProjects = projects
+        .map((p) => ({ p, s: score(p.name, q) }))
+        .filter((x) => x.s > 0)
+        .sort((a, b) => b.s - a.s)
+        .slice(0, 4)
+      for (const { p } of scoredProjects) {
+        out.push({
+          id: `pr${p.id}`,
+          group: 'projects',
+          label: p.name,
+          sublabel: p.kind || undefined,
+          icon: FolderKanban,
+          run: () => go(`/project/${p.id}`),
+        })
+      }
     }
     return out
-  }, [query, titles, notes, t, go, close, updateSettings])
+  }, [query, titles, notes, tasks, projects, t, go, close, updateSettings])
 
   useEffect(() => setActive(0), [query])
 
@@ -228,6 +260,8 @@ export default function CommandPalette() {
     actions: t('cmdk.actions'),
     titles: t('cmdk.titles'),
     notes: t('cmdk.notes'),
+    tasks: t('nav.tasks'),
+    projects: t('nav.projects'),
   }
 
   let lastGroup: Item['group'] | null = null
@@ -235,11 +269,11 @@ export default function CommandPalette() {
   return (
     <div className="fixed inset-0 z-50 bg-black/45 backdrop-blur-[2px] animate-fade-in" onMouseDown={close}>
       <div
-        className="mx-auto mt-[12vh] w-[600px] max-w-[92vw] overflow-hidden rounded-2xl border border-edge bg-surface animate-scale-in"
+        className="mx-auto mt-[12vh] w-[600px] max-w-[92vw] overflow-hidden rounded-2xl border border-edge bg-card animate-scale-in"
         style={{ boxShadow: 'var(--palette-shadow)' }}
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center gap-3 border-b border-edge/60 px-4">
+        <div className="flex items-center gap-3 border-b border-edge px-4">
           <Search size={16} className="shrink-0 text-zinc-600" />
           <input
             autoFocus
@@ -282,10 +316,10 @@ export default function CommandPalette() {
                   onMouseMove={() => setActive(i)}
                   onClick={item.run}
                   className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm transition-colors ${
-                    i === active ? 'bg-accent/15 text-zinc-100' : 'text-zinc-400'
+                    i === active ? 'bg-highlight text-zinc-100' : 'text-zinc-400'
                   }`}
                 >
-                  <Icon size={15} className={i === active ? 'text-accent-bright' : 'text-zinc-600'} />
+                  <Icon size={15} className={i === active ? 'text-zinc-100' : 'text-zinc-600'} />
                   <span className="min-w-0 flex-1 truncate">{item.label}</span>
                   {item.sublabel && <span className="text-[11px] uppercase tracking-wide text-zinc-600">{item.sublabel}</span>}
                 </button>
@@ -294,7 +328,7 @@ export default function CommandPalette() {
           })}
         </div>
 
-        <div className="flex items-center gap-4 border-t border-edge/60 px-4 py-2.5 text-[11px] text-zinc-600">
+        <div className="flex items-center gap-4 border-t border-edge px-4 py-2.5 text-[11px] text-zinc-600">
           <span className="flex items-center gap-1.5"><span className="kbd">↑</span><span className="kbd">↓</span> {t('cmdk.navigate')}</span>
           <span className="flex items-center gap-1.5"><span className="kbd">Enter</span> {t('cmdk.open')}</span>
           <span className="flex items-center gap-1.5"><span className="kbd">Esc</span> {t('cmdk.close')}</span>

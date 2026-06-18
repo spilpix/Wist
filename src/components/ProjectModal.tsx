@@ -1,7 +1,8 @@
 import { useRef, useState } from 'react'
-import { ImagePlus, Plus, X } from 'lucide-react'
+import { CircleAlert, ImagePlus, Plus, X } from 'lucide-react'
 import Modal from './ui/Modal'
 import ChipsInput from './ui/ChipsInput'
+import DatePicker from './ui/DatePicker'
 import ProjectCover from './ProjectCover'
 import { toast } from '../store/toastStore'
 import { useI18n } from '../i18n'
@@ -36,6 +37,7 @@ export default function ProjectModal({
   const [cover, setCover] = useState<string | null>(project?.cover_path ?? null)
   const [description, setDescription] = useState(project?.description ?? '')
   const [saving, setSaving] = useState(false)
+  const [nameErr, setNameErr] = useState(false)
   const nameRef = useRef<HTMLInputElement>(null)
 
   const pickCover = async () => {
@@ -47,7 +49,8 @@ export default function ProjectModal({
   const save = async () => {
     if (saving) return
     if (!name.trim()) {
-      // never look broken — focus the required field instead of being silently disabled
+      // never look broken — flag the required field (red rim + message) and focus it
+      setNameErr(true)
       nameRef.current?.focus()
       return
     }
@@ -81,12 +84,12 @@ export default function ProjectModal({
         <div>
           <label className="mb-1.5 block text-xs font-medium text-zinc-400">{t('project.cover')}</label>
           {cover && (
-            <ProjectCover cover={cover} className="mb-2 h-24 w-full rounded-lg border border-edge">
+            <ProjectCover cover={cover} className="mb-2 h-24 w-full rounded-xl border border-edge">
               <button
                 type="button"
                 onClick={() => setCover(null)}
                 title={t('common.delete')}
-                className="absolute right-2 top-2 rounded-md bg-black/60 p-1.5 text-zinc-100 backdrop-blur-sm transition-colors hover:text-red-400"
+                className="absolute right-2 top-2 rounded-lg bg-black/60 p-1.5 text-zinc-100 backdrop-blur-sm transition-colors hover:text-danger"
               >
                 <X size={13} />
               </button>
@@ -97,7 +100,7 @@ export default function ProjectModal({
               type="button"
               onClick={pickCover}
               title={t('project.addCover')}
-              className="flex h-7 w-9 items-center justify-center rounded-md border border-dashed border-edge text-zinc-500 transition-colors hover:border-accent hover:text-zinc-300"
+              className="flex h-7 w-9 items-center justify-center rounded-lg border border-dashed border-edge text-zinc-500 transition-colors hover:border-accent hover:text-zinc-300"
             >
               <ImagePlus size={14} />
             </button>
@@ -109,7 +112,7 @@ export default function ProjectModal({
                   type="button"
                   onClick={() => setCover(val)}
                   title={t('project.coverTemplate')}
-                  className={`h-7 w-9 rounded-md border transition-transform hover:scale-105 ${cover === val ? 'border-accent ring-1 ring-accent' : 'border-edge'}`}
+                  className={`h-7 w-9 rounded-lg border transition-transform hover:scale-105 ${cover === val ? 'border-accent ring-1 ring-accent' : 'border-edge'}`}
                   style={{ backgroundImage: tpl.css }}
                 />
               )
@@ -117,17 +120,27 @@ export default function ProjectModal({
           </div>
         </div>
 
-        <div>
-          <label className="mb-1 block text-xs font-medium text-zinc-400">{t('project.name')}</label>
+        <div className="field">
+          <label>
+            {t('project.name')} <span className="req">*</span>
+          </label>
           <input
             ref={nameRef}
             autoFocus
-            className="input"
+            className={`input ${nameErr ? 'invalid' : ''}`}
             placeholder={t('project.namePh')}
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) => {
+              setName(e.target.value)
+              if (nameErr && e.target.value.trim()) setNameErr(false)
+            }}
             onKeyDown={(e) => e.key === 'Enter' && save()}
           />
+          {nameErr && (
+            <span className="err">
+              <CircleAlert size={13} /> {t('project.nameRequired')}
+            </span>
+          )}
         </div>
 
         <div className="grid grid-cols-2 gap-3">
@@ -161,14 +174,14 @@ export default function ProjectModal({
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="mb-1 block text-xs font-medium text-zinc-400">{t('project.deadline')}</label>
-            <input type="date" className="input" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
+            <DatePicker value={deadline} onChange={setDeadline} placeholder={t('hub.noDeadline')} />
           </div>
           {!showClient && (
             <div className="flex items-end">
               <button
                 type="button"
                 onClick={() => setShowClient(true)}
-                className="flex items-center gap-1.5 py-2 text-sm text-zinc-500 transition-colors hover:text-accent-bright"
+                className="flex items-center gap-1.5 py-2 text-sm text-zinc-500 transition-colors hover:text-zinc-200"
               >
                 <Plus size={14} /> {t('project.addClient')}
               </button>
@@ -206,7 +219,7 @@ export default function ProjectModal({
                   key={s}
                   type="button"
                   onClick={() => setTools([s])}
-                  className="rounded-md bg-raised px-2 py-0.5 text-[11px] text-zinc-500 transition-colors hover:text-zinc-200"
+                  className="rounded bg-raised px-2 py-0.5 text-[11px] text-zinc-500 transition-colors hover:text-zinc-200"
                 >
                   + {s}
                 </button>

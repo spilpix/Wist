@@ -81,7 +81,7 @@ export default function Heatmap({ data }: { data: HeatmapDay[] }) {
                   <span
                     key={day.key}
                     title={`${day.key} — ${day.seconds > 0 ? formatDurationHuman(day.seconds) : t('heat.noActivity')}`}
-                    className={`h-[10px] w-[10px] rounded-[2px] ${LEVEL_CLASSES[levelFor(day.seconds)]}`}
+                    className={`h-[10px] w-[10px] rounded-sm ${LEVEL_CLASSES[levelFor(day.seconds)]}`}
                   />
                 )
               )}
@@ -91,7 +91,7 @@ export default function Heatmap({ data }: { data: HeatmapDay[] }) {
         <div className="mt-2 flex items-center justify-end gap-1 text-[10px] text-zinc-600">
           {t('heat.less')}
           {LEVEL_CLASSES.map((c) => (
-            <span key={c} className={`h-[10px] w-[10px] rounded-[2px] ${c}`} />
+            <span key={c} className={`h-[10px] w-[10px] rounded-sm ${c}`} />
           ))}
           {t('heat.more')}
         </div>

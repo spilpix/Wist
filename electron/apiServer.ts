@@ -3,12 +3,11 @@ import { app } from 'electron'
 import { getSettings } from './settings'
 import * as tasks from './db/tasks'
 import * as notes from './db/notes'
-import * as journal from './db/journal'
 import { now } from './db/database'
 
 /**
  * Local HTTP API so external tools and AI agents can write into Bard:
- * tasks they completed, reports as notes, journal updates. 127.0.0.1 only,
+ * tasks they completed and reports as notes. 127.0.0.1 only,
  * Bearer-token auth, JSON in/out.
  */
 
@@ -45,12 +44,6 @@ function readBody(req: http.IncomingMessage): Promise<any> {
     })
     req.on('error', reject)
   })
-}
-
-function today(): string {
-  const d = new Date()
-  const p = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
 }
 
 async function handle(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
@@ -148,25 +141,10 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse): Prom
       return
     }
 
-    if (route === 'POST /api/journal') {
-      const body = await readBody(req)
-      if (!body.content || typeof body.content !== 'string') {
-        json(res, 400, { error: 'content (string) is required' })
-        return
-      }
-      const day = typeof body.day === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.day) ? body.day : today()
-      const mood = typeof body.mood === 'number' && body.mood >= 1 && body.mood <= 5 ? body.mood : undefined
-      const entry = journal.appendToEntry(day, body.content, mood)
-      notifyRenderer('journal')
-      json(res, 200, { entry })
-      return
-    }
-
     if (route === 'GET /api/summary') {
       const open = tasks.listTasks({ done: false }).length
       json(res, 200, {
         openTasks: open,
-        journalStreak: journal.streak(),
         notes: notes.listNotes({}).length,
       })
       return
@@ -181,7 +159,6 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse): Prom
         'PATCH /api/tasks/:id {done?, title?, note?, priority?, due_date?}',
         'DELETE /api/tasks/:id',
         'POST /api/notes {content, title?, tags?, source?}',
-        'POST /api/journal {content, day?, mood?}',
         'GET /api/summary',
       ],
     })

@@ -17,11 +17,11 @@ export default function ChipsInput({ value, onChange, placeholder }: Props) {
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-edge bg-raised px-2 py-1.5 focus-within:border-accent">
+    <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-edge bg-field px-2 py-1.5 focus-within:border-accent">
       {value.map((chip) => (
-        <span key={chip} className="flex items-center gap-1 rounded-md bg-accent/20 px-2 py-0.5 text-xs text-accent-bright">
+        <span key={chip} className="flex items-center gap-1 rounded-full bg-highlight px-2 py-0.5 text-xs font-medium text-zinc-300">
           {chip}
-          <button onClick={() => onChange(value.filter((c) => c !== chip))} className="hover:text-white">
+          <button onClick={() => onChange(value.filter((c) => c !== chip))} className="text-zinc-500 hover:text-white">
             <X size={11} />
           </button>
         </span>

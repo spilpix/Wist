@@ -10,7 +10,7 @@ const CSP = [
   "img-src 'self' media: data: blob:",
   "media-src 'self' media: blob:",
   "font-src 'self' data:",
-  "connect-src 'self' media: blob:",
+  "connect-src 'self' media: blob: https://rqmfihedebhwvcrcjkkr.supabase.co wss://rqmfihedebhwvcrcjkkr.supabase.co https://*.supabase.co wss://*.supabase.co",
 ].join('; ')
 
 function injectCsp(): Plugin {
@@ -34,6 +34,9 @@ export default defineConfig({
       main: {
         entry: 'electron/main.ts',
         vite: {
+          // Baked into the main bundle: the "Testing Bard" build (BARD_TESTING=1)
+          // uses an isolated userData folder and seeds demo content on first run.
+          define: { __BARD_TESTING__: JSON.stringify(process.env.BARD_TESTING === '1') },
           build: {
             outDir: 'dist-electron',
             rollupOptions: {
