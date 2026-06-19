@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
-import { Bell, Film, FolderKanban, Trash2, X } from 'lucide-react'
+import { Bell, FolderKanban, Trash2, X } from 'lucide-react'
 import Modal from './ui/Modal'
 import DatePicker from './ui/DatePicker'
 import TimeSelect from './ui/TimeSelect'
@@ -37,17 +37,13 @@ export default function TaskDetailModal({
   const [remindDate, setRemindDate] = useState(task.remind_at ? task.remind_at.slice(0, 10) : '')
   const [remindTime, setRemindTime] = useState(task.remind_at ? task.remind_at.slice(11, 16) : '')
   const [projectId, setProjectId] = useState(task.project_id)
-  const [titleId, setTitleId] = useState(task.linked_title_id)
   const [projects, setProjects] = useState<LinkOption[]>([])
-  const [titles, setTitles] = useState<LinkOption[]>([])
 
   useEffect(() => {
     window.wist.projects.list().then((ps) => setProjects(ps.map((p) => ({ id: p.id, name: p.name })))).catch(() => undefined)
-    window.wist.titles.list().then((ts) => setTitles(ts.map((x) => ({ id: x.id, name: x.title })))).catch(() => undefined)
   }, [])
 
   const projectName = projects.find((p) => p.id === projectId)?.name ?? (projectId === task.project_id ? task.project_name ?? null : null)
-  const titleName = titles.find((x) => x.id === titleId)?.name ?? (titleId === task.linked_title_id ? task.linked_title_name ?? null : null)
 
   // compare edits against the LAST SAVED value, not the (stale-after-patch) prop —
   // otherwise editing then reverting within one open is silently dropped
@@ -267,27 +263,6 @@ export default function TaskDetailModal({
               }}
               searchPh={t('tasks.searchProject')}
             />
-            <LinkField
-              icon={Film}
-              placeholder={t('tasks.linkLibraryAdd')}
-              currentName={titleName}
-              options={titles}
-              onSelect={(id) => {
-                setTitleId(id)
-                patch({ linked_title_id: id })
-              }}
-              onClear={() => {
-                setTitleId(null)
-                patch({ linked_title_id: null })
-              }}
-              onOpen={() => {
-                if (titleId) {
-                  navigate(`/title/${titleId}`)
-                  onClose()
-                }
-              }}
-              searchPh={t('tasks.searchLibrary')}
-            />
           </div>
         </div>
 
@@ -318,7 +293,7 @@ export function LinkField({
   onOpen,
   searchPh,
 }: {
-  icon: typeof Film
+  icon: typeof FolderKanban
   placeholder: string
   currentName: string | null
   options: LinkOption[]

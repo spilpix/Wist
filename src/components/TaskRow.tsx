@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Check, Bot, CalendarClock, Film, FolderKanban, Trash2 } from 'lucide-react'
+import { Check, Bot, CalendarClock, FolderKanban, Trash2 } from 'lucide-react'
 import DatePicker from './ui/DatePicker'
 import { type Task } from '../types/models'
 import { formatRelative } from '../utils/formatters'
@@ -140,18 +140,6 @@ export default function TaskRow({
           <span className={`flex items-center gap-1 text-[11px] font-medium ${due.color}`}>
             <CalendarClock size={11} /> {due.label}
           </span>
-        )}
-        {task.linked_title_name && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              onOpenLink?.(task)
-            }}
-            title={task.linked_title_name}
-            className="flex max-w-[10rem] items-center gap-1 rounded-full bg-raised px-2 py-0.5 text-[10px] font-medium text-zinc-300 transition-colors hover:bg-highlight hover:text-zinc-100"
-          >
-            <Film size={10} className="shrink-0" /> <span className="truncate">{task.linked_title_name}</span>
-          </button>
         )}
         {task.project_name && (
           <span className="flex max-w-[9rem] items-center gap-1 rounded-full border border-edge bg-raised px-2 py-0.5 text-[10px] font-medium text-zinc-300">

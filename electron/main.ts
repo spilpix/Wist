@@ -6,7 +6,6 @@ import { openDatabase, closeDatabase } from './db/database'
 import { seedDemoContent } from './db/seed'
 import { syncBrain } from './ipc/brain'
 import { registerIpcHandlers } from './ipc'
-import { registerMusicHandlers } from './ipc/music'
 import { getSettings, setSettings } from './settings'
 import { restartApiServer, setApiNotifier } from './apiServer'
 import { startReminders } from './reminders'
@@ -180,7 +179,6 @@ app.whenReady().then(() => {
     }
   }
   registerIpcHandlers()
-  registerMusicHandlers()
   createWindow()
 
   // auto-update: silent background check → download → install on next quit (packaged only)

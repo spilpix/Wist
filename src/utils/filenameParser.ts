@@ -1,6 +1,12 @@
-import type { ParsedFile } from '../types/models'
-
 export const VIDEO_EXTENSIONS = ['.mkv', '.mp4', '.avi', '.mov', '.webm']
+
+interface ParsedFile {
+  path: string
+  fileName: string
+  parsedTitle: string
+  episode: number | null
+  season: number | null
+}
 
 /**
  * Extracts title / episode / season from common anime & series file naming

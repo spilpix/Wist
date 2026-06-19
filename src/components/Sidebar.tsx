@@ -1,24 +1,18 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
-import { NavLink, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
+import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import {
   ArrowUpRight,
-  BookOpen,
   ChevronDown,
-  Clapperboard,
   Compass,
   File as FileIcon,
   FileText,
-  Film,
   FolderKanban,
   Frame,
   GripVertical,
   Home,
-  Library,
   ListChecks,
   ListTodo,
   MoreHorizontal,
-  Music,
-  Music2,
   PanelLeft,
   Pencil,
   PenLine,
@@ -31,7 +25,6 @@ import {
   Users,
 } from 'lucide-react'
 import Tooltip from './ui/Tooltip'
-import SidebarPlayer from './SidebarPlayer'
 import ProfileMenu from './ProfileMenu'
 import { useUiStore } from '../store/uiStore'
 import { useHistoryStore } from '../store/historyStore'
@@ -72,17 +65,7 @@ const HOME_GROUPS: Array<{ key: TKey; id: string; links: Link[] }> = [
     links: [
       { to: '/tasks', key: 'nav.tasks', icon: ListTodo },
       { to: '/notes', key: 'nav.notes', icon: PenLine },
-    ],
-  },
-  {
-    key: 'nav.libraries',
-    id: 'content',
-    links: [
-      { to: '/video', key: 'lib.cat.videos', icon: Film },
-      { to: '/library?cat=books', key: 'lib.cat.books', icon: BookOpen },
-      { to: '/library?cat=documents', key: 'lib.cat.documents', icon: FileText },
-      { to: '/music', key: 'lib.cat.music', icon: Music },
-      { to: '/library', key: 'nav.myFiles', icon: Library },
+      { to: '/vault', key: 'nav.vault', icon: FileText },
     ],
   },
   {
@@ -99,8 +82,6 @@ const HOME_GROUPS: Array<{ key: TKey; id: string; links: Link[] }> = [
 const FAV_KIND_ICON: Record<FavoriteKind, typeof Home> = {
   note: PenLine,
   project: FolderKanban,
-  title: Clapperboard,
-  track: Music2,
   canvas: ListChecks,
   task: ListTodo,
   vault: FileIcon,
@@ -447,16 +428,11 @@ function FavoritesList({
 }
 
 export default function Sidebar() {
-  const [searchParams] = useSearchParams()
-  const activeType = searchParams.get('type')
-  const activeTab = searchParams.get('tab')
   const { t } = useI18n()
   const navigate = useNavigate()
   const pathname = useLocation().pathname
   const historyEntries = useHistoryStore((s) => s.entries)
   const removeHistory = useHistoryStore((s) => s.remove)
-  const onLibrary = pathname === '/library'
-  const [libOpen, setLibOpen] = useState(true)
   const compact = useUiStore((s) => s.sidebarCollapsed)
   const setPalette = useUiStore((s) => s.setPalette)
   const toggleSidebar = useUiStore((s) => s.toggleSidebar)
@@ -540,7 +516,7 @@ export default function Sidebar() {
   // recent deep items (a specific hub / title / canvas) for one-click return. The flat
   // top-level pages already live in the nav, so we only surface detail routes here.
   const deepRecents = historyEntries
-    .filter((e) => /^\/(project|title|canvas)\//.test(e.path) && e.path.split('?')[0] !== pathname)
+    .filter((e) => /^\/(project|canvas)\//.test(e.path) && e.path.split('?')[0] !== pathname)
     .slice(0, 4)
 
   // close the context menu + collapse the hover-peek on navigation
@@ -579,28 +555,7 @@ export default function Sidebar() {
     })
   }, [])
 
-  useEffect(() => {
-    if (onLibrary) setLibOpen(true) // entering the Library auto-opens its sub-nav
-  }, [onLibrary])
-
-  // resolve the active Library category (new ?cat= scheme + legacy ?type=book / ?tab= deep links)
-  const activeCat =
-    searchParams.get('cat') ??
-    (activeType === 'book'
-      ? 'books'
-      : activeTab === 'music'
-        ? 'music'
-        : activeTab === 'files'
-          ? 'files'
-          : searchParams.get('status') || (activeType && activeType !== 'book')
-            ? 'videos'
-            : null)
-
   const isLinkActive = (to: string, routeActive: boolean): boolean => {
-    if (to === '/video') return pathname === '/video' // local video (children pass routeActive=false)
-    if (to === '/music') return pathname === '/music' // local music player (children pass routeActive=false)
-    if (to.startsWith('/library?cat=')) return onLibrary && activeCat === to.split('cat=')[1]
-    if (to === '/library') return onLibrary && !activeCat
     return routeActive
   }
 
@@ -737,48 +692,7 @@ export default function Sidebar() {
   }
 
   const navRow = (link: Link) => {
-    const { to, key, icon: Icon, children } = link
-    // expandable parent (Библиотека → Видео / Музыка / Книги)
-    if (children) {
-      return (
-        <div key={to}>
-          <div onClick={() => navigate(to)} onContextMenu={(e) => navMenu(e, link)} className={`${rowClass(false)} cursor-pointer`}>
-            <Icon size={17} className={iconClass(onLibrary)} />
-            <span className="min-w-0 flex-1 truncate">{t(key)}</span>
-            <button
-              onClick={(e) => {
-                e.stopPropagation()
-                setLibOpen((v) => !v)
-              }}
-              className="rounded-lg p-0.5 text-zinc-500 transition-colors hover:bg-highlight hover:text-zinc-200"
-            >
-              <ChevronDown size={13} className={`transition-transform duration-200 ${libOpen ? '' : '-rotate-90'}`} />
-            </button>
-          </div>
-          <div className={`collapse-morph ${libOpen ? 'is-open' : ''}`}>
-            <div>
-              <div className="space-y-px py-px pl-3">
-                {children.map((c) => {
-                  const active = isLinkActive(c.to, false)
-                  const CIcon = c.icon
-                  return (
-                    <button
-                      key={c.to}
-                      onClick={() => navigate(c.to)}
-                      onContextMenu={(e) => navMenu(e, c)}
-                      className={`${rowClass(active)} w-full`}
-                    >
-                      <CIcon size={15} className={iconClass(active)} />
-                      <span className="min-w-0 flex-1 truncate text-left">{t(c.key)}</span>
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-          </div>
-        </div>
-      )
-    }
+    const { to, key, icon: Icon } = link
     return (
       <NavLink key={to} to={to} draggable={false} onContextMenu={(e) => navMenu(e, link)} className={({ isActive }) => rowClass(isLinkActive(to, isActive))}>
         {({ isActive }) => {
@@ -1008,7 +922,7 @@ export default function Sidebar() {
                 {t('nav.recent')}
               </span>
               <button
-                onClick={() => removeHistory((e) => /^\/(project|title|canvas)\//.test(e.path))}
+                onClick={() => removeHistory((e) => /^\/(project|canvas)\//.test(e.path))}
                 title={t('nav.recentClear')}
                 className="select-none text-[11px] font-medium text-zinc-600 opacity-0 transition-opacity duration-200 hover:text-zinc-300 group-hover/recent:opacity-100"
               >
@@ -1166,9 +1080,6 @@ export default function Sidebar() {
           </div>
         )}
       </nav>
-
-      {/* minimized player docked above the bottom utilities (only while the bottom bar is collapsed) */}
-      <SidebarPlayer />
 
       {/* bottom: a quiet Корзина utility row + the Claude-style profile pill (Settings,
           Profile, Language, History, Statistics live in the profile menu) */}

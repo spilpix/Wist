@@ -1,8 +1,3 @@
-export type TitleType = 'anime' | 'movie' | 'series' | 'cartoon' | 'youtube' | 'book'
-export type TitleStatus = 'watching' | 'completed' | 'planned' | 'on_hold' | 'dropped'
-export type MomentTag = 'epic' | 'funny' | 'sad' | 'important' | 'beautiful'
-export type SubtitleLang = 'ru' | 'en' | 'off'
-
 // auto-update lifecycle (electron-updater) surfaced to the renderer
 export type UpdateStatus =
   | { state: 'idle' }
@@ -13,64 +8,11 @@ export type UpdateStatus =
   | { state: 'ready'; version: string }
   | { state: 'error'; message: string }
 
-export interface Title {
-  id: number
-  title: string
-  original_title: string | null
-  type: TitleType
-  status: TitleStatus
-  rating: number | null
-  cover_path: string | null
-  total_episodes: number
-  reading_progress: number
-  year: number | null
-  genres: string[]
-  tags: string[]
-  notes: string | null
-  intro_end_seconds: number | null
-  date_added: string
-  date_started: string | null
-  date_finished: string | null
-  // derived (filled by list queries)
-  episode_count?: number
-  watched_count?: number
-  last_watched?: string | null
-}
-
-export interface Episode {
-  id: number
-  title_id: number
-  episode_number: number
-  season: number
-  name: string | null
-  file_path: string | null
-  duration_seconds: number | null
-  watched: 0 | 1
-  watch_date: string | null
-  watch_position_seconds: number
-}
-
-export interface Moment {
-  id: number
-  title_id: number
-  episode_id: number | null
-  timestamp_seconds: number
-  screenshot_path: string | null
-  note: string | null
-  tag: MomentTag | null
-  created_at: string
-  // derived
-  title_name?: string
-  episode_number?: number | null
-  episode_name?: string | null
-}
-
 export interface Note {
   id: number
   title: string
   content: string
   tags: string[]
-  linked_title_id: number | null
   project_id: number | null
   folder_id: number | null // Obsidian-style vault folder (NULL = root)
   pinned: 0 | 1
@@ -79,7 +21,6 @@ export interface Note {
   updated_at: string
   deleted_at: string | null
   // derived
-  linked_title_name?: string | null
   project_name?: string | null
 }
 
@@ -94,7 +35,7 @@ export interface NoteFolder {
 
 // ---------- universal Favorites ("pin anything") ----------
 // any entity across every module can be pinned to one quick-access list
-export type FavoriteKind = 'note' | 'project' | 'title' | 'track' | 'canvas' | 'task' | 'vault' | 'route'
+export type FavoriteKind = 'note' | 'project' | 'canvas' | 'task' | 'vault' | 'route'
 
 export interface Favorite {
   id: number
@@ -118,47 +59,6 @@ export interface FavoriteInput {
   route?: string | null
 }
 
-// ---------- Library collections ("folders") ----------
-// a user-created folder that gathers ANY library entity into one named tile
-export type CollectionItemKind = 'title' | 'vault' | 'playlist' | 'track' | 'note' | 'canvas'
-
-export interface Collection {
-  id: number
-  name: string
-  icon: string | null
-  color: string | null
-  sort: number
-  created_at: string
-  item_count: number // computed: live (non-stale) member count
-  covers: string[] // computed: up to 4 cover paths for the tile's 2×2 preview
-}
-
-export interface CollectionItem {
-  id: number // the membership row id (for removal), NOT the entity id
-  kind: string
-  ref: string // entity id as text
-  label: string
-  sublabel: string | null
-  cover_path: string | null
-  route: string | null // where clicking navigates (http URL → opens externally)
-}
-
-// ---------- Library hub roll-up ----------
-// per-category count + a few cover paths for the "Мои файлы" tiles, read live from
-// the source tables so the hub mirrors everything in Bard regardless of where added
-export interface LibraryCategorySummary {
-  count: number
-  covers: string[]
-}
-export interface LibrarySummary {
-  videos: LibraryCategorySummary
-  books: LibraryCategorySummary
-  music: LibraryCategorySummary
-  documents: LibraryCategorySummary
-  images: LibraryCategorySummary
-  files: LibraryCategorySummary
-}
-
 export type TaskPriority = 'none' | 'low' | 'high'
 export type TaskStatus = 'todo' | 'doing' | 'done'
 
@@ -174,15 +74,12 @@ export interface Task {
   reminded: 0 | 1 // set once the scheduler has shown the notification
   tags: string[]
   project_id: number | null
-  linked_title_id: number | null // cross-link to a Library title (sources, book, …)
   source: string // 'user' or an agent name
   created_at: string
   completed_at: string | null
   deleted_at: string | null
   // derived
   project_name?: string | null
-  linked_title_name?: string | null
-  linked_title_type?: TitleType | null
 }
 
 // kanban columns, in pipeline order
@@ -191,66 +88,6 @@ export const TASK_STATUS_COLORS: Record<TaskStatus, string> = {
   todo: '#8a8278', // text-2 gray
   doing: '#e67d22', // accent — actively in progress
   done: '#6fb06f', // active green
-}
-
-export type MusicService = 'spotify' | 'youtube' | 'yandex' | 'soundcloud' | 'apple' | 'other'
-
-export interface Playlist {
-  id: number
-  title: string
-  url: string
-  service: MusicService
-  cover_path: string | null
-  notes: string | null
-  created_at: string
-}
-
-// ---------- local music library (a "local Spotify") ----------
-export interface Track {
-  id: number
-  path: string
-  title: string
-  artist: string | null
-  album: string | null
-  album_artist: string | null
-  genre: string | null
-  year: number | null
-  track_no: number | null
-  disc_no: number | null
-  duration_seconds: number | null
-  cover_path: string | null
-  liked: 0 | 1
-  play_count: number
-  last_played: string | null
-  added_at: string
-}
-
-// an album view, aggregated from tracks (album + album_artist is the identity)
-export interface MusicAlbum {
-  key: string // `${album_artist ?? artist} ${album}` — stable id for routing
-  album: string
-  artist: string // album_artist, falling back to the most common track artist
-  cover_path: string | null
-  year: number | null
-  track_count: number
-  duration_seconds: number
-}
-
-// an artist view, aggregated from tracks
-export interface MusicArtist {
-  name: string
-  cover_path: string | null // a representative cover
-  track_count: number
-  album_count: number
-}
-
-export interface MusicPlaylist {
-  id: number
-  name: string
-  cover_path: string | null
-  created_at: string
-  // derived
-  track_count?: number
 }
 
 export type VaultKind = 'image' | 'video' | 'audio' | 'doc' | 'archive' | 'other'
@@ -495,98 +332,8 @@ export interface Canvas {
   updated_at: string
 }
 
-export interface MetaCandidate {
-  title: string
-  original_title: string | null
-  year: number | null
-  episodes: number | null
-  genres: string[]
-  description: string
-  imageUrl: string | null
-  source: string
-}
-
-export type MemoryKind = 'moment' | 'title' | 'book' | 'note' | 'project'
-
-export interface MemoryEvent {
-  key: string
-  kind: MemoryKind
-  date: string // YYYY-MM-DD HH:MM:SS
-  label: string
-  sublabel: string | null
-  ref_id: number
-}
-
-export interface YoutubeSource {
-  id: number
-  title_id: number
-  channel_url: string | null
-  playlist_url: string | null
-  last_synced: string | null
-  title_name?: string
-}
-
-export interface YoutubeVideo {
-  id: string
-  title: string
-  url: string
-  duration: number | null
-}
-
-export interface ContinueItem extends Episode {
-  title_name: string
-  title_type: TitleType
-  cover_path: string | null
-  total_episodes: number
-}
-
-export interface TitleFilters {
-  search?: string
-  type?: TitleType | 'all'
-  status?: TitleStatus | 'all'
-  genre?: string
-  year?: number
-  minRating?: number
-  sort?: 'date_added' | 'title' | 'rating' | 'progress' | 'last_watched'
-  sortDir?: 'asc' | 'desc'
-}
-
-export interface StatsSummary {
-  titles: number
-  episodesWatched: number
-  secondsWatched: number
-  daysWithActivity: number
-  moments: number
-  currentStreak: number
-  longestStreak: number
-}
-
-export interface HeatmapDay {
-  day: string // YYYY-MM-DD
-  seconds: number
-}
-
-export interface TypeSlice {
-  type: TitleType
-  count: number
-  seconds: number
-}
-
-export interface MonthBar {
-  month: string // YYYY-MM
-  seconds: number
-}
-
 export interface AppSettings {
-  mediaFolders: string[]
-  musicFolders: string[] // folders scanned for the local music library
-  screenshotsDir: string
-  defaultSubtitleLang: SubtitleLang
-  autoPlayNext: boolean
-  skipIntroEnabled: boolean
   accentColor: string
-  ytDlpPath: string
-  mpvPath: string
   language: 'en' | 'ru'
   theme: 'dark' | 'light' | 'system'
   apiEnabled: boolean
@@ -595,26 +342,6 @@ export interface AppSettings {
   brainFolder: string // Obsidian-style portable mirror folder ('' = Documents/Bard Brain)
   profileName: string // display name shown in the greeting / profile ('' = "Bard")
   profileAvatar: string // saved avatar image path ('' = initial letter on accent)
-}
-
-export interface SubtitleTrack {
-  label: string
-  lang: string
-  vtt: string
-}
-
-export interface ParsedFile {
-  path: string
-  fileName: string
-  parsedTitle: string
-  episode: number | null
-  season: number | null
-}
-
-export interface ImportGroup {
-  titleId?: number
-  newTitle?: { title: string; type: TitleType }
-  episodes: Array<{ path: string; episode: number | null; season: number | null }>
 }
 
 export interface TaskComment {
@@ -632,28 +359,6 @@ export interface TaskAttachment {
   path: string
   name: string
   created_at: string
-}
-
-export const TITLE_STATUSES: TitleStatus[] = ['watching', 'completed', 'planned', 'on_hold', 'dropped']
-
-export const STATUS_COLORS: Record<TitleStatus, string> = {
-  watching: '#7aa8c4',
-  completed: '#6fb06f',
-  planned: '#8a8278',
-  on_hold: '#c9a96b',
-  dropped: '#c47a7a',
-}
-
-export const TITLE_TYPES: TitleType[] = ['movie', 'series', 'anime', 'cartoon', 'youtube', 'book']
-
-export const MOMENT_TAGS: MomentTag[] = ['epic', 'funny', 'sad', 'important', 'beautiful']
-
-export const MOMENT_TAG_COLORS: Record<MomentTag, string> = {
-  epic: '#a87dc4',
-  funny: '#c9a96b',
-  sad: '#7aa8c4',
-  important: '#c47a7a',
-  beautiful: '#6fb06f',
 }
 
 export const PROJECT_STATUSES: ProjectStatus[] = ['idea', 'active', 'review', 'done', 'archived']

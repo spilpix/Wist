@@ -5,10 +5,8 @@ import {
   Database,
   Download,
   FolderOpen,
-  FolderPlus,
   Languages,
   Monitor,
-  MonitorPlay,
   Moon,
   Palette,
   Plug,
@@ -23,7 +21,7 @@ import ConfirmDialog from '../components/ui/ConfirmDialog'
 import Spinner from '../components/ui/Spinner'
 import { useSettingsStore } from '../store/settingsStore'
 import { toast } from '../store/toastStore'
-import type { SubtitleLang, UpdateStatus } from '../types/models'
+import type { UpdateStatus } from '../types/models'
 import { useI18n, t as tGlobal, type TKey } from '../i18n'
 
 const ACCENT_PRESETS: Array<{ nameKey: TKey; value: string }> = [
@@ -35,12 +33,10 @@ const ACCENT_PRESETS: Array<{ nameKey: TKey; value: string }> = [
   { nameKey: 'set.accent.rose', value: '#c47a7a' },
 ]
 
-type Cat = 'appearance' | 'player' | 'media' | 'api' | 'brain' | 'data'
+type Cat = 'appearance' | 'api' | 'brain' | 'data'
 
 const CATEGORIES: Array<{ id: Cat; icon: typeof Palette; key: TKey }> = [
   { id: 'appearance', icon: Palette, key: 'set.appearance' },
-  { id: 'player', icon: MonitorPlay, key: 'set.player' },
-  { id: 'media', icon: FolderOpen, key: 'set.mediaFolders' },
   { id: 'api', icon: Plug, key: 'set.api' },
   { id: 'brain', icon: Brain, key: 'set.brain' },
   { id: 'data', icon: Database, key: 'set.data' },
@@ -144,7 +140,6 @@ export default function SettingsPage() {
   const { t } = useI18n()
   const { settings, update, load } = useSettingsStore()
   const [cat, setCat] = useState<Cat>('appearance')
-  const [confirmClear, setConfirmClear] = useState(false)
   const [confirmImport, setConfirmImport] = useState(false)
   const [confirmRestore, setConfirmRestore] = useState(false)
   const [confirmClearDb, setConfirmClearDb] = useState(false)
@@ -159,14 +154,6 @@ export default function SettingsPage() {
 
   if (!settings) return <Spinner />
 
-  const addMediaFolder = async () => {
-    const dir = await window.wist.settings.pickDirectory()
-    if (dir && !settings.mediaFolders.includes(dir)) update({ mediaFolders: [...settings.mediaFolders, dir] })
-  }
-  const setScreenshotsDir = async () => {
-    const dir = await window.wist.settings.pickDirectory()
-    if (dir) update({ screenshotsDir: dir })
-  }
   const exportData = async () => {
     const file = await window.wist.data.exportAll()
     if (file) toast(tGlobal('set.exportedTo', { file }), 'success')
@@ -179,11 +166,6 @@ export default function SettingsPage() {
     } catch (err: any) {
       toast(String(err?.message ?? err), 'error')
     }
-  }
-  const clearHistory = async () => {
-    setConfirmClear(false)
-    await window.wist.data.clearHistory()
-    toast(tGlobal('set.historyCleared'), 'success')
   }
   const syncBrain = async () => {
     setBusy(true)
@@ -306,62 +288,6 @@ export default function SettingsPage() {
             </Panel>
           )}
 
-          {cat === 'player' && (
-            <Panel title={t('set.player')} desc={t('set.playerDesc')}>
-              <Card>
-                <Row label={t('set.subLang')}>
-                  <select className="select" value={settings.defaultSubtitleLang} onChange={(e) => update({ defaultSubtitleLang: e.target.value as SubtitleLang })}>
-                    <option value="ru">{t('set.subRu')}</option>
-                    <option value="en">{t('set.subEn')}</option>
-                    <option value="off">{t('common.off')}</option>
-                  </select>
-                </Row>
-                <Row label={t('set.autoPlay')}>
-                  <Switch checked={settings.autoPlayNext} onChange={(v) => update({ autoPlayNext: v })} />
-                </Row>
-                <Row label={t('set.skipIntro')} hint={t('set.skipIntroHint')}>
-                  <Switch checked={settings.skipIntroEnabled} onChange={(v) => update({ skipIntroEnabled: v })} />
-                </Row>
-                <Row label={t('set.ytDlpPath')} hint={t('set.ytDlpHint')}>
-                  <input className="input !w-64" placeholder="yt-dlp" defaultValue={settings.ytDlpPath} onBlur={(e) => update({ ytDlpPath: e.target.value.trim() })} />
-                </Row>
-                <Row label={t('set.mpvPath')} hint={t('set.mpvHint')}>
-                  <input className="input !w-64" placeholder="mpv" defaultValue={settings.mpvPath} onBlur={(e) => update({ mpvPath: e.target.value.trim() })} />
-                </Row>
-              </Card>
-            </Panel>
-          )}
-
-          {cat === 'media' && (
-            <Panel title={t('set.mediaFolders')} desc={t('set.mediaDesc')}>
-              <Card>
-                <Row label={t('set.watchedFolders')} hint={t('set.watchedFoldersHint')}>
-                  <button className="btn-ghost !py-1.5 text-xs" onClick={addMediaFolder}>
-                    <FolderPlus size={14} /> {t('set.addFolder')}
-                  </button>
-                </Row>
-                {settings.mediaFolders.length > 0 && (
-                  <div className="space-y-1.5 py-3">
-                    {settings.mediaFolders.map((folder) => (
-                      <div key={folder} className="flex items-center gap-2 rounded-lg bg-raised px-3 py-2">
-                        <FolderOpen size={14} className="shrink-0 text-zinc-500" />
-                        <span className="min-w-0 flex-1 truncate text-xs text-zinc-300">{folder}</span>
-                        <button className="text-zinc-600 transition-colors hover:text-danger" onClick={() => update({ mediaFolders: settings.mediaFolders.filter((f) => f !== folder) })}>
-                          <X size={14} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <Row label={t('set.screenshotsFolder')} hint={settings.screenshotsDir}>
-                  <button className="btn-ghost !py-1.5 text-xs" onClick={setScreenshotsDir}>
-                    {t('common.change')}
-                  </button>
-                </Row>
-              </Card>
-            </Panel>
-          )}
-
           {cat === 'api' && (
             <Panel title={t('set.api')} desc={t('set.apiDesc')}>
               <Card>
@@ -434,7 +360,7 @@ Authorization: Bearer <token>
                 {brainStats && (
                   <Row label={t('set.brainContents')} hint={t('set.brainContentsHint')}>
                     <span className="max-w-xs text-right text-xs text-zinc-500">
-                      {t('set.brainSummary', { titles: brainStats.titles, tasks: brainStats.tasks, done: brainStats.tasksDone, notes: brainStats.notes })}
+                      {t('set.brainSummary', { tasks: brainStats.tasks, done: brainStats.tasksDone, notes: brainStats.notes })}
                     </span>
                   </Row>
                 )}
@@ -468,11 +394,6 @@ Authorization: Bearer <token>
                 </Row>
               </Card>
               <Card>
-                <Row label={t('set.clearHistory')} hint={t('set.clearHint')}>
-                  <button className="btn-danger !py-1.5 text-xs" onClick={() => setConfirmClear(true)}>
-                    <Trash2 size={14} /> {t('set.clear')}
-                  </button>
-                </Row>
                 <Row label={t('set.clearDb')} hint={t('set.clearDbHint')}>
                   <button className="btn-danger !py-1.5 text-xs" onClick={() => setConfirmClearDb(true)}>
                     <Trash2 size={14} /> {t('set.clearDbBtn')}
@@ -484,16 +405,6 @@ Authorization: Bearer <token>
         </div>
       </div>
 
-      {confirmClear && (
-        <ConfirmDialog
-          title={t('set.clearConfirmTitle')}
-          message={t('set.clearConfirmMessage')}
-          confirmLabel={t('set.clearConfirmAction')}
-          danger
-          onConfirm={clearHistory}
-          onCancel={() => setConfirmClear(false)}
-        />
-      )}
       {confirmImport && (
         <ConfirmDialog
           title={t('set.importConfirmTitle')}

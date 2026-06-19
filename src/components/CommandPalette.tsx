@@ -3,18 +3,11 @@ import { useNavigate } from 'react-router-dom'
 import {
   Archive,
   BarChart3,
-  Bookmark,
-  BookOpen,
-  Clock,
-  FileText,
   FolderKanban,
-  FolderOpen,
   Heart,
   Home,
-  Library,
   ListTodo,
   Moon,
-  Music,
   PenLine,
   Plus,
   Search,
@@ -22,25 +15,22 @@ import {
   Sun,
   Trash2,
   TreePine,
-  Tv,
-  Youtube,
 } from 'lucide-react'
 import { useUiStore } from '../store/uiStore'
 import { useSettingsStore, resolvedTheme } from '../store/settingsStore'
-import type { Note, Project, Task, Title } from '../types/models'
+import type { Note, Project, Task } from '../types/models'
 import { physKey } from '../lib/keyboard'
 import { useI18n, type TKey } from '../i18n'
 
 interface Item {
   id: string
-  group: 'pages' | 'actions' | 'titles' | 'notes' | 'tasks' | 'projects'
+  group: 'pages' | 'actions' | 'notes' | 'tasks' | 'projects'
   label: string
   sublabel?: string
   icon: typeof Home
   run: () => void
 }
 
-/** simple fuzzy score: prefix > word boundary > substring > subsequence */
 function score(text: string, query: string): number {
   const t = text.toLowerCase()
   const q = query.toLowerCase()
@@ -48,28 +38,23 @@ function score(text: string, query: string): number {
   if (t.startsWith(q)) return 4
   if (t.includes(' ' + q)) return 3
   if (t.includes(q)) return 2
-  let qi = 0
-  for (let i = 0; i < t.length && qi < q.length; i++) if (t[i] === q[qi]) qi++
-  return qi === q.length ? 1 : 0
+  let i = 0
+  for (const ch of q) {
+    const j = t.indexOf(ch, i)
+    if (j === -1) return 0
+    i = j + 1
+  }
+  return 1
 }
 
 const PAGES: Array<{ to: string; key: TKey; icon: typeof Home }> = [
   { to: '/', key: 'nav.home', icon: Home },
-  { to: '/library', key: 'nav.library', icon: Library },
-  { to: '/library?type=book', key: 'nav.books', icon: BookOpen },
-  { to: '/library?cat=documents', key: 'lib.cat.documents', icon: FileText },
-  { to: '/continue', key: 'nav.continue', icon: Clock },
   { to: '/favorites', key: 'nav.favorites', icon: Heart },
-  { to: '/projects', key: 'nav.projects', icon: FolderKanban },
-  { to: '/moments', key: 'nav.moments', icon: Bookmark },
   { to: '/notes', key: 'nav.notes', icon: PenLine },
   { to: '/tasks', key: 'nav.tasks', icon: ListTodo },
   { to: '/vault', key: 'nav.vault', icon: Archive },
-  { to: '/music', key: 'nav.music', icon: Music },
-  { to: '/video', key: 'nav.video', icon: Tv },
+  { to: '/projects', key: 'nav.projects', icon: FolderKanban },
   { to: '/tree', key: 'nav.tree', icon: TreePine },
-  { to: '/local', key: 'nav.localFiles', icon: FolderOpen },
-  { to: '/youtube', key: 'nav.youtube', icon: Youtube },
   { to: '/trash', key: 'nav.trash', icon: Trash2 },
   { to: '/stats', key: 'nav.statistics', icon: BarChart3 },
   { to: '/settings', key: 'nav.settings', icon: Settings },
@@ -84,13 +69,11 @@ export default function CommandPalette() {
 
   const [query, setQuery] = useState('')
   const [active, setActive] = useState(0)
-  const [titles, setTitles] = useState<Title[]>([])
   const [notes, setNotes] = useState<Note[]>([])
   const [tasks, setTasks] = useState<Task[]>([])
   const [projects, setProjects] = useState<Project[]>([])
   const listRef = useRef<HTMLDivElement>(null)
 
-  // global hotkey
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && physKey(e) === 'k') {
@@ -102,12 +85,10 @@ export default function CommandPalette() {
     return () => window.removeEventListener('keydown', onKey)
   }, [setPalette])
 
-  // fresh data each open
   useEffect(() => {
     if (!open) return
     setQuery('')
     setActive(0)
-    window.wist.titles.list({}).then(setTitles)
     window.wist.notes.list({}).then(setNotes)
     window.wist.tasks.list().then(setTasks).catch(() => undefined)
     window.wist.projects.list().then(setProjects).catch(() => undefined)
@@ -136,13 +117,6 @@ export default function CommandPalette() {
 
     const dark = resolvedTheme() === 'dark'
     const actions: Item[] = [
-      {
-        id: 'a-add',
-        group: 'actions',
-        label: t('cmdk.addTitle'),
-        icon: Plus,
-        run: () => go('/library?add=1'),
-      },
       {
         id: 'a-project',
         group: 'actions',
@@ -178,21 +152,6 @@ export default function CommandPalette() {
     for (const a of actions) if (score(a.label, q) > 0) out.push(a)
 
     if (q) {
-      const scoredTitles = titles
-        .map((ti) => ({ ti, s: Math.max(score(ti.title, q), score(ti.original_title ?? '', q)) }))
-        .filter((x) => x.s > 0)
-        .sort((a, b) => b.s - a.s)
-        .slice(0, 8)
-      for (const { ti } of scoredTitles) {
-        out.push({
-          id: `t${ti.id}`,
-          group: 'titles',
-          label: ti.title,
-          sublabel: t(`type.${ti.type}`),
-          icon: ti.type === 'book' ? BookOpen : Tv,
-          run: () => go(`/title/${ti.id}`),
-        })
-      }
       const scoredNotes = notes
         .map((n) => ({ n, s: Math.max(score(n.title, q), score(n.content.slice(0, 200), q)) }))
         .filter((x) => x.s > 0)
@@ -242,11 +201,10 @@ export default function CommandPalette() {
       }
     }
     return out
-  }, [query, titles, notes, tasks, projects, t, go, close, updateSettings])
+  }, [query, notes, tasks, projects, t, go, close, updateSettings])
 
   useEffect(() => setActive(0), [query])
 
-  // keep the active row visible
   useEffect(() => {
     listRef.current
       ?.querySelector(`[data-idx="${active}"]`)
@@ -258,7 +216,6 @@ export default function CommandPalette() {
   const GROUP_LABEL: Record<Item['group'], string> = {
     pages: t('cmdk.pages'),
     actions: t('cmdk.actions'),
-    titles: t('cmdk.titles'),
     notes: t('cmdk.notes'),
     tasks: t('nav.tasks'),
     projects: t('nav.projects'),

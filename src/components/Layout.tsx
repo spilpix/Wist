@@ -9,10 +9,8 @@ import ErrorBoundary from './ErrorBoundary'
 import Toaster from './ui/Toaster'
 import CommandPalette from './CommandPalette'
 import GlobalShortcuts from './GlobalShortcuts'
-import PlayerBar from './PlayerBar'
 import { physKey } from '../lib/keyboard'
 import SplitPane from './SplitPane'
-import { usePlayerStore } from '../store/playerStore'
 import { usePreviewStore } from '../store/previewStore'
 import { useUiStore } from '../store/uiStore'
 import { useTabStore } from '../store/tabStore'
@@ -152,14 +150,6 @@ export default function Layout() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.pathname, location.search, syncPath])
 
-  // music player follows the route: full bottom bar on the Music page, tucked into
-  // the sidebar everywhere else (only while something is loaded). Runs on route
-  // change only, so a manual collapse/expand within a page is never overridden.
-  useEffect(() => {
-    if (!usePlayerStore.getState().current) return
-    usePlayerStore.getState().setBarCollapsed(location.pathname !== '/music')
-  }, [location.pathname])
-
   // Ctrl/Cmd+B (or Ctrl/Cmd+\, the Notion/industry standard) toggles the sidebar.
   // Skip while typing — editors use Ctrl+B for bold.
   useEffect(() => {
@@ -276,7 +266,6 @@ export default function Layout() {
           </div>
         </div>
       </div>
-      <PlayerBar />
       <Toaster />
       <CommandPalette />
       <GlobalShortcuts />

@@ -9,15 +9,7 @@ let store: Store<AppSettings> | null = null
 
 function defaults(): AppSettings {
   return {
-    mediaFolders: [],
-    musicFolders: [],
-    screenshotsDir: path.join(app.getPath('userData'), 'screenshots'),
-    defaultSubtitleLang: 'en',
-    autoPlayNext: true,
-    skipIntroEnabled: true,
     accentColor: '', // '' = brand (theme-specific Crail/Tangerine)
-    ytDlpPath: '',
-    mpvPath: '',
     language: app.getLocale().toLowerCase().startsWith('ru') ? 'ru' : 'en',
     theme: 'dark',
     apiEnabled: false,
@@ -50,12 +42,6 @@ export function setSettings(patch: Partial<AppSettings>): AppSettings {
     store!.set(key as keyof AppSettings, value as never)
   }
   return getSettings()
-}
-
-export function screenshotsDir(): string {
-  const dir = getSettings().screenshotsDir
-  fs.mkdirSync(dir, { recursive: true })
-  return dir
 }
 
 export function coversDir(): string {

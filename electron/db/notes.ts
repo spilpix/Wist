@@ -16,9 +16,8 @@ function rowToNote(row: any): Note {
 }
 
 const SELECT = `
-  SELECT n.*, t.title AS linked_title_name, p.name AS project_name
+  SELECT n.*, p.name AS project_name
   FROM notes n
-  LEFT JOIN titles t ON t.id = n.linked_title_id
   LEFT JOIN projects p ON p.id = n.project_id
 `
 
@@ -50,12 +49,11 @@ export function getNote(id: number): Note | null {
 
 export function createNote(data: Partial<Note>): Note {
   const info = db()
-    .prepare('INSERT INTO notes (title, content, tags, linked_title_id, project_id, folder_id, pinned, source) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+    .prepare('INSERT INTO notes (title, content, tags, project_id, folder_id, pinned, source) VALUES (?, ?, ?, ?, ?, ?, ?)')
     .run(
       data.title ?? '',
       data.content ?? '',
       JSON.stringify(Array.isArray(data.tags) ? data.tags : []),
-      data.linked_title_id ?? null,
       data.project_id ?? null,
       data.folder_id ?? null,
       data.pinned ? 1 : 0,
@@ -64,7 +62,7 @@ export function createNote(data: Partial<Note>): Note {
   return getNote(Number(info.lastInsertRowid))!
 }
 
-const WRITABLE = ['title', 'content', 'tags', 'linked_title_id', 'project_id', 'folder_id', 'pinned'] as const
+const WRITABLE = ['title', 'content', 'tags', 'project_id', 'folder_id', 'pinned'] as const
 
 export function updateNote(id: number, patch: Partial<Note>): Note {
   const sets: string[] = []

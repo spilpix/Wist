@@ -1,14 +1,10 @@
-import { lazy, Suspense, useEffect } from 'react'
+import { useEffect } from 'react'
 import { HashRouter, Navigate, Route, Routes } from 'react-router-dom'
 import Layout from './components/Layout'
-import Spinner from './components/ui/Spinner'
 import { pageRouteElements } from './routes'
 import { physKey } from './lib/keyboard'
 import { useSettingsStore } from './store/settingsStore'
 import { useWorkspaceStore } from './store/workspaceStore'
-
-// the player is a full-screen route (outside Layout) — load on demand
-const Player = lazy(() => import('./pages/Player'))
 
 export default function App() {
   const loadSettings = useSettingsStore((s) => s.load)
@@ -40,14 +36,6 @@ export default function App() {
     <HashRouter>
       <Routes>
         <Route element={<Layout />}>{pageRouteElements()}</Route>
-        <Route
-          path="/player/:episodeId"
-          element={
-            <Suspense fallback={<div className="force-dark flex h-full items-center justify-center bg-black"><Spinner /></div>}>
-              <Player />
-            </Suspense>
-          }
-        />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </HashRouter>

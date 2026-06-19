@@ -30,7 +30,7 @@ import { useUiStore } from '../store/uiStore'
 import { useTabStore } from '../store/tabStore'
 import { useFavoritesStore } from '../store/favoritesStore'
 import { physKey } from '../lib/keyboard'
-import type { Note, NoteFolder, Title } from '../types/models'
+import type { Note, NoteFolder } from '../types/models'
 import { useI18n, t as tGlobal } from '../i18n'
 
 // ─── Draft ──────────────────────────────────────────────────────────────────
@@ -40,7 +40,6 @@ interface Draft {
   title: string
   content: string
   tags: string[]
-  linked_title_id: number | null
   project_id: number | null
   pinned: boolean
   folder_id: number | null
@@ -53,7 +52,6 @@ const emptyDraft = (title = '', folderId: number | null = null, projectId: numbe
   title,
   content: '',
   tags: [],
-  linked_title_id: null,
   project_id: projectId,
   pinned: false,
   folder_id: folderId,
@@ -127,7 +125,6 @@ export default function Notes() {
 
   const [notes, setNotes] = useState<Note[] | null>(null)
   const [folders, setFolders] = useState<NoteFolder[]>([])
-  const [titles, setTitles] = useState<Title[]>([])
   const [draft, setDraft] = useState<Draft | null>(null)
   const [saveState, setSaveState] = useState<SaveState>('idle')
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -196,20 +193,17 @@ export default function Notes() {
 
   const load = useCallback(async () => {
     try {
-      const [ns, ts, fs] = await Promise.all([
+      const [ns, fs] = await Promise.all([
         window.wist.notes.list({}),
-        window.wist.titles.list({}),
         window.wist.noteFolders.list(),
       ])
       setNotes(ns)
-      setTitles(ts)
       setFolders(fs)
       return ns
     } catch (e) {
       console.error('notes load failed', e)
       toast(tGlobal('notes.loadError'))
       setNotes((prev) => prev ?? [])
-      setTitles((prev) => prev ?? [])
       return []
     }
   }, [])
@@ -316,7 +310,6 @@ export default function Notes() {
           title: d.title.trim(),
           content: d.content,
           tags: d.tags,
-          linked_title_id: d.linked_title_id,
           project_id: d.project_id,
           pinned: (d.pinned ? 1 : 0) as 0 | 1,
           folder_id: d.folder_id,
@@ -375,7 +368,6 @@ export default function Notes() {
         title: nt.title,
         content: nt.content,
         tags: nt.tags,
-        linked_title_id: nt.linked_title_id,
         project_id: nt.project_id,
         pinned: !!nt.pinned,
         folder_id: nt.folder_id ?? null,
@@ -453,13 +445,9 @@ export default function Notes() {
       seen.add(key)
       const note = (notes ?? []).find((x) => x.title.trim().toLowerCase() === key)
       if (note) { out.push({ name: m[1], go: () => openNote(note) }); continue }
-      const title = titles.find(
-        (x) => x.title.trim().toLowerCase() === key || x.original_title?.trim().toLowerCase() === key
-      )
-      if (title) out.push({ name: m[1], go: () => navigate(`/title/${title.id}`) })
     }
     return out
-  }, [draft, notes, titles, navigate, openNote])
+  }, [draft, notes, openNote])
 
   const wordCount = useMemo(() => {
     if (!draft) return 0
@@ -468,18 +456,13 @@ export default function Notes() {
 
   const charCount = draft?.content.length ?? 0
 
-  // open a [[wiki link]] from the reading view → another note or a library title
   const openLink = useCallback(
     (name: string) => {
       const key = name.trim().toLowerCase()
       const note = (notes ?? []).find((x) => x.title.trim().toLowerCase() === key)
-      if (note) return openNote(note)
-      const title = titles.find(
-        (x) => x.title.trim().toLowerCase() === key || x.original_title?.trim().toLowerCase() === key
-      )
-      if (title) navigate(`/title/${title.id}`)
+      if (note) openNote(note)
     },
-    [notes, titles, navigate, openNote]
+    [notes, openNote]
   )
 
   // reading view: flip a "- [ ]" ↔ "- [x]" checkbox on the given line
@@ -586,7 +569,6 @@ export default function Notes() {
       title,
       content: note.content,
       tags: note.tags,
-      linked_title_id: note.linked_title_id,
       project_id: note.project_id,
       pinned: 0,
       folder_id: note.folder_id ?? null,
@@ -1090,21 +1072,6 @@ export default function Notes() {
                         {isFav('note', draft.id) ? t('fav.unpin') : t('fav.pin')}
                       </button>
                     )}
-                    <div className="px-2.5 pb-1 pt-1.5">
-                      <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-600">{t('notes.linkedTitle')}</div>
-                      <select
-                        className="select w-full !py-1 text-xs"
-                        value={draft.linked_title_id ?? ''}
-                        onChange={(e) => patchDraft({ linked_title_id: e.target.value ? Number(e.target.value) : null })}
-                      >
-                        <option value="">{t('notes.noLink')}</option>
-                        {titles.map((ti) => (
-                          <option key={ti.id} value={ti.id}>
-                            {ti.title}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
                     {draft.id != null && (
                       <>
                         <div className="my-1 h-px bg-edge" />

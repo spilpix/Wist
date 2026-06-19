@@ -15,11 +15,9 @@ import { getSettings, setSettings } from '../settings'
 // every user table (NOT schema_migrations) — the lossless snapshot set, in FK-safe
 // creation order (parents before children) so a restore inserts cleanly.
 const TABLES = [
-  'titles', 'episodes', 'moments', 'youtube_sources', 'watch_sessions', 'screenshots',
   'projects', 'project_sections', 'project_assets', 'project_sessions', 'project_snapshots', 'project_patches',
-  'note_folders', 'notes', 'journal_entries', 'tasks', 'task_comments', 'playlists', 'vault_files',
-  'tracks', 'music_playlists', 'music_playlist_tracks',
-  'canvases', 'favorites', 'collections', 'collection_items',
+  'note_folders', 'notes', 'journal_entries', 'tasks', 'task_comments', 'vault_files',
+  'canvases', 'favorites',
 ] as const
 
 function emitChange() {
@@ -40,17 +38,11 @@ function tableRows(table: string): any[] {
 }
 
 export interface BrainStats {
-  titles: number
-  titlesDone: number
-  episodes: number
-  episodesWatched: number
   notes: number
   tasks: number
   tasksDone: number
   journal: number
   projects: number
-  tracks: number
-  moments: number
   canvases: number
 }
 
@@ -63,17 +55,11 @@ export function brainStats(): BrainStats {
     }
   }
   return {
-    titles: c('SELECT COUNT(*) c FROM titles'),
-    titlesDone: c("SELECT COUNT(*) c FROM titles WHERE status='completed'"),
-    episodes: c('SELECT COUNT(*) c FROM episodes'),
-    episodesWatched: c('SELECT COUNT(*) c FROM episodes WHERE watched=1'),
     notes: c('SELECT COUNT(*) c FROM notes WHERE deleted_at IS NULL'),
     tasks: c('SELECT COUNT(*) c FROM tasks WHERE deleted_at IS NULL'),
     tasksDone: c('SELECT COUNT(*) c FROM tasks WHERE done=1 AND deleted_at IS NULL'),
     journal: c('SELECT COUNT(*) c FROM journal_entries'),
     projects: c('SELECT COUNT(*) c FROM projects WHERE deleted_at IS NULL'),
-    tracks: c('SELECT COUNT(*) c FROM tracks'),
-    moments: c('SELECT COUNT(*) c FROM moments'),
     canvases: c('SELECT COUNT(*) c FROM canvases'),
   }
 }
@@ -100,7 +86,6 @@ function writeMarkdown(dir: string) {
   }
   const s = brainStats()
 
-  // BRAIN.md — the digest: what's in the base and what's done
   write(
     'BRAIN.md',
     [
@@ -110,14 +95,10 @@ function writeMarkdown(dir: string) {
       '',
       '## Что в базе',
       '',
-      `- 🎬 Библиотека: **${s.titles}** (завершено ${s.titlesDone})`,
-      `- ▶️ Эпизоды: **${s.episodes}** (просмотрено ${s.episodesWatched})`,
       `- ✅ Задачи: **${s.tasks}** (выполнено ${s.tasksDone})`,
       `- 📝 Заметки: **${s.notes}**`,
       `- 📔 Дневник: **${s.journal}** записей`,
       `- 📂 Хабы: **${s.projects}**`,
-      `- 🎵 Треки: **${s.tracks}**`,
-      `- ⭐ Моменты: **${s.moments}**`,
       `- 🎨 Холсты: **${s.canvases}**`,
       '',
       '> Это человекочитаемое зеркало базы Барда. Полная копия для восстановления — `bard-brain.json`.',
@@ -131,15 +112,6 @@ function writeMarkdown(dir: string) {
     'Tasks.md',
     ['# ✅ Задачи', '']
       .concat(tasks.length ? tasks.map((t) => `- [${t.done ? 'x' : ' '}] ${t.title}${t.due_date ? `  *(${String(t.due_date).slice(0, 10)})*` : ''}`) : ['_пусто_'])
-      .join('\n')
-  )
-
-  // Library.md
-  const titles = tableRows('titles')
-  write(
-    'Library.md',
-    ['# 🎬 Библиотека', '']
-      .concat(titles.length ? titles.map((t) => `- **${t.title}** — ${t.type}${t.year ? `, ${t.year}` : ''} · ${t.status}`) : ['_пусто_'])
       .join('\n')
   )
 

@@ -1,38 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { BarChart3, Bookmark, Camera, ChevronRight, Clock, Flame, Heart, History as HistoryIcon, Pencil, Settings, Sparkles, Trash2, Tv, X } from 'lucide-react'
-import Spinner from '../components/ui/Spinner'
+import { BarChart3, Camera, ChevronRight, Heart, History as HistoryIcon, Pencil, Settings, Trash2, Tv, X } from 'lucide-react'
 import Avatar from '../components/ui/Avatar'
-import type { StatsSummary } from '../types/models'
 import { useSettingsStore } from '../store/settingsStore'
-import { formatHours } from '../utils/formatters'
 import { useI18n, type TKey } from '../i18n'
 
-// spirit level thresholds mirror Home / the world page: level k needs 3·k² memories
-function spiritLevel(n: number): number {
-  let level = 1
-  while (level < 6 && n >= 3 * (level + 1) ** 2) level++
-  return level
-}
-
 type TFn = ReturnType<typeof useI18n>['t']
-
-function StatTile({ icon: Icon, value, label, sub }: { icon: typeof Tv; value: string; label: string; sub?: string }) {
-  return (
-    <div className="card flex items-center gap-3 px-4 py-4">
-      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-raised text-zinc-400">
-        <Icon size={19} />
-      </span>
-      <div className="min-w-0">
-        <div className="text-xl font-bold text-zinc-100">{value}</div>
-        <div className="truncate text-xs text-zinc-500">
-          {label}
-          {sub && <span className="text-zinc-600"> · {sub}</span>}
-        </div>
-      </div>
-    </div>
-  )
-}
 
 function QuickLink({ to, icon: Icon, label, t }: { to: string; icon: typeof Tv; label: string; t: TFn }) {
   return (
@@ -47,12 +20,9 @@ function QuickLink({ to, icon: Icon, label, t }: { to: string; icon: typeof Tv; 
 }
 
 export default function Profile() {
-  const { t, tn } = useI18n()
+  const { t } = useI18n()
   const settings = useSettingsStore((s) => s.settings)
   const updateSettings = useSettingsStore((s) => s.update)
-  const [loading, setLoading] = useState(true)
-  const [summary, setSummary] = useState<StatsSummary | null>(null)
-  const [xp, setXp] = useState(0)
   const [editingName, setEditingName] = useState(false)
   const [nameDraft, setNameDraft] = useState('')
 
@@ -70,23 +40,6 @@ export default function Profile() {
   }
   const removeAvatar = () => void updateSettings({ profileAvatar: '' })
 
-  useEffect(() => {
-    Promise.all([window.wist.stats.summary(), window.wist.stats.memories()])
-      .then(([sum, mem]) => {
-        setSummary(sum)
-        setXp(mem.length)
-      })
-      .catch((e) => console.error('profile load failed', e))
-      .finally(() => setLoading(false))
-  }, [])
-
-  if (loading) return <Spinner label={t('home.loading')} />
-
-  const level = spiritLevel(xp)
-  const maxed = level >= 6
-  const nextAt = 3 * (level + 1) ** 2
-  const progress = maxed ? 1 : Math.min(1, xp / nextAt)
-
   const links: Array<{ to: string; icon: typeof Tv; key: TKey }> = [
     { to: '/stats', icon: BarChart3, key: 'nav.statistics' },
     { to: '/history', icon: HistoryIcon, key: 'nav.history' },
@@ -97,7 +50,6 @@ export default function Profile() {
   return (
     <div className="page">
       <div className="mx-auto max-w-3xl space-y-8">
-        {/* hero */}
         <header className="card overflow-hidden">
           <div className="h-24 bg-raised" />
           <div className="flex flex-wrap items-end gap-4 px-6 pb-5">
@@ -142,44 +94,8 @@ export default function Profile() {
               <Settings size={15} /> {t('nav.settings')}
             </Link>
           </div>
-
-          {/* spirit level progress */}
-          <Link to="/tree" className="mx-4 mb-4 block rounded-xl border border-edge bg-surface px-4 py-3 transition-colors hover:bg-raised">
-            <div className="flex items-center gap-2">
-              <Sparkles size={15} className="text-zinc-400" />
-              <span className="text-sm font-semibold text-zinc-200">{t('home.spiritLevel', { n: level })}</span>
-              <span className="ml-auto text-xs tabular-nums text-zinc-500">{maxed ? `${xp}` : `${xp} / ${nextAt}`}</span>
-            </div>
-            <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-edge">
-              <div className="h-full rounded-full bg-accent transition-all" style={{ width: `${progress * 100}%` }} />
-            </div>
-          </Link>
         </header>
 
-        {/* stats */}
-        {summary && (
-          <section>
-            <h2 className="section-title">{t('home.myStats')}</h2>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <StatTile icon={Tv} value={String(summary.episodesWatched)} label={t('home.episodesWatched')} />
-              <StatTile
-                icon={Clock}
-                value={t('home.hoursValue', { n: formatHours(summary.secondsWatched) })}
-                label={t('home.hoursSpent')}
-                sub={t('home.equalsDays', { n: (summary.secondsWatched / 86400).toFixed(1) })}
-              />
-              <StatTile icon={Bookmark} value={String(summary.moments)} label={t('home.savedMoments')} />
-              <StatTile
-                icon={Flame}
-                value={tn('count.days', summary.currentStreak)}
-                label={t('home.currentStreak')}
-                sub={summary.longestStreak ? t('home.best', { n: summary.longestStreak }) : undefined}
-              />
-            </div>
-          </section>
-        )}
-
-        {/* quick links */}
         <section>
           <h2 className="section-title">{t('profile.quickLinks')}</h2>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">

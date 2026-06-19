@@ -1,18 +1,12 @@
 import { BrowserWindow, dialog } from 'electron'
 import fs from 'node:fs'
-import path from 'node:path'
 import { db } from '../db/database'
-import { listMoments } from '../db/moments'
 import { getSettings } from '../settings'
 
-// MUST stay in sync with the TABLES list in electron/ipc/brain.ts (the authoritative
-// full set). Order is FK-safe: parents before children for insert, reversed for delete.
 const TABLES = [
-  'titles', 'episodes', 'moments', 'youtube_sources', 'watch_sessions', 'screenshots',
   'projects', 'project_sections', 'project_assets', 'project_sessions', 'project_snapshots', 'project_patches',
-  'note_folders', 'notes', 'journal_entries', 'tasks', 'task_comments', 'playlists', 'vault_files',
-  'tracks', 'music_playlists', 'music_playlist_tracks',
-  'canvases', 'favorites', 'collections', 'collection_items',
+  'note_folders', 'notes', 'journal_entries', 'tasks', 'task_comments', 'vault_files',
+  'canvases', 'favorites',
 ] as const
 
 function win(): BrowserWindow | undefined {
@@ -28,7 +22,7 @@ export async function exportAll(): Promise<string | null> {
   if (res.canceled || !res.filePath) return null
 
   const safeSettings = { ...getSettings() } as Record<string, unknown>
-  delete safeSettings.apiToken // never write the API token into an exportable/synced file
+  delete safeSettings.apiToken
   const payload: Record<string, unknown> = {
     app: 'wist',
     version: 1,
@@ -36,7 +30,11 @@ export async function exportAll(): Promise<string | null> {
     settings: safeSettings,
   }
   for (const table of TABLES) {
-    payload[table] = db().prepare(`SELECT * FROM ${table}`).all()
+    try {
+      payload[table] = db().prepare(`SELECT * FROM ${table}`).all()
+    } catch {
+      payload[table] = []
+    }
   }
   fs.writeFileSync(res.filePath, JSON.stringify(payload, null, 2), 'utf-8')
   return res.filePath
@@ -51,13 +49,13 @@ export async function importAll(): Promise<boolean> {
   if (res.canceled || !res.filePaths.length) return false
 
   const raw = JSON.parse(fs.readFileSync(res.filePaths[0], 'utf-8'))
-  if (raw?.app !== 'wist' || !Array.isArray(raw.titles)) {
-    throw new Error('Not a valid Bard backup file.')
-  }
+  if (raw?.app !== 'wist') throw new Error('Not a valid Bard backup file.')
 
   const d = db()
   const tx = d.transaction(() => {
-    for (const table of [...TABLES].reverse()) d.prepare(`DELETE FROM ${table}`).run()
+    for (const table of [...TABLES].reverse()) {
+      try { d.prepare(`DELETE FROM ${table}`).run() } catch { /* table may not exist */ }
+    }
     for (const table of TABLES) {
       const rows: any[] = raw[table] ?? []
       if (!rows.length) continue
@@ -70,40 +68,4 @@ export async function importAll(): Promise<boolean> {
   })
   tx()
   return true
-}
-
-export function clearHistory(): void {
-  const d = db()
-  const tx = d.transaction(() => {
-    d.prepare('DELETE FROM watch_sessions').run()
-    d.prepare('UPDATE episodes SET watched = 0, watch_date = NULL, watch_position_seconds = 0').run()
-  })
-  tx()
-}
-
-export async function exportMoments(): Promise<{ exported: number; dir: string } | null> {
-  const res = await dialog.showOpenDialog(win()!, {
-    title: 'Choose export folder for moments',
-    properties: ['openDirectory', 'createDirectory'],
-  })
-  if (res.canceled || !res.filePaths.length) return null
-  const dir = res.filePaths[0]
-
-  const moments = listMoments()
-  let exported = 0
-  const meta = moments.map((m) => {
-    let copied: string | null = null
-    if (m.screenshot_path && fs.existsSync(m.screenshot_path)) {
-      copied = path.basename(m.screenshot_path)
-      try {
-        fs.copyFileSync(m.screenshot_path, path.join(dir, copied))
-        exported++
-      } catch {
-        copied = null
-      }
-    }
-    return { ...m, screenshot_file: copied }
-  })
-  fs.writeFileSync(path.join(dir, 'moments.json'), JSON.stringify(meta, null, 2), 'utf-8')
-  return { exported, dir }
 }

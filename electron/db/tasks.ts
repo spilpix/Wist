@@ -28,10 +28,9 @@ const rowToTask = (row: any): Task => ({
   priority: validPriority(row.priority) ? row.priority : 'none',
 })
 
-const SELECT = `SELECT t.*, p.name AS project_name, ti.title AS linked_title_name, ti.type AS linked_title_type
+const SELECT = `SELECT t.*, p.name AS project_name
   FROM tasks t
-  LEFT JOIN projects p ON p.id = t.project_id
-  LEFT JOIN titles ti ON ti.id = t.linked_title_id`
+  LEFT JOIN projects p ON p.id = t.project_id`
 
 export function listTasks(filters: { done?: boolean; projectId?: number } = {}): Task[] {
   const where: string[] = ['t.deleted_at IS NULL']
@@ -72,7 +71,7 @@ export function createTask(data: Partial<Task>): Task {
   const done = status === 'done' ? 1 : 0
   const info = db()
     .prepare(
-      'INSERT INTO tasks (title, note, priority, due_date, remind_at, tags, project_id, linked_title_id, source, status, done, completed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+      'INSERT INTO tasks (title, note, priority, due_date, remind_at, tags, project_id, source, status, done, completed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     )
     .run(
       (data.title ?? '').trim() || 'Untitled',
@@ -82,7 +81,6 @@ export function createTask(data: Partial<Task>): Task {
       data.remind_at ?? null,
       JSON.stringify(Array.isArray(data.tags) ? data.tags : []),
       data.project_id ?? null,
-      data.linked_title_id ?? null,
       typeof data.source === 'string' && data.source ? data.source.slice(0, 64) : 'user',
       status,
       done,
@@ -94,7 +92,7 @@ export function createTask(data: Partial<Task>): Task {
 export function updateTask(id: number, patch: Partial<Task>): Task {
   const sets: string[] = []
   const values: any[] = []
-  for (const key of ['title', 'note', 'due_date', 'remind_at', 'project_id', 'linked_title_id'] as const) {
+  for (const key of ['title', 'note', 'due_date', 'remind_at', 'project_id'] as const) {
     if (patch[key] === undefined) continue
     sets.push(`${key} = ?`)
     values.push(patch[key])

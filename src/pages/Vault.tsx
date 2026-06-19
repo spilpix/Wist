@@ -13,7 +13,6 @@ import {
   Package,
   Pencil,
   Plus,
-  RefreshCw,
   Search,
   Trash2,
   Video,
@@ -165,14 +164,6 @@ export default function Vault({ embedded = false, kindFilter }: VaultProps = {})
     }
   }
 
-  // adding a folder ALSO syncs the music/video inside it into their sections
-  const mediaParts = (r: { tracks?: number; titles?: number; episodes?: number }): string[] => {
-    const parts: string[] = []
-    if (r.tracks) parts.push(t('vault.syncedTracks', { n: r.tracks }))
-    if (r.episodes || r.titles) parts.push(t('vault.syncedVideos', { n: r.episodes || r.titles || 0 }))
-    return parts
-  }
-
   const addFolder = async () => {
     const r = await window.wist.vault.addFolder(parentId)
     if (!r.folders) {
@@ -180,20 +171,7 @@ export default function Vault({ embedded = false, kindFilter }: VaultProps = {})
       return
     }
     load()
-    const parts = mediaParts(r)
-    toast(parts.length ? `${t('vault.folderAdded')} · ${parts.join(' · ')}` : t('vault.folderAdded'), 'success')
-  }
-
-  const syncAll = async () => {
-    toast(t('vault.syncing'))
-    try {
-      const r = await window.wist.vault.syncAll()
-      load()
-      const parts = mediaParts(r)
-      toast(parts.length ? parts.join(' · ') : t('vault.syncNone'), 'success')
-    } catch (e: any) {
-      toast(String(e?.message ?? e), 'error')
-    }
+    toast(t('vault.folderAdded'), 'success')
   }
 
   // ── drop rules ────────────────────────────────────────────────────────────
@@ -259,9 +237,6 @@ export default function Vault({ embedded = false, kindFilter }: VaultProps = {})
             </button>
             <button className="btn-ghost" onClick={addFolder}>
               <FolderOpen size={15} /> {t('vault.addFolder')}
-            </button>
-            <button className="btn-ghost" onClick={syncAll} title={t('vault.syncHint')}>
-              <RefreshCw size={15} /> {t('vault.sync')}
             </button>
             <button className="btn-accent" onClick={() => addFiles(() => window.wist.vault.pickAndAdd(parentId))}>
               <Plus size={16} /> {t('vault.add')}

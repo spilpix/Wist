@@ -9,14 +9,12 @@ import {
   EyeOff,
   File as FileIcon,
   FileText,
-  Film,
   Folder,
   FolderKanban,
   Frame,
   Hash,
   Layers,
   Maximize2,
-  Music,
   PanelLeftClose,
   PanelLeftOpen,
   Play,
@@ -24,7 +22,6 @@ import {
   Search,
   Settings2,
   Share2,
-  Sparkles,
   X,
   type LucideIcon,
 } from 'lucide-react'
@@ -44,15 +41,12 @@ import { useSettingsStore, resolvedTheme } from '../store/settingsStore'
 import { useUiStore } from '../store/uiStore'
 import type {
   Canvas,
-  Moment,
-  MusicAlbum,
   Note,
   NoteFolder,
   Project,
   ProjectAsset,
   ProjectSection,
   Task,
-  Title,
   VaultFile,
 } from '../types/models'
 import { useI18n, type TKey } from '../i18n'
@@ -104,15 +98,12 @@ const MONO_HEX = (kind: GraphKind): string => (kind === 'root' ? '#cbd5e1' : kin
 
 // leaf icon per node kind (sidebar tree)
 const KIND_ICON: Partial<Record<GraphKind, LucideIcon>> = {
-  title: Film,
   book: BookOpen,
   note: FileText,
-  moment: Sparkles,
   project: FolderKanban,
   task: CheckSquare,
   tag: Hash,
   canvas: Frame,
-  album: Music,
   file: FileIcon,
   folder: Folder,
   section: Layers,
@@ -128,42 +119,33 @@ interface CategoryDef {
   icon: LucideIcon
 }
 const CATEGORIES: CategoryDef[] = [
-  { key: 'library', labelKey: 'nav.library', color: '#6fb06f', icon: Film },
   { key: 'projects', labelKey: 'nav.hub', color: '#e67d22', icon: FolderKanban },
   { key: 'notes', labelKey: 'nav.notes', color: '#7aa8c4', icon: FileText },
   { key: 'tasks', labelKey: 'nav.tasks', color: '#c47a7a', icon: CheckSquare },
   { key: 'canvas', labelKey: 'nav.canvas', color: '#5b8bb0', icon: Frame },
-  { key: 'music', labelKey: 'nav.music', color: '#c479b8', icon: Music },
   { key: 'files', labelKey: 'nav.localFiles', color: '#8a8278', icon: Folder },
-  { key: 'moments', labelKey: 'nav.moments', color: '#a87dc4', icon: Sparkles },
   { key: 'tags', labelKey: 'world.tags', color: '#6b7686', icon: Hash },
 ]
 const CATEGORY_KEYS = CATEGORIES.map((c) => c.key)
 
 interface SourceData {
-  titles: Title[]
   notes: Note[]
   noteFolders: NoteFolder[]
-  moments: Moment[]
   projects: Project[]
   projSections: Record<number, ProjectSection[]>
   projAssets: Record<number, ProjectAsset[]>
   tasks: Task[]
   canvases: Canvas[]
-  albums: MusicAlbum[]
   vault: VaultFile[]
 }
 const EMPTY_SRC: SourceData = {
-  titles: [],
   notes: [],
   noteFolders: [],
-  moments: [],
   projects: [],
   projSections: {},
   projAssets: {},
   tasks: [],
   canvases: [],
-  albums: [],
   vault: [],
 }
 
@@ -265,22 +247,6 @@ function buildWorld(src: SourceData, opts: BuildOpts, names: Record<string, stri
     return id
   }
 
-  // ---------- Библиотека (titles + books) ----------
-  const titleByName = new Map<string, string>()
-  if (!hidden.has('library')) {
-    for (const t of src.titles) {
-      const kind: GraphKind = t.type === 'book' ? 'book' : 'title'
-      const id = `t${t.id}`
-      add({ id, kind, label: t.title, sub: t.year ? String(t.year) : null, route: `/title/${t.id}` }, 'library', ensureCat('library'))
-      link(ensureCat('library'), id)
-      titleByName.set(t.title.trim().toLowerCase(), id)
-      if (t.original_title) titleByName.set(t.original_title.trim().toLowerCase(), id)
-      for (const g of t.genres) facet(g, id)
-      for (const tg of t.tags) facet(tg, id)
-      facet(t.type, id)
-    }
-  }
-
   // ---------- Проекты → секции → файлы ----------
   const projectByName = new Map<string, string>()
   if (!hidden.has('projects')) {
@@ -359,16 +325,6 @@ function buildWorld(src: SourceData, opts: BuildOpts, names: Record<string, stri
     }
   }
 
-  // ---------- Музыка (альбомы) ----------
-  if (!hidden.has('music')) {
-    for (const al of src.albums) {
-      const id = `al${al.key}`
-      add({ id, kind: 'album', label: al.album || '—', sub: al.artist ?? null, route: '/music' }, 'music', ensureCat('music'))
-      link(ensureCat('music'), id)
-      facet(al.artist, id)
-    }
-  }
-
   // ---------- Файлы (vault-дерево) ----------
   if (!hidden.has('files')) {
     const vfId = (id: number) => `vf${id}`
@@ -383,31 +339,15 @@ function buildWorld(src: SourceData, opts: BuildOpts, names: Record<string, stri
     }
   }
 
-  // ---------- Моменты ----------
-  if (!hidden.has('moments')) {
-    for (const m of src.moments) {
-      const id = `m${m.id}`
-      add(
-        { id, kind: 'moment', label: m.note || m.title_name || names['cat.moments'], sub: m.title_name ?? null, route: `/title/${m.title_id}` },
-        'moments',
-        ensureCat('moments')
-      )
-      link(ensureCat('moments'), id)
-      if (m.title_id != null) link(id, `t${m.title_id}`, true)
-    }
-  }
-
   // ---------- cross-links (knowledge layer) ----------
   if (!hidden.has('notes')) {
     for (const nt of src.notes) {
-      if (nt.linked_title_id != null) link(`n${nt.id}`, `t${nt.linked_title_id}`, true)
       if (nt.project_id != null) link(`n${nt.id}`, `pr${nt.project_id}`, true)
     }
   }
   if (!hidden.has('tasks')) {
     for (const tk of src.tasks) {
       if (tk.project_id != null) link(`tk${tk.id}`, `pr${tk.project_id}`, true)
-      if (tk.linked_title_id != null) link(`tk${tk.id}`, `t${tk.linked_title_id}`, true)
     }
   }
 
@@ -426,12 +366,12 @@ function buildWorld(src: SourceData, opts: BuildOpts, names: Record<string, stri
     for (const nt of src.notes) {
       for (const m of nt.content.matchAll(/\[\[([^\]]+)\]\]/g)) {
         const key = m[1].trim().toLowerCase()
-        const target = noteByName.get(key) ?? titleByName.get(key) ?? projectByName.get(key) ?? taskByName.get(key)
+        const target = noteByName.get(key) ?? projectByName.get(key) ?? taskByName.get(key)
         if (target) link(`n${nt.id}`, target)
       }
     }
     const mentionNames: Array<{ key: string; id: string }> = []
-    for (const mp of [titleByName, projectByName, noteByName, taskByName]) {
+    for (const mp of [projectByName, noteByName, taskByName]) {
       for (const [k, id] of mp) if (k.length >= 4) mentionNames.push({ key: k, id })
     }
     for (const nt of src.notes) {
@@ -603,15 +543,12 @@ export default function MemoryTree() {
     let cancelled = false
     const safe = <T,>(p: Promise<T>, d: T): Promise<T> => p.catch(() => d)
     ;(async () => {
-      const [titles, notes, noteFolders, moments, projects, tasks, canvases, albums] = await Promise.all([
-        safe(window.wist.titles.list({}), [] as Title[]),
+      const [notes, noteFolders, projects, tasks, canvases] = await Promise.all([
         safe(window.wist.notes.list({}), [] as Note[]),
         safe(window.wist.noteFolders.list(), [] as NoteFolder[]),
-        safe(window.wist.moments.list({}), [] as Moment[]),
         safe(window.wist.projects.list(), [] as Project[]),
         safe(window.wist.tasks.list({}), [] as Task[]),
         safe(window.wist.canvas.list(), [] as Canvas[]),
-        safe(window.wist.music.albums(), [] as MusicAlbum[]),
       ])
       const projSections: Record<number, ProjectSection[]> = {}
       const projAssets: Record<number, ProjectAsset[]> = {}
@@ -639,7 +576,7 @@ export default function MemoryTree() {
         }
       }
       await walk(null, 0)
-      if (!cancelled) setSrc({ titles, notes, noteFolders, moments, projects, projSections, projAssets, tasks, canvases, albums, vault })
+      if (!cancelled) setSrc({ notes, noteFolders, projects, projSections, projAssets, tasks, canvases, vault })
     })().catch((e) => {
       // a failed load must never leave the graph stuck on the spinner
       console.error('graph load failed', e)
@@ -714,13 +651,10 @@ export default function MemoryTree() {
   if (!src) return <Spinner />
 
   const total =
-    src.titles.length +
     src.notes.length +
-    src.moments.length +
     src.projects.length +
     src.tasks.length +
     src.canvases.length +
-    src.albums.length +
     src.vault.length
   if (total === 0) {
     return (
