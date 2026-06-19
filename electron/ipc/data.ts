@@ -5,10 +5,13 @@ import { db } from '../db/database'
 import { listMoments } from '../db/moments'
 import { getSettings } from '../settings'
 
+// MUST stay in sync with the TABLES list in electron/ipc/brain.ts (the authoritative
+// full set). Order is FK-safe: parents before children for insert, reversed for delete.
 const TABLES = [
   'titles', 'episodes', 'moments', 'youtube_sources', 'watch_sessions', 'screenshots',
-  'projects', 'project_assets',
-  'notes', 'journal_entries', 'tasks', 'playlists', 'vault_files',
+  'projects', 'project_sections', 'project_assets', 'project_sessions', 'project_snapshots', 'project_patches',
+  'note_folders', 'notes', 'journal_entries', 'tasks', 'task_comments', 'playlists', 'vault_files',
+  'tracks', 'music_playlists', 'music_playlist_tracks',
   'canvases', 'favorites', 'collections', 'collection_items',
 ] as const
 
@@ -24,11 +27,13 @@ export async function exportAll(): Promise<string | null> {
   })
   if (res.canceled || !res.filePath) return null
 
+  const safeSettings = { ...getSettings() } as Record<string, unknown>
+  delete safeSettings.apiToken // never write the API token into an exportable/synced file
   const payload: Record<string, unknown> = {
     app: 'wist',
     version: 1,
     exported_at: new Date().toISOString(),
-    settings: getSettings(),
+    settings: safeSettings,
   }
   for (const table of TABLES) {
     payload[table] = db().prepare(`SELECT * FROM ${table}`).all()

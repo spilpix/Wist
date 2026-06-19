@@ -21,18 +21,23 @@ export default function YouTubeSources() {
   const navigate = useNavigate()
 
   const load = useCallback(async () => {
-    const sources = await window.wist.youtube.sources()
-    const withVideos = await Promise.all(
-      sources.map(async (source) => {
-        const eps = await window.wist.episodes.listByTitle(source.title_id)
-        return {
-          source,
-          videos: eps.filter((e) => e.file_path?.startsWith('http')),
-        }
-      })
-    )
-    setBlocks(withVideos)
-    setLoading(false)
+    try {
+      const sources = await window.wist.youtube.sources()
+      const withVideos = await Promise.all(
+        sources.map(async (source) => {
+          const eps = await window.wist.episodes.listByTitle(source.title_id)
+          return {
+            source,
+            videos: eps.filter((e) => e.file_path?.startsWith('http')),
+          }
+        })
+      )
+      setBlocks(withVideos)
+    } catch {
+      setBlocks([])
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
   useEffect(() => {

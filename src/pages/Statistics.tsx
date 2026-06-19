@@ -131,8 +131,8 @@ export default function Statistics() {
               <ResponsiveContainer width="55%" height={200}>
                 <PieChart>
                   <Pie data={typeData} dataKey="value" innerRadius={48} outerRadius={80} paddingAngle={3} stroke="none">
-                    {typeData.map((_, i) => (
-                      <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                    {typeData.map((d, i) => (
+                      <Cell key={d.name} fill={PIE_COLORS[i % PIE_COLORS.length]} />
                     ))}
                   </Pie>
                   <Tooltip contentStyle={CHART_TOOLTIP_STYLE} itemStyle={CHART_ITEM_STYLE} />

@@ -14,7 +14,6 @@ export default function HubTasks({
   onChanged,
 }: {
   projectId: number
-  accent: string
   openSignal?: number
   onChanged?: () => void
 }) {

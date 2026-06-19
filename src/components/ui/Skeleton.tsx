@@ -24,24 +24,6 @@ export default function Skeleton({ w = '100%', h = 11, radius, className = '' }:
   )
 }
 
-/** Content-card placeholder: avatar + two meta lines + three body lines (spec §Скелетоны). */
-export function SkeletonCard({ className = '' }: { className?: string }) {
-  return (
-    <div className={`card flex flex-col gap-3.5 p-[18px] ${className}`}>
-      <div className="flex items-center gap-3">
-        <SkeletonCircle size={40} />
-        <div className="flex flex-1 flex-col gap-[7px]">
-          <SkeletonLine w="42%" />
-          <SkeletonLine w="26%" />
-        </div>
-      </div>
-      <SkeletonLine w="100%" />
-      <SkeletonLine w="88%" />
-      <SkeletonLine w="64%" />
-    </div>
-  )
-}
-
 /** Borderless task-list placeholder: N rows of check-square + title + due (mirrors TaskListRow). */
 export function SkeletonTasks({ rows = 5, className = '' }: { rows?: number; className?: string }) {
   const widths = ['46%', '32%', '54%', '38%', '60%', '28%']

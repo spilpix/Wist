@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import pkg from '../../package.json'
 import {
   Brain,
   Database,
@@ -247,7 +248,7 @@ export default function SettingsPage() {
             </button>
           ))}
         </nav>
-        <div className="mt-auto px-2 pt-6 text-[11px] text-zinc-600">{t('set.footer', { version: '0.42.0' })}</div>
+        <div className="mt-auto px-2 pt-6 text-[11px] text-zinc-600">{t('set.footer', { version: pkg.version })}</div>
       </aside>
 
       {/* right content pane — centered, no wasted right-hand air */}

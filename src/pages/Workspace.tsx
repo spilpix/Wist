@@ -269,7 +269,7 @@ function ProjectView({
       setTasks(tk ?? [])
       setNotes(n ?? [])
       setLoading(false)
-    })
+    }).catch(() => setLoading(false))
   }, [project.id])
 
   useEffect(() => {

@@ -203,9 +203,9 @@ export default function Player() {
       sessionId.current = await window.wist.sessions.start(b.title.id, b.episode.id)
       window.wist.moments.list({ titleId: b.title.id }).then((ms) =>
         setMoments(ms.filter((m) => m.episode_id === epId))
-      )
-      window.wist.media.subtitles(b.episode.file_path).then(setSubtitleTracks)
-    })
+      ).catch(() => setMoments([]))
+      window.wist.media.subtitles(b.episode.file_path).then(setSubtitleTracks).catch(() => setSubtitleTracks([]))
+    }).catch((e) => setError(String(e?.message ?? e)))
 
     return () => {
       const v = videoRef.current

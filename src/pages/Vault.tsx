@@ -90,11 +90,11 @@ export default function Vault({ embedded = false, kindFilter }: VaultProps = {})
     if (current.kind === 'vault') {
       setDiskItems(null)
       setVaultItems(null)
-      window.wist.vault.list(current.id).then(setVaultItems)
+      window.wist.vault.list(current.id).then(setVaultItems).catch(() => setVaultItems([]))
     } else {
       setVaultItems(null)
       setDiskItems(null)
-      window.wist.vault.browse(current.path).then(setDiskItems)
+      window.wist.vault.browse(current.path).then(setDiskItems).catch(() => setDiskItems([]))
     }
   }, [current])
 
@@ -186,10 +186,14 @@ export default function Vault({ embedded = false, kindFilter }: VaultProps = {})
 
   const syncAll = async () => {
     toast(t('vault.syncing'))
-    const r = await window.wist.vault.syncAll()
-    load()
-    const parts = mediaParts(r)
-    toast(parts.length ? parts.join(' · ') : t('vault.syncNone'), 'success')
+    try {
+      const r = await window.wist.vault.syncAll()
+      load()
+      const parts = mediaParts(r)
+      toast(parts.length ? parts.join(' · ') : t('vault.syncNone'), 'success')
+    } catch (e: any) {
+      toast(String(e?.message ?? e), 'error')
+    }
   }
 
   // ── drop rules ────────────────────────────────────────────────────────────

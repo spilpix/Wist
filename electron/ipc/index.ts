@@ -726,7 +726,7 @@ export function registerIpcHandlers(): void {
 
   // --- shell ---
   ipcMain.handle('shell:openExternal', (_e, url: string) => {
-    if (/^https?:\/\//i.test(url)) return shell.openExternal(url)
+    if (/^https:\/\//i.test(url)) return shell.openExternal(url)
   })
   ipcMain.handle('shell:showItemInFolder', (_e, p: string) => shell.showItemInFolder(p))
   ipcMain.handle('shell:openInMpv', (_e, filePath: string) => {

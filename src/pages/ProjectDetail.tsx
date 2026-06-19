@@ -439,7 +439,7 @@ export default function ProjectDetail() {
           )}
 
           {tab === 'tasks' && (
-            <HubTasks projectId={projectId} accent={accent} openSignal={taskSignal} onChanged={loadTasks} />
+            <HubTasks projectId={projectId} openSignal={taskSignal} onChanged={loadTasks} />
           )}
 
           {tab === 'notes' && <NotesPanel notes={notes} t={t} onNew={newNote} onOpen={(n) => navigate(`/notes?open=${n.id}`)} />}
