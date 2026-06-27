@@ -3,7 +3,7 @@ import {
   ChevronRight, Download, File as FileIcon, FileImage, FileText, Film, Folder,
   FolderPlus, Music, Trash2, Upload,
 } from 'lucide-react'
-import { supabase } from '../../lib/supabase'
+import { supabase, subscribe } from '../../data/cloud'
 import { useWorkspaceStore } from '../../store/workspaceStore'
 import { formatSize, timeAgo } from '../../lib/wsUi'
 import Spinner from '../ui/Spinner'
@@ -51,10 +51,7 @@ export default function FilesSection({ workspaceId, userId }: { workspaceId: str
 
   useEffect(() => {
     reload()
-    const ch = supabase.channel(`files:${workspaceId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'shared_files', filter: `workspace_id=eq.${workspaceId}` }, reload)
-      .subscribe()
-    return () => { supabase.removeChannel(ch) }
+    return subscribe(`files:${workspaceId}`, 'shared_files', `workspace_id=eq.${workspaceId}`, reload)
   }, [workspaceId, reload])
 
   const here = items.filter((i) => i.parent_id === cwd)

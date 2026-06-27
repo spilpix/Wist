@@ -2,12 +2,15 @@ import { type RefObject, useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Check, Plus } from 'lucide-react'
 import TaskPeekDock from '../components/TaskPeekDock'
+import TypeBadge from '../components/TypeBadge'
 import { SkeletonTasks } from '../components/ui/Skeleton'
 import type { Note, Task } from '../types/models'
 import { DATE_LOCALE, useI18n, t as tGlobal, type TKey } from '../i18n'
 import { toast } from '../store/toastStore'
 import { useSettingsStore } from '../store/settingsStore'
 import { formatRelative } from '../utils/formatters'
+import { listTasks, createTask, updateTask } from '../data/tasks'
+import { listNotes, createNote } from '../data/notes'
 
 function greetingKey(): TKey {
   const h = new Date().getHours()
@@ -72,11 +75,11 @@ export default function Home() {
   const taskInput = useRef<HTMLInputElement>(null)
 
   const loadTasks = useCallback(
-    () => window.wist.tasks.list().then((x: Task[]) => setTasks(x)).catch((e) => { console.error('home tasks load failed', e); toast(tGlobal('home.loadError')); setTasks([]) }),
+    () => listTasks().then((x: Task[]) => setTasks(x)).catch((e) => { console.error('home tasks load failed', e); toast(tGlobal('home.loadError')); setTasks([]) }),
     [],
   )
   const loadNotes = useCallback(
-    () => window.wist.notes.list().then((x: Note[]) => setNotes(x)).catch((e) => { console.error('home notes load failed', e); setNotes([]) }),
+    () => listNotes().then((x: Note[]) => setNotes(x)).catch((e) => { console.error('home notes load failed', e); setNotes([]) }),
     [],
   )
 
@@ -104,21 +107,21 @@ export default function Home() {
       else next.delete(task.id)
       return next
     })
-    await window.wist.tasks.update(task.id, { done: completing ? 1 : 0 })
+    await updateTask(task.id, { done: completing ? 1 : 0 })
     loadTasks()
   }
   const addTask = async () => {
     const v = newTask.trim()
     if (!v) return
     setNewTask('')
-    await window.wist.tasks.create({ title: v, status: 'todo' })
+    await createTask({ title: v, status: 'todo' })
     loadTasks()
   }
   const addNote = async () => {
     const v = newNote.trim()
     if (!v) return
     setNewNote('')
-    await window.wist.notes.create({ title: v, content: '' })
+    await createNote({ title: v, content: '' })
     loadNotes()
   }
 
@@ -176,6 +179,7 @@ export default function Home() {
                             >
                               <Check size={11} strokeWidth={3.5} />
                             </button>
+                            <TypeBadge typeId={task.props?.type} size={13} />
                             <span className={`min-w-0 flex-1 truncate text-[13px] ${isDone ? 'text-zinc-500 line-through' : 'text-zinc-100'}`}>
                               {task.title}
                             </span>

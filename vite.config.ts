@@ -56,5 +56,19 @@ export default defineConfig({
     }),
   ],
   server: { port: 5173, strictPort: true },
-  build: { outDir: 'dist' },
+  build: {
+    outDir: 'dist',
+    // Split heavy vendors out of the main chunk so they cache independently and load in
+    // parallel, instead of one ~1.2 MB monolith (the audit's scalability note #5).
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+          charts: ['recharts', 'd3-force'],
+          supabase: ['@supabase/supabase-js'],
+          icons: ['lucide-react'],
+        },
+      },
+    },
+  },
 })

@@ -31,11 +31,13 @@ import {
   GitBranch,
   CalendarDays,
   ListChecks,
+  Timer as TimerIcon,
   X,
 } from 'lucide-react'
 import Spinner from '../components/ui/Spinner'
 import Modal from '../components/ui/Modal'
 import { physKey } from '../lib/keyboard'
+import { useElementSize } from '../lib/useElementSize'
 import Button from '../components/ui/Button'
 import { toast } from '../store/toastStore'
 import type { CanvasAnchor, CanvasConnectorType, CanvasData, CanvasEdge, CanvasGuide, CanvasNode, Note, Task } from '../types/models'
@@ -65,12 +67,14 @@ import {
   bbox,
   type Box,
   boxesIntersect,
+  boxIntersectsPolygon,
   center,
   connectorPath,
   nearestAnchor,
   nodeAABB,
   pointInBox,
   type Pt,
+  recognizeShape,
   rotate,
   sideToward,
   snap as snapTo,
@@ -80,7 +84,7 @@ import {
 import { useHistory } from '../canvas/history'
 import NodeView from '../canvas/NodeView'
 import ConnectorView from '../canvas/ConnectorView'
-import BottomToolbar from '../canvas/BottomToolbar'
+import BottomToolbar, { type PenStyle } from '../canvas/BottomToolbar'
 import ContextToolbar from '../canvas/ContextToolbar'
 import Minimap from '../canvas/Minimap'
 import FramesPanel from '../canvas/FramesPanel'
@@ -89,53 +93,33 @@ import GridCanvas from '../canvas/GridCanvas'
 import Rulers from '../canvas/Rulers'
 import AutoWidthInput from '../canvas/AutoWidthInput'
 import { buildPdf } from '../canvas/pdf'
+import FocusTimer from '../canvas/FocusTimer'
+import Relations from '../components/Relations'
 import { useUiStore } from '../store/uiStore'
 import { baseName, dragHasDroppable, isImagePath, readMediaDrag } from '../lib/mediaDrag'
 import { CANVAS_TEMPLATES, type CanvasTemplate } from '../canvas/templates'
+import { HANDLES, SIDE_HANDLES, SIDE_ANCHORS, type Sign } from '../canvas/boardGeometry'
+import { TopBtn, MenuItem, SelectionFrame, LinkModal } from '../canvas/BoardParts'
+import { sigOf, useCanvasPersistence } from '../canvas/persistence'
+import { useCanvasExport } from '../canvas/useCanvasExport'
+import { useViewport } from '../canvas/useViewport'
+import { useSelection } from '../canvas/useSelection'
+import { getCanvas, captureCanvas, saveCanvasExport } from '../data/canvas'
+import { listNotes } from '../data/notes'
+import { listTasks, updateTask } from '../data/tasks'
+import { useCanvasDrag, type Drag, type ConnectFrom } from '../canvas/useCanvasDrag'
 
 const uid = () => Math.random().toString(36).slice(2, 10)
 
 // lucide icons referenced by template definitions (keeps templates.ts JSX-free)
 const TPL_ICONS: Record<string, typeof Sparkles> = { Share2, Lightbulb, Columns3, GitBranch, CalendarDays, ListChecks }
 
-// stable signature of a board's persisted state — used to skip no-op autosaves
-const sigOf = (id: number, nm: string, d: CanvasData, c: { x: number; y: number; k: number }) =>
-  JSON.stringify({ id, nm, n: d.nodes, e: d.edges, g: d.guides, v: c })
+// sigOf + the autosave lifecycle live in ../canvas/persistence
 
-type Sign = [number, number]
+// Sign / HANDLES / SIDE_HANDLES / SIDE_ANCHORS now live in ../canvas/boardGeometry
 
-// the origin of an in-progress connector: an anchor on a node, or a free-floating point
-type ConnectFrom = { id: string; anchor: CanvasAnchor } | { point: Pt }
+// Drag + ConnectFrom types live in ../canvas/useCanvasDrag (the drag state machine)
 
-type Drag =
-  | { mode: 'pan'; sx: number; sy: number; ox: number; oy: number; button: number; moved: boolean }
-  | { mode: 'move'; sx: number; sy: number; start: Record<string, Pt>; firstId: string; moved: boolean; tapEdit: boolean }
-  | { mode: 'resize'; id: string; sign: Sign; sx: number; sy: number; box: Box; rot: number; aspect: boolean }
-  | { mode: 'gresize'; sign: Sign; sx: number; sy: number; box: Box; start: Record<string, Box> }
-  | { mode: 'rotate'; id: string; cxC: number; cyC: number; startAngle: number; startRot: number }
-  | { mode: 'radius'; id: string; corner: Sign; sx: number; sy: number; start: number; max: number }
-  | { mode: 'marquee'; sx: number; sy: number; additive: boolean; base: Set<string> }
-  | { mode: 'connect'; from: ConnectFrom; cur: Pt }
-  | { mode: 'create'; tool: ToolKey; down: Pt }
-  | { mode: 'guide'; axis: 'h' | 'v'; index: number | null } // index null = creating a new guide
-  | { mode: 'pen' }
-  | { mode: 'crop'; corner: Sign | 'move'; sx: number; sy: number; rect: { x: number; y: number; w: number; h: number }; box: { w: number; h: number } }
-  | null
-
-const HANDLES: { key: string; sign: Sign; cursor: string }[] = [
-  { key: 'nw', sign: [-1, -1], cursor: 'nwse-resize' },
-  { key: 'ne', sign: [1, -1], cursor: 'nesw-resize' },
-  { key: 'se', sign: [1, 1], cursor: 'nwse-resize' },
-  { key: 'sw', sign: [-1, 1], cursor: 'nesw-resize' },
-]
-// side-midpoint handles (single-axis resize) — Figma-style 8-handle frame
-const SIDE_HANDLES: { key: string; sign: Sign; cursor: string }[] = [
-  { key: 'n', sign: [0, -1], cursor: 'ns-resize' },
-  { key: 'e', sign: [1, 0], cursor: 'ew-resize' },
-  { key: 's', sign: [0, 1], cursor: 'ns-resize' },
-  { key: 'w', sign: [-1, 0], cursor: 'ew-resize' },
-]
-const SIDE_ANCHORS: CanvasAnchor[] = ['t', 'r', 'b', 'l']
 
 export default function CanvasBoard() {
   const { t } = useI18n()
@@ -147,16 +131,13 @@ export default function CanvasBoard() {
   useTabTitle(name)
   const hist = useHistory({ nodes: [], edges: [] })
   const data = hist.data
-  const [cam, setCam] = useState({ x: 200, y: 140, k: 1 })
   const [tool, setTool] = useState<ToolKey>('select')
   const [shape, setShape] = useState<CanvasNode['shape']>('rect')
   const [connType, setConnType] = useState<CanvasConnectorType>('curve') // style for new connectors
-  const [penStyle, setPenStyle] = useState<{ kind: 'pen' | 'marker' | 'highlighter'; size: number; color: string }>({ kind: 'pen', size: 3, color: '' })
+  const [penStyle, setPenStyle] = useState<PenStyle>({ kind: 'pen', size: 3, color: '' })
   const [stickyFill, setStickyFill] = useState(STICKY_COLORS[0])
-  const [sel, setSel] = useState<Set<string>>(new Set())
-  const [selEdge, setSelEdge] = useState<string | null>(null)
-  const [editing, setEditing] = useState<string | null>(null)
-  const [hover, setHover] = useState<string | null>(null)
+  // selection model (selected nodes + ref · selected edge · editing · hover) → ../canvas/useSelection
+  const { sel, setSel, selRef, selEdge, setSelEdge, editing, setEditing, hover, setHover } = useSelection()
   const [marquee, setMarquee] = useState<{ x: number; y: number; w: number; h: number } | null>(null)
   const [connectCur, setConnectCur] = useState<Pt | null>(null)
   // a connector dropped on empty canvas → a small menu offering to create & wire a node
@@ -164,6 +145,7 @@ export default function CanvasBoard() {
   // a connector waiting on the note picker (chose "add note from vault")
   const [pendingConnect, setPendingConnect] = useState<{ from: ConnectFrom; at: Pt } | null>(null)
   const [penDraft, setPenDraft] = useState<Pt[] | null>(null)
+  const [lassoDraft, setLassoDraft] = useState<Pt[] | null>(null)
   const [space, setSpace] = useState(false)
   const [grid, setGrid] = useState<'dots' | 'lines' | 'none'>('dots')
   const [snap, setSnap] = useState(false) // grid-snap off by default — smooth drag; objects still snap to each other
@@ -173,12 +155,9 @@ export default function CanvasBoard() {
   const [present, setPresent] = useState<number | null>(null)
   const [openComment, setOpenComment] = useState<string | null>(null)
   const [showResolved, setShowResolved] = useState(false)
-  const [exportMenu, setExportMenu] = useState(false)
-  const [exporting, setExporting] = useState(false)
   const [cropping, setCropping] = useState<string | null>(null)
   const [cropRect, setCropRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null)
   const [minimapOpen, setMinimapOpen] = useState(false)
-  const [boardSize, setBoardSize] = useState({ w: 0, h: 0 })
   const [guides, setGuides] = useState<{ vx: number[]; hy: number[] } | null>(null)
   const [dropFrame, setDropFrame] = useState<string | null>(null) // frame highlighted as the drop target mid-drag
   const [dndOver, setDndOver] = useState(false) // a media/file drag from another section is hovering the board
@@ -187,6 +166,8 @@ export default function CanvasBoard() {
   const [searchIdx, setSearchIdx] = useState(-1) // match the camera is parked on (-1 = none yet)
   const [templatesDismissed, setTemplatesDismissed] = useState(false) // hide the empty-board starter
   const [outlineOpen, setOutlineOpen] = useState(false) // table-of-contents panel
+  const [timerOpen, setTimerOpen] = useState(false) // focus/pomodoro timer
+  const [relationsOpen, setRelationsOpen] = useState(false) // edge-backed relations panel
   const [guideDraft, setGuideDraft] = useState<CanvasGuide | null>(null) // live ruler-guide being dragged
   const [ctxSize, setCtxSize] = useState({ w: 0, h: 0 }) // measured floating-toolbar size → used to clamp it on-screen
 
@@ -198,11 +179,10 @@ export default function CanvasBoard() {
   const boardRef = useRef<HTMLDivElement>(null)
   const ctxRef = useRef<HTMLDivElement>(null)
   const drag = useRef<Drag>(null)
-  const selRef = useRef(sel)
-  selRef.current = sel
-  const camRef = useRef(cam)
-  camRef.current = cam
-  const camAnim = useRef<number | null>(null) // rAF id of an in-flight camera tween
+  // camera/viewport (cam + camRef + zoom/fit/pan) lives in ../canvas/useViewport
+  const getNodes = useCallback(() => hist.get().nodes, [hist])
+  const { cam, setCam, camRef, toWorld, toScreen, cancelCamAnim, animateCamTo, zoomAt, zoomCenter, fitBox, animateToBox, fit } =
+    useViewport({ boardRef, getNodes })
   const toolRef = useRef(tool)
   toolRef.current = tool
   const clip = useRef<{ nodes: CanvasNode[]; edges: CanvasEdge[] }>({ nodes: [], edges: [] })
@@ -212,13 +192,12 @@ export default function CanvasBoard() {
   const lastTap = useRef<{ id: string; t: number }>({ id: '', t: 0 })
   const editStart = useRef(0)
   const latest = useRef<{ id: number; data: CanvasData; name: string; cam: typeof cam }>({ id: canvasId, data, name, cam })
+  // board element size (drives the infinite grid canvas) — measured once the board is ready
+  const boardSize = useElementSize(boardRef, ready)
   latest.current = { id: canvasId, data, name, cam }
 
-  // write a board's state to disk and remember its signature (skips later no-ops)
-  const persist = useCallback((id: number, nm: string, d: CanvasData, c: { x: number; y: number; k: number }) => {
-    window.wist.canvas.update(id, { name: nm, data: { ...d, viewport: c } }).catch(() => {})
-    baseline.current = sigOf(id, nm, d, c)
-  }, [])
+  // autosave lifecycle (persist + debounced save + flush-on-leave + 30s net) → ../canvas/persistence
+  useCanvasPersistence({ canvasId, name, data, cam, present, latest, readyRef, baseline })
 
   // ── load ────────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -234,8 +213,7 @@ export default function CanvasBoard() {
     setPendingConnect(null)
     setTemplatesDismissed(false)
     setSearch(null)
-    window.wist.canvas
-      .get(canvasId)
+    getCanvas(canvasId)
       .then((c) => {
         if (!alive) return
         if (c) {
@@ -255,12 +233,10 @@ export default function CanvasBoard() {
         readyRef.current = true
         setReady(true)
       })
-    window.wist.notes
-      .list({})
+    listNotes({})
       .then((n) => alive && setNotes(n))
       .catch(() => {})
-    window.wist.tasks
-      .list({})
+    listTasks({})
       .then((tk) => alive && setTasks(tk))
       .catch(() => {})
     return () => {
@@ -269,43 +245,6 @@ export default function CanvasBoard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canvasId])
 
-  // ── autosave: debounced; skips no-op writes and never persists the present camera ─
-  useEffect(() => {
-    if (!readyRef.current || present != null) return
-    if (sigOf(canvasId, name, data, cam) === baseline.current) return
-    const h = setTimeout(() => persist(canvasId, name, data, cam), 700)
-    return () => clearTimeout(h)
-  }, [data, name, cam, canvasId, present, persist])
-
-  // flush THIS board's pending edits when leaving it (switch or unmount)
-  useEffect(() => {
-    const id2 = canvasId
-    return () => {
-      const l = latest.current
-      if (readyRef.current && sigOf(id2, l.name, l.data, l.cam) !== baseline.current) persist(id2, l.name, l.data, l.cam)
-    }
-  }, [canvasId, persist])
-
-  // 30s safety net
-  useEffect(() => {
-    const iv = setInterval(() => {
-      const l = latest.current
-      if (readyRef.current && sigOf(l.id, l.name, l.data, l.cam) !== baseline.current) persist(l.id, l.name, l.data, l.cam)
-    }, 30000)
-    return () => clearInterval(iv)
-  }, [persist])
-
-  // track board size (drives the infinite grid canvas)
-  useEffect(() => {
-    if (!ready) return
-    const el = boardRef.current
-    if (!el) return
-    const update = () => setBoardSize({ w: el.clientWidth, h: el.clientHeight })
-    update()
-    const ro = new ResizeObserver(update)
-    ro.observe(el)
-    return () => ro.disconnect()
-  }, [ready])
 
   // measure the floating context toolbar so it can be clamped on-screen (guarded → no loop)
   useLayoutEffect(() => {
@@ -383,14 +322,6 @@ export default function CanvasBoard() {
     return ns.filter((n) => !(n.type === 'comment' && n.resolved && !showResolved))
   }, [data.nodes, present, frames, showResolved])
 
-  // ── coordinate helpers ────────────────────────────────────────────────────────
-  const toWorld = useCallback((cx: number, cy: number): Pt => {
-    const r = boardRef.current!.getBoundingClientRect()
-    const c = camRef.current
-    return { x: (cx - r.left - c.x) / c.k, y: (cy - r.top - c.y) / c.k }
-  }, [])
-  const toScreen = (wx: number, wy: number): Pt => ({ x: cam.x + wx * cam.k, y: cam.y + wy * cam.k })
-
   // topmost node under a world point — non-frames win over frames
   const nodeAt = useCallback((w: Pt): CanvasNode | undefined => {
     const ns = hist.get().nodes
@@ -407,77 +338,6 @@ export default function CanvasBoard() {
       if (f.type === 'frame' && f.id !== node.id && pointInBox(c, f) && (!best || f.w * f.h < best.w * best.h)) best = f
     return best ? best.id : null
   }
-
-  // ── camera ────────────────────────────────────────────────────────────────────
-  // smooth camera tween for NAVIGATION jumps (fit / frames / search / zoom buttons).
-  // Export + presentation keep the instant `fitBox` so capture lands on a settled frame.
-  const cancelCamAnim = useCallback(() => {
-    if (camAnim.current != null) {
-      cancelAnimationFrame(camAnim.current)
-      camAnim.current = null
-    }
-  }, [])
-  const animateCamTo = useCallback(
-    (target: { x: number; y: number; k: number }, dur = 280) => {
-      cancelCamAnim()
-      const start = camRef.current
-      const t0 = performance.now()
-      const ease = (p: number) => 1 - Math.pow(1 - p, 3) // easeOutCubic
-      const step = (now: number) => {
-        const p = Math.min(1, (now - t0) / dur)
-        const e = ease(p)
-        setCam({ x: start.x + (target.x - start.x) * e, y: start.y + (target.y - start.y) * e, k: start.k + (target.k - start.k) * e })
-        camAnim.current = p < 1 ? requestAnimationFrame(step) : null
-      }
-      camAnim.current = requestAnimationFrame(step)
-    },
-    [cancelCamAnim]
-  )
-
-  const zoomAt = (sx: number, sy: number, factor: number) =>
-    setCam((c) => {
-      const nk = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, c.k * factor))
-      return { k: nk, x: sx - ((sx - c.x) / c.k) * nk, y: sy - ((sy - c.y) / c.k) * nk }
-    })
-  const zoomCenter = (factor: number) => {
-    const r = boardRef.current?.getBoundingClientRect()
-    const sx = (r?.width ?? 800) / 2
-    const sy = (r?.height ?? 600) / 2
-    const c = camRef.current
-    const nk = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, c.k * factor))
-    animateCamTo({ k: nk, x: sx - ((sx - c.x) / c.k) * nk, y: sy - ((sy - c.y) / c.k) * nk }, 170)
-  }
-  const fitBox = (box: Box, margin = 40) => {
-    const r = boardRef.current?.getBoundingClientRect()
-    if (!r) return
-    const k = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, Math.min((r.width - margin * 2) / box.w, (r.height - margin * 2) / box.h)))
-    setCam({ k, x: (r.width - box.w * k) / 2 - box.x * k, y: (r.height - box.h * k) / 2 - box.y * k })
-  }
-  // animated counterpart of fitBox — for user-facing navigation (frames panel, etc.)
-  const animateToBox = (box: Box, margin = 60) => {
-    const r = boardRef.current?.getBoundingClientRect()
-    if (!r) return
-    const k = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, Math.min((r.width - margin * 2) / box.w, (r.height - margin * 2) / box.h)))
-    animateCamTo({ k, x: (r.width - box.w * k) / 2 - box.x * k, y: (r.height - box.h * k) / 2 - box.y * k })
-  }
-  const fit = useCallback(
-    (animate = false) => {
-      const b = bbox(hist.get().nodes)
-      const r = boardRef.current?.getBoundingClientRect()
-      if (!b || !r) {
-        setCam({ x: 200, y: 140, k: 1 })
-        return
-      }
-      const pad = 80
-      const k = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, Math.min((r.width - pad * 2) / b.w, (r.height - pad * 2) / b.h, 1.5)))
-      const target = { k, x: (r.width - b.w * k) / 2 - b.x * k, y: (r.height - b.h * k) / 2 - b.y * k }
-      animate ? animateCamTo(target) : setCam(target)
-    },
-    [hist, animateCamTo]
-  )
-
-  // stop any in-flight camera tween when leaving the board
-  useEffect(() => () => cancelCamAnim(), [cancelCamAnim])
 
   // ── presentation ───────────────────────────────────────────────────────────────
   const enterPresent = () => {
@@ -501,54 +361,10 @@ export default function CanvasBoard() {
     setPresent(null)
   }
 
-  // ── export ───────────────────────────────────────────────────────────────────
-  const settle = () => new Promise<void>((res) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(res, 140))))
-  const captureRect = () => {
-    const r = boardRef.current!.getBoundingClientRect()
-    return { x: r.left, y: r.top, width: r.width, height: r.height }
-  }
-  const exportPng = async (scope: 'board' | 'frame') => {
-    setExportMenu(false)
-    const selFrame = data.nodes.find((n) => n.type === 'frame' && selRef.current.has(n.id))
-    const target = scope === 'frame' ? selFrame ?? frames[0] : undefined
-    setSel(new Set())
-    setSelEdge(null)
-    setOpenComment(null)
-    setExporting(true)
-    if (target) fitBox(target, 8)
-    else fit()
-    await settle()
-    const cap = await window.wist.canvas.capture(captureRect(), 'png').catch(() => null)
-    setExporting(false)
-    if (cap) {
-      const saved = await window.wist.canvas.saveExport(`${name || 'board'}.png`, cap.bytes)
-      if (saved) toast(t('canvas.exported'), 'success')
-    }
-  }
-  const exportPdf = async () => {
-    setExportMenu(false)
-    if (!frames.length) {
-      toast(t('canvas.noFrames'), 'error')
-      return
-    }
-    setSel(new Set())
-    setSelEdge(null)
-    setOpenComment(null)
-    setExporting(true)
-    const pages: { bytes: Uint8Array; width: number; height: number }[] = []
-    for (let i = 0; i < frames.length; i++) {
-      fitBox(frames[i], 8)
-      await settle()
-      const cap = await window.wist.canvas.capture(captureRect(), 'jpeg').catch(() => null)
-      if (cap) pages.push({ bytes: cap.bytes, width: cap.width, height: cap.height })
-    }
-    setExporting(false)
-    if (pages.length) {
-      const pdf = buildPdf(pages)
-      const saved = await window.wist.canvas.saveExport(`${name || 'board'}.pdf`, pdf)
-      if (saved) toast(t('canvas.exported'), 'success')
-    }
-  }
+  // board export (PNG of board/frame · multi-frame PDF) → ../canvas/useCanvasExport
+  const { exportMenu, setExportMenu, exporting, exportPng, exportPdf } = useCanvasExport({
+    boardRef, name, frames, selRef, setSel, setSelEdge, setOpenComment, fit, fitBox, t,
+  })
 
   // ── mutators ──────────────────────────────────────────────────────────────────
   const patchSelected = (patch: Partial<CanvasNode>) =>
@@ -908,6 +724,46 @@ export default function CanvasBoard() {
     const by = Math.min(...ys)
     const bw = Math.max(1, Math.max(...xs) - bx)
     const bh = Math.max(1, Math.max(...ys) - by)
+
+    // Smart drawing: try to recognise the stroke as a geometric shape
+    if (penStyle.smart && (penStyle.kind === 'pen' || penStyle.kind === 'marker')) {
+      const hit = recognizeShape(pts)
+      if (hit) {
+        if (hit.kind === 'shape') {
+          const nid = addNode({
+            type: 'shape',
+            shape: hit.shape,
+            x: bx, y: by, w: bw, h: bh,
+            fill: SHAPE_DEFAULT_FILL,
+            stroke: null,
+            strokeWidth: 0,
+            radius: hit.shape === 'roundRect' ? ROUND_RECT_RADIUS : 0,
+          })
+          setSel(new Set([nid]))
+          setTool('select')
+          return
+        }
+        if (hit.kind === 'line') {
+          const eid = uid()
+          hist.commit((d) => ({
+            ...d,
+            edges: [...d.edges, {
+              id: eid,
+              from: '', to: '',
+              fromPoint: pts[0],
+              toPoint: pts[pts.length - 1],
+              type: 'straight' as const,
+              arrow: 'end' as const,
+            }],
+          }))
+          setSelEdge(eid)
+          setSel(new Set())
+          setTool('select')
+          return
+        }
+      }
+    }
+
     const local = pts.map((p) => ({ x: p.x - bx, y: p.y - by }))
     const nid = addNode({
       type: 'pen',
@@ -931,457 +787,23 @@ export default function CanvasBoard() {
     setTool('select')
   }
 
-  // ── ruler guides ───────────────────────────────────────────────────────────────
-  // pull a new guide out of a ruler band (top → horizontal, left → vertical)
-  const startGuide = (e: React.PointerEvent, axis: 'h' | 'v') => {
-    if (e.button !== 0 || space || toolRef.current === 'hand') return // fall through to board pan
-    e.stopPropagation()
-    setMenu(null)
-    boardRef.current?.setPointerCapture(e.pointerId)
-    const w = toWorld(e.clientX, e.clientY)
-    drag.current = { mode: 'guide', axis, index: null }
-    setGuideDraft({ axis, pos: Math.round(axis === 'h' ? w.y : w.x) })
-  }
-  // grab an existing guide to reposition (or drop it back on the ruler to delete)
-  const startMoveGuide = (e: React.PointerEvent, index: number) => {
-    if (e.button !== 0 || space || toolRef.current === 'hand') return
-    e.stopPropagation()
-    const g = hist.get().guides?.[index]
-    if (!g) return
-    boardRef.current?.setPointerCapture(e.pointerId)
-    drag.current = { mode: 'guide', axis: g.axis, index }
-    setGuideDraft({ ...g })
-  }
+  // ── drag/pointer state machine — extracted verbatim to ../canvas/useCanvasDrag ──
+  const {
+    startGuide, startMoveGuide, startConnect, onNodePointerDown, onBoardPointerDown, onBoardDoubleClick,
+    onPointerMove, onPointerUp, cancelGesture, onWheel, startResize, startGroupResize, startRotate, startRadius, startCropDrag,
+  } = useCanvasDrag({
+    drag, boardRef, camRef, selRef, toolRef, lastTap,
+    cam, sel, editing, present, cropping, cropRect, penDraft, guideDraft, penStyle, connType, snap, space, selNodes, nodesById,
+    setCam, setSel, setSelEdge, setMenu, setGuides, setGuideDraft, setDropFrame, setMarquee, setConnectCur, setConnectMenu, setHover, setPenDraft, setLassoDraft, setCropRect, setOpenComment,
+    hist, toWorld, zoomAt, cancelCamAnim,
+    nodeAt, frameContaining, startEdit, addNode, addComment, createObject, finalizePen, uid,
+  })
 
-  // ── pointer routing (all gestures finalize through the board) ──────────────────
-  const startConnect = (from: { id: string; anchor: CanvasAnchor } | { point: Pt }, e: React.PointerEvent) => {
-    e.stopPropagation()
-    boardRef.current?.setPointerCapture(e.pointerId)
-    const w = toWorld(e.clientX, e.clientY)
-    drag.current = { mode: 'connect', from, cur: w }
-    setConnectCur(w)
-  }
 
-  const onNodePointerDown = (e: React.PointerEvent, n: CanvasNode) => {
-    if (e.button !== 0 || present != null || cropping) return
-    const tk = toolRef.current
-    if (tk === 'connector') {
-      e.stopPropagation()
-      const w = toWorld(e.clientX, e.clientY)
-      startConnect({ id: n.id, anchor: nearestAnchor(n, w) }, e)
-      return
-    }
-    if (tk !== 'select') return // hand / creation handled by the board
-    e.stopPropagation()
-    // double-tap → edit. Pointer capture (below) steals the native dblclick from the
-    // node, so we detect the second quick tap ourselves and open the editor.
-    const editable = n.type === 'sticky' || n.type === 'text' || n.type === 'shape' || n.type === 'frame'
-    // a click on an already-selected editable node that doesn't drag → enter edit on
-    // release (so re-editing is a forgiving 2 clicks, no 350ms double-tap timing needed)
-    const wasSoleEditable = !e.shiftKey && editable && !n.locked && selRef.current.size === 1 && selRef.current.has(n.id)
-    if (!e.shiftKey && editable && !n.locked) {
-      const now = Date.now()
-      if (lastTap.current.id === n.id && now - lastTap.current.t < 350) {
-        lastTap.current = { id: '', t: 0 }
-        setSel(new Set([n.id]))
-        setSelEdge(null)
-        startEdit(n.id)
-        return
-      }
-      lastTap.current = { id: n.id, t: now }
-    }
-    boardRef.current?.setPointerCapture(e.pointerId)
-    setSelEdge(null)
-    let next: Set<string>
-    if (e.shiftKey) {
-      next = new Set(selRef.current)
-      next.has(n.id) ? next.delete(n.id) : next.add(n.id)
-      setSel(next)
-      return // shift-toggle never starts a move
-    }
-    next = selRef.current.has(n.id) ? selRef.current : new Set([n.id])
-    if (next !== selRef.current) setSel(next)
-    const cur = hist.get().nodes
-    const movers = cur.filter((m) => next.has(m.id) && !m.locked)
-    if (!movers.length) return
-    // a frame drags its children along — by stored membership OR geometric containment,
-    // so a frame drawn around existing objects still moves them (Figma/Miro behaviour)
-    const ids = new Set(movers.map((m) => m.id))
-    for (const m of movers)
-      if (m.type === 'frame')
-        for (const ch of cur)
-          if (ch.id !== m.id && ch.type !== 'frame' && !ch.locked && (ch.frameId === m.id || pointInBox(center(ch), m))) ids.add(ch.id)
-    const startNodes = cur.filter((nn) => ids.has(nn.id))
-    hist.begin()
-    drag.current = {
-      mode: 'move',
-      sx: e.clientX,
-      sy: e.clientY,
-      firstId: movers[0].id,
-      moved: false,
-      tapEdit: wasSoleEditable && movers.length === 1 && movers[0].id === n.id,
-      start: Object.fromEntries(startNodes.map((m) => [m.id, { x: m.x, y: m.y }])),
-    }
-  }
 
-  const onBoardPointerDown = (e: React.PointerEvent) => {
-    if (present != null || cropping) return
-    cancelCamAnim() // any direct interaction interrupts a camera tween
-    setMenu(null)
-    const tk = toolRef.current
-    boardRef.current?.setPointerCapture(e.pointerId)
-    if (e.button === 2 || e.button === 1 || space || tk === 'hand') {
-      drag.current = { mode: 'pan', sx: e.clientX, sy: e.clientY, ox: cam.x, oy: cam.y, button: e.button, moved: false }
-      return
-    }
-    if (e.button !== 0) return
-    const w = toWorld(e.clientX, e.clientY)
-    if (tk === 'sticky' || tk === 'text' || tk === 'shape' || tk === 'frame') {
-      drag.current = { mode: 'create', tool: tk, down: w }
-      return
-    }
-    if (tk === 'pen') {
-      drag.current = { mode: 'pen' }
-      setPenDraft([w])
-      return
-    }
-    if (tk === 'comment') {
-      addComment(w)
-      return
-    }
-    if (tk === 'connector') {
-      const hit = nodeAt(w)
-      if (hit) startConnect({ id: hit.id, anchor: nearestAnchor(hit, w) }, e)
-      else startConnect({ point: w }, e)
-      return
-    }
-    const additive = e.shiftKey
-    if (!additive) {
-      setSel(new Set())
-      setSelEdge(null)
-    }
-    drag.current = { mode: 'marquee', sx: e.clientX, sy: e.clientY, additive, base: new Set(additive ? selRef.current : []) }
-    setMarquee({ x: e.clientX, y: e.clientY, w: 0, h: 0 })
-  }
 
-  // double-click empty canvas → drop a text object right there and start typing
-  // (Figma/FigJam quick-create; a double-click ON a node is handled by the node → edit)
-  const onBoardDoubleClick = (e: React.MouseEvent) => {
-    if (present != null || cropping || toolRef.current !== 'select') return
-    const w = toWorld(e.clientX, e.clientY)
-    if (nodeAt(w)) return
-    const def = DEFAULTS.text
-    const nid = addNode({ type: 'text', x: w.x - 6, y: w.y - 12, w: def.w, h: def.h, text: '', autoWidth: true })
-    setSel(new Set([nid]))
-    setSelEdge(null)
-    startEdit(nid)
-  }
-
-  const onPointerMove = (e: React.PointerEvent) => {
-    const d = drag.current
-    if (!d) return
-    const c = camRef.current
-    if (d.mode === 'pan') {
-      if (Math.abs(e.clientX - d.sx) + Math.abs(e.clientY - d.sy) > 3) d.moved = true
-      setCam((cc) => ({ ...cc, x: d.ox + (e.clientX - d.sx), y: d.oy + (e.clientY - d.sy) }))
-    } else if (d.mode === 'move') {
-      if (Math.abs(e.clientX - d.sx) + Math.abs(e.clientY - d.sy) > 2) d.moved = true
-      let dx = (e.clientX - d.sx) / c.k
-      let dy = (e.clientY - d.sy) / c.k
-      const f = d.start[d.firstId]
-      // smart alignment: snap to other objects' edges/centres, then grid as fallback
-      const cur = hist.get().nodes
-      const boxes: Box[] = []
-      for (const id of Object.keys(d.start)) {
-        const n = nodesById.get(id)
-        if (n) boxes.push({ x: d.start[id].x + dx, y: d.start[id].y + dy, w: n.w, h: n.h })
-      }
-      const movingBox = bbox(boxes)
-      if (movingBox) {
-        const sn = snapToObjects(movingBox, cur.filter((n) => !d.start[n.id]), 6 / c.k)
-        if (sn.mx) dx += sn.dx
-        if (sn.my) dy += sn.dy
-        if (snap && !sn.mx) dx = snapTo(f.x + dx, GRID) - f.x
-        if (snap && !sn.my) dy = snapTo(f.y + dy, GRID) - f.y
-        setGuides(sn.vx.length || sn.hy.length ? { vx: sn.vx, hy: sn.hy } : null)
-      } else if (snap) {
-        dx = snapTo(f.x + dx, GRID) - f.x
-        dy = snapTo(f.y + dy, GRID) - f.y
-      }
-      hist.live((dd) => ({ ...dd, nodes: dd.nodes.map((n) => (d.start[n.id] ? { ...n, x: d.start[n.id].x + dx, y: d.start[n.id].y + dy } : n)) }))
-      // Figma-style: light up the frame the dragged object would drop into
-      const movingFrame = Object.keys(d.start).some((id) => nodesById.get(id)?.type === 'frame')
-      const primary = hist.get().nodes.find((nn) => nn.id === d.firstId)
-      setDropFrame(primary && !movingFrame && primary.type !== 'frame' ? frameContaining(primary, hist.get().nodes) : null)
-    } else if (d.mode === 'resize') {
-      const wd = (e.clientX - d.sx) / c.k
-      const hd = (e.clientY - d.sy) / c.k
-      const l = unrotate(wd, hd, d.rot)
-      let nw = Math.max(24, d.box.w + d.sign[0] * l.x)
-      let nh = Math.max(24, d.box.h + d.sign[1] * l.y)
-      if (d.aspect && d.sign[0] !== 0 && d.sign[1] !== 0) {
-        const ratio = d.box.w ? d.box.h / d.box.w : 1
-        nh = Math.max(24, nw * ratio)
-        nw = ratio ? nh / ratio : nw
-      }
-      const shiftLocal = { x: (d.sign[0] * (nw - d.box.w)) / 2, y: (d.sign[1] * (nh - d.box.h)) / 2 }
-      const sw = rotate(shiftLocal.x, shiftLocal.y, d.rot)
-      const c0 = { x: d.box.x + d.box.w / 2, y: d.box.y + d.box.h / 2 }
-      let nx = c0.x + sw.x - nw / 2
-      let ny = c0.y + sw.y - nh / 2
-      if (snap && !d.rot) {
-        nx = snapTo(nx, GRID)
-        ny = snapTo(ny, GRID)
-      }
-      hist.live((dd) => ({ ...dd, nodes: dd.nodes.map((n) => (n.id === d.id ? { ...n, x: nx, y: ny, w: nw, h: nh } : n)) }))
-    } else if (d.mode === 'gresize') {
-      const wd = (e.clientX - d.sx) / c.k
-      const hd = (e.clientY - d.sy) / c.k
-      const b = d.box
-      const nw = d.sign[0] !== 0 ? Math.max(40, b.w + d.sign[0] * wd) : b.w
-      const nh = d.sign[1] !== 0 ? Math.max(40, b.h + d.sign[1] * hd) : b.h
-      const fx = d.sign[0] === -1 ? b.x + b.w : b.x
-      const fy = d.sign[1] === -1 ? b.y + b.h : b.y
-      const sx = b.w ? nw / b.w : 1
-      const sy = b.h ? nh / b.h : 1
-      hist.live((dd) => ({
-        ...dd,
-        nodes: dd.nodes.map((n) => {
-          const s = d.start[n.id]
-          if (!s) return n
-          return { ...n, x: fx + (s.x - fx) * sx, w: s.w * sx, y: fy + (s.y - fy) * sy, h: s.h * sy }
-        }),
-      }))
-    } else if (d.mode === 'rotate') {
-      const ang = Math.atan2(e.clientY - d.cyC, e.clientX - d.cxC)
-      let deg = d.startRot + ((ang - d.startAngle) * 180) / Math.PI
-      if (e.shiftKey) deg = Math.round(deg / 15) * 15
-      hist.live((dd) => ({ ...dd, nodes: dd.nodes.map((n) => (n.id === d.id ? { ...n, rotation: Math.round(deg) } : n)) }))
-    } else if (d.mode === 'radius') {
-      // drag a corner handle inward → larger radius (project the move onto the inward diagonal)
-      const dw = ((e.clientX - d.sx) / c.k) * -d.corner[0]
-      const dh = ((e.clientY - d.sy) / c.k) * -d.corner[1]
-      const r = Math.round(Math.max(0, Math.min(d.max, d.start + (dw + dh) / 2)))
-      hist.live((dd) => ({ ...dd, nodes: dd.nodes.map((n) => (n.id === d.id ? { ...n, radius: r } : n)) }))
-    } else if (d.mode === 'marquee') {
-      const x = Math.min(d.sx, e.clientX)
-      const y = Math.min(d.sy, e.clientY)
-      const w = Math.abs(e.clientX - d.sx)
-      const h = Math.abs(e.clientY - d.sy)
-      setMarquee({ x, y, w, h })
-      const w0 = toWorld(x, y)
-      const w1 = toWorld(x + w, y + h)
-      const rect: Box = { x: w0.x, y: w0.y, w: w1.x - w0.x, h: w1.y - w0.y }
-      const picked = new Set(d.base)
-      for (const n of hist.get().nodes) if (boxesIntersect(rect, n)) picked.add(n.id)
-      setSel(picked)
-    } else if (d.mode === 'connect') {
-      const w = toWorld(e.clientX, e.clientY)
-      d.cur = w
-      setConnectCur(w)
-      const hit = nodeAt(w)
-      setHover(hit ? hit.id : null)
-    } else if (d.mode === 'pen') {
-      const w = toWorld(e.clientX, e.clientY)
-      setPenDraft((pts) => (pts ? [...pts, w] : [w]))
-    } else if (d.mode === 'guide') {
-      const w = toWorld(e.clientX, e.clientY)
-      const raw = d.axis === 'h' ? w.y : w.x
-      setGuideDraft({ axis: d.axis, pos: snap ? snapTo(raw, GRID) : Math.round(raw) })
-    } else if (d.mode === 'crop') {
-      const wd = (e.clientX - d.sx) / c.k
-      const hd = (e.clientY - d.sy) / c.k
-      let { x, y, w, h } = d.rect
-      if (d.corner === 'move') {
-        x = Math.max(0, Math.min(d.box.w - d.rect.w, d.rect.x + wd))
-        y = Math.max(0, Math.min(d.box.h - d.rect.h, d.rect.y + hd))
-      } else {
-        const [cxn, cyn] = d.corner
-        if (cxn < 0) {
-          x = Math.max(0, Math.min(d.rect.x + wd, d.rect.x + d.rect.w - 24))
-          w = d.rect.x + d.rect.w - x
-        }
-        if (cxn > 0) w = Math.max(24, Math.min(d.box.w - d.rect.x, d.rect.w + wd))
-        if (cyn < 0) {
-          y = Math.max(0, Math.min(d.rect.y + hd, d.rect.y + d.rect.h - 24))
-          h = d.rect.y + d.rect.h - y
-        }
-        if (cyn > 0) h = Math.max(24, Math.min(d.box.h - d.rect.y, d.rect.h + hd))
-      }
-      setCropRect({ x, y, w, h })
-    }
-  }
-
-  const onPointerUp = (e: React.PointerEvent) => {
-    const d = drag.current
-    drag.current = null
-    setGuides(null)
-    setDropFrame(null)
-    if (!d) return
-    if (d.mode === 'move') {
-      if (d.moved) {
-        const selIds = selRef.current
-        hist.live((dd) => ({
-          ...dd,
-          nodes: dd.nodes.map((n) => (selIds.has(n.id) && n.type !== 'frame' ? { ...n, frameId: frameContaining(n, dd.nodes) } : n)),
-        }))
-      }
-      hist.end()
-      // a click/tap (small net movement) on a lone comment opens its thread (jitter-tolerant)
-      const dist = Math.abs(e.clientX - d.sx) + Math.abs(e.clientY - d.sy)
-      const ids = Object.keys(d.start)
-      if (dist < 5 && ids.length === 1) {
-        const node = nodesById.get(ids[0])
-        if (node?.type === 'comment') setOpenComment(node.id)
-      }
-      // tap (small net movement, jitter-tolerant — NOT the 2px move flag) on an
-      // already-selected editable node → edit. The 2px move flag was too twitchy:
-      // a normal click jitters >2px, so editing wrongly needed a 3rd, perfectly-still click.
-      if (dist < 6 && d.tapEdit && editing !== d.firstId) startEdit(d.firstId)
-    } else if (d.mode === 'resize' || d.mode === 'gresize' || d.mode === 'rotate' || d.mode === 'radius') {
-      hist.end()
-    } else if (d.mode === 'pen') {
-      const pts = penDraft
-      setPenDraft(null)
-      if (pts) finalizePen(pts)
-    } else if (d.mode === 'marquee') {
-      setMarquee(null)
-    } else if (d.mode === 'connect') {
-      const w = toWorld(e.clientX, e.clientY)
-      const target = nodeAt(w)
-      const fromId = 'id' in d.from ? d.from.id : ''
-      if (target && target.id !== fromId) {
-        const edge: CanvasEdge = {
-          id: uid(),
-          from: fromId,
-          to: target.id,
-          fromAnchor: 'anchor' in d.from ? d.from.anchor : undefined,
-          fromPoint: 'point' in d.from ? d.from.point : undefined,
-          toAnchor: nearestAnchor(target, w),
-          type: connType,
-          arrow: 'end',
-        }
-        hist.commit((dd) => ({ ...dd, edges: [...dd.edges, edge] }))
-        setSelEdge(edge.id)
-        setSel(new Set())
-      } else if (!target) {
-        const src = 'id' in d.from ? nodesById.get(d.from.id) : null
-        const p0 = 'point' in d.from ? d.from.point : src ? anchorPoint(src, d.from.anchor) : null
-        // dragged out into empty space → offer to create & wire a new card / note here
-        if (p0 && Math.hypot(w.x - p0.x, w.y - p0.y) > 12) {
-          setConnectMenu({ sx: e.clientX, sy: e.clientY, from: d.from, at: w })
-        }
-      }
-      setConnectCur(null)
-      setHover(null)
-    } else if (d.mode === 'create') {
-      createObject(d.tool, d.down, toWorld(e.clientX, e.clientY))
-    } else if (d.mode === 'guide') {
-      const r = boardRef.current!.getBoundingClientRect()
-      // released back over the originating ruler band → delete (or discard a new one)
-      const onRuler = d.axis === 'h' ? e.clientY - r.top < RULER_SIZE : e.clientX - r.left < RULER_SIZE
-      const draft = guideDraft
-      setGuideDraft(null)
-      if (d.index == null) {
-        if (!onRuler && draft) hist.commit((dd) => ({ ...dd, guides: [...(dd.guides ?? []), draft] }))
-      } else if (onRuler) {
-        hist.commit((dd) => ({ ...dd, guides: (dd.guides ?? []).filter((_, i) => i !== d.index) }))
-      } else if (draft) {
-        hist.commit((dd) => ({ ...dd, guides: (dd.guides ?? []).map((g, i) => (i === d.index ? draft : g)) }))
-      }
-    } else if (d.mode === 'pan') {
-      if (d.button === 2 && !d.moved) {
-        const w = toWorld(e.clientX, e.clientY)
-        const hit = nodeAt(w)
-        if (hit && !sel.has(hit.id)) setSel(new Set([hit.id]))
-        setMenu({ x: e.clientX, y: e.clientY, world: w, onNode: !!hit })
-      }
-    }
-  }
-
-  // finalize a gesture interrupted by the OS / lost pointer capture
-  const cancelGesture = () => {
-    const d = drag.current
-    drag.current = null
-    if (d && (d.mode === 'move' || d.mode === 'resize' || d.mode === 'gresize' || d.mode === 'rotate' || d.mode === 'radius')) hist.end()
-    setMarquee(null)
-    setConnectCur(null)
-    setPenDraft(null)
-    setGuides(null)
-    setDropFrame(null)
-    setHover(null)
-    setGuideDraft(null)
-  }
-
-  const onWheel = (e: React.WheelEvent) => {
-    if (present != null || cropping) return
-    cancelCamAnim()
-    if (e.ctrlKey || e.metaKey) {
-      const r = boardRef.current!.getBoundingClientRect()
-      zoomAt(e.clientX - r.left, e.clientY - r.top, Math.exp(-e.deltaY * 0.0015))
-    } else {
-      setCam((c) => ({ ...c, x: c.x - e.deltaX, y: c.y - e.deltaY }))
-    }
-  }
-
-  // ── selection handles ─────────────────────────────────────────────────────────
-  const startResize = (e: React.PointerEvent, n: CanvasNode, sign: Sign) => {
-    e.stopPropagation()
-    boardRef.current?.setPointerCapture(e.pointerId)
-    hist.begin()
-    // dragging a text node's width handle pins its width → switch from auto-width to
-    // fixed-width (wrapping, auto-height), so the resize sticks instead of snapping back
-    if (n.type === 'text' && n.autoWidth !== false) {
-      hist.live((d) => ({ ...d, nodes: d.nodes.map((m) => (m.id === n.id ? { ...m, autoWidth: false } : m)) }))
-    }
-    drag.current = {
-      mode: 'resize',
-      id: n.id,
-      sign,
-      sx: e.clientX,
-      sy: e.clientY,
-      box: { x: n.x, y: n.y, w: n.w, h: n.h },
-      rot: n.rotation || 0,
-      aspect: n.type === 'image' || e.shiftKey,
-    }
-  }
-  const startGroupResize = (e: React.PointerEvent, sign: Sign, b: Box) => {
-    e.stopPropagation()
-    boardRef.current?.setPointerCapture(e.pointerId)
-    hist.begin()
-    drag.current = {
-      mode: 'gresize',
-      sign,
-      sx: e.clientX,
-      sy: e.clientY,
-      box: b,
-      start: Object.fromEntries(selNodes.filter((n) => !n.locked).map((n) => [n.id, { x: n.x, y: n.y, w: n.w, h: n.h }])),
-    }
-  }
-  const startRotate = (e: React.PointerEvent, n: CanvasNode) => {
-    e.stopPropagation()
-    boardRef.current?.setPointerCapture(e.pointerId)
-    const r = boardRef.current!.getBoundingClientRect()
-    const cc = center(n)
-    const cxC = r.left + cam.x + cc.x * cam.k
-    const cyC = r.top + cam.y + cc.y * cam.k
-    hist.begin()
-    drag.current = { mode: 'rotate', id: n.id, cxC, cyC, startAngle: Math.atan2(e.clientY - cyC, e.clientX - cxC), startRot: n.rotation || 0 }
-  }
-  const startRadius = (e: React.PointerEvent, n: CanvasNode, corner: Sign) => {
-    e.stopPropagation()
-    boardRef.current?.setPointerCapture(e.pointerId)
-    hist.begin()
-    const cur = n.radius ?? (n.type === 'shape' && n.shape === 'roundRect' ? ROUND_RECT_RADIUS : n.type === 'sticky' || n.type === 'image' ? 6 : 0)
-    drag.current = { mode: 'radius', id: n.id, corner, sx: e.clientX, sy: e.clientY, start: cur, max: maxRadius(n.w, n.h) }
-  }
-  const startCropDrag = (e: React.PointerEvent, corner: Sign | 'move') => {
-    e.stopPropagation()
-    boardRef.current?.setPointerCapture(e.pointerId)
-    const node = cropping ? nodesById.get(cropping) : null
-    if (!node || !cropRect) return
-    drag.current = { mode: 'crop', corner, sx: e.clientX, sy: e.clientY, rect: cropRect, box: { w: node.w, h: node.h } }
-  }
+  // drag handlers (onNodePointerDown / onBoardPointerDown / onPointerMove / onPointerUp /
+  // cancelGesture / onWheel / startResize / startRotate / …) live in ../canvas/useCanvasDrag
 
   // ── keyboard ──────────────────────────────────────────────────────────────────
   // grab focus on mount so shortcuts work right away (before any board click)
@@ -1486,7 +908,7 @@ export default function CanvasBoard() {
         tidyUp()
         return
       }
-      const map: Record<string, ToolKey> = { v: 'select', h: 'hand', f: 'frame', n: 'sticky', t: 'text', s: 'shape', l: 'connector', p: 'pen', c: 'comment' }
+      const map: Record<string, ToolKey> = { v: 'select', o: 'lasso', h: 'hand', f: 'frame', n: 'sticky', t: 'text', s: 'shape', l: 'connector', p: 'pen', c: 'comment' }
       const tk = map[pk]
       if (tk) {
         setTool(tk)
@@ -1605,7 +1027,7 @@ export default function CanvasBoard() {
     if (!tk) return
     const done: 0 | 1 = tk.done ? 0 : 1
     setTasks((ts) => ts.map((x) => (x.id === taskId ? { ...x, done, status: done ? 'done' : 'todo' } : x)))
-    window.wist.tasks.update(taskId, { done }).catch(() => {})
+    updateTask(taskId, { done }).catch(() => {})
   }
   const openTask = (taskId: number) => navigate(`/tasks?open=${taskId}`)
 
@@ -1864,7 +1286,11 @@ export default function CanvasBoard() {
   const groupRotated = selNodes.some((n) => n.rotation)
   const selEdgeObj = selEdge ? data.edges.find((e) => e.id === selEdge) ?? null : null
   const rulerSel: Box | null = single ? nodeAABB(single) : groupBox // selection extent shown on the rulers
-  const cursor = space || tool === 'hand' ? 'grab' : tool === 'select' ? 'default' : 'crosshair'
+  const cursor =
+    space || tool === 'hand' ? 'grab'
+    : tool === 'select' ? 'default'
+    : tool === 'pen' && penStyle.kind === 'eraser' ? 'cell'
+    : 'crosshair'
   const commentNode = openComment ? nodesById.get(openComment) : null
 
   let ctxPos: Pt | null = null
@@ -1911,6 +1337,7 @@ export default function CanvasBoard() {
     return (
       <div
         key={n.id}
+        data-node-id={n.id}
         className="absolute"
         style={{
           left: n.x,
@@ -1978,6 +1405,7 @@ export default function CanvasBoard() {
             return (
               <button
                 key={a}
+                data-anchor={a}
                 onPointerDown={(e) => startConnect({ id: n.id, anchor: a }, e)}
                 className="absolute z-10 rounded-full border border-[#fff]"
                 style={{ left: local.x, top: local.y, width: 11 / cam.k, height: 11 / cam.k, transform: 'translate(-50%, -50%)', background: ACTIVE }}
@@ -2083,25 +1511,26 @@ export default function CanvasBoard() {
         {showRulers && chrome && (
           <>
             <Rulers cam={cam} width={boardSize.w} height={boardSize.h} selBox={rulerSel} />
-            <div className="absolute left-0 top-0 z-20" style={{ width: boardSize.w, height: RULER_SIZE, cursor: 'ns-resize' }} onPointerDown={(e) => startGuide(e, 'h')} title={t('canvas.guideHint')} />
-            <div className="absolute left-0 top-0 z-20" style={{ width: RULER_SIZE, height: boardSize.h, cursor: 'ew-resize' }} onPointerDown={(e) => startGuide(e, 'v')} title={t('canvas.guideHint')} />
+            <div data-ruler="h" className="absolute left-0 top-0 z-20" style={{ width: boardSize.w, height: RULER_SIZE, cursor: 'ns-resize' }} onPointerDown={(e) => startGuide(e, 'h')} title={t('canvas.guideHint')} />
+            <div data-ruler="v" className="absolute left-0 top-0 z-20" style={{ width: RULER_SIZE, height: boardSize.h, cursor: 'ew-resize' }} onPointerDown={(e) => startGuide(e, 'v')} title={t('canvas.guideHint')} />
           </>
         )}
 
         {/* floating top-left: back button + board name — two separate pills, with air */}
         {chrome && (
           <div className="pointer-events-auto absolute z-30 flex items-center gap-2" style={{ left: rOff + 12, top: rOff + 12 }} onPointerDown={(e) => e.stopPropagation()}>
-            <div className="rounded-xl border border-edge bg-card p-1 ring-1 ring-black/5 shadow-[var(--float-shadow)]">
+            <div className="flex h-11 items-center justify-center rounded-2xl border border-edge bg-card px-1 ring-1 ring-black/5 shadow-[var(--float-shadow)]">
               <TopBtn title={t('app.back')} onClick={() => navigate('/canvas')}>
-                <ArrowLeft size={16} />
+                <ArrowLeft size={17} />
               </TopBtn>
             </div>
-            <div className="flex items-center rounded-xl border border-edge bg-card px-1.5 py-1.5 ring-1 ring-black/5 shadow-[var(--float-shadow)]">
+            <div className="flex h-11 items-center gap-1.5 rounded-2xl border border-edge bg-card px-2.5 ring-1 ring-black/5 shadow-[var(--float-shadow)]">
+              <FrameIcon size={16} className="shrink-0 text-accent-bright" />
               <AutoWidthInput
                 value={name}
                 onChange={setName}
                 placeholder={t('canvas.untitled')}
-                className="bg-transparent px-1 text-sm font-semibold text-[rgb(var(--ink-0))] outline-none"
+                className="bg-transparent px-0.5 text-sm font-semibold text-[rgb(var(--ink-0))] outline-none"
                 min={44}
                 max={340}
               />
@@ -2147,66 +1576,98 @@ export default function CanvasBoard() {
           </div>
         )}
 
-        {/* floating top-right: view tools + zoom + export */}
-        {chrome && (
+        {/* relations — edge-backed backlinks for this canvas (board ↔ knowledge graph) */}
+        {chrome && relationsOpen && (
           <div
-            className="pointer-events-auto absolute right-3 z-30 flex items-center gap-0.5 rounded-xl border border-edge bg-card px-1 py-1 ring-1 ring-black/5 shadow-[var(--float-shadow)]"
-            style={{ top: rOff + 12 }}
+            className="pointer-events-auto absolute z-30 flex max-h-[62vh] w-72 flex-col rounded-xl border border-edge bg-card ring-1 ring-black/5 shadow-[var(--float-shadow)]"
+            style={{ right: rOff + 12, top: rOff + 64 }}
             onPointerDown={(e) => e.stopPropagation()}
           >
-            <TopBtn active={showResolved} title={t('canvas.showResolved')} onClick={() => setShowResolved((v) => !v)}>
-              {showResolved ? <Eye size={16} /> : <EyeOff size={16} />}
-            </TopBtn>
-            <TopBtn active={grid !== 'none'} title={t('canvas.grid')} onClick={() => setGrid((g) => (g === 'dots' ? 'lines' : g === 'lines' ? 'none' : 'dots'))}>
-              <Grid3x3 size={16} />
-            </TopBtn>
-            <TopBtn active={snap} title={t('canvas.snap')} onClick={() => setSnap((s) => !s)}>
-              <Magnet size={16} />
-            </TopBtn>
-            <TopBtn active={showRulers} title={t('canvas.rulers')} onClick={() => setShowRulers((v) => !v)}>
-              <RulerIcon size={16} />
-            </TopBtn>
-            <TopBtn active={outlineOpen} title={t('canvas.outline')} onClick={() => setOutlineOpen((v) => !v)}>
-              <ListTree size={16} />
-            </TopBtn>
-            <div className="mx-1 h-5 w-px bg-edge" />
-            <TopBtn title={t('canvas.zoomOut')} onClick={() => zoomCenter(1 / 1.2)}>
-              <Minus size={16} />
-            </TopBtn>
-            <button
-              className="rounded-lg px-1.5 text-xs tabular-nums text-[rgb(var(--ink-300))] transition-colors hover:text-[rgb(var(--ink-0))]"
-              title="100%"
-              onClick={() => zoomCenter(1 / cam.k)}
-            >
-              {Math.round(cam.k * 100)}%
-            </button>
-            <TopBtn title={t('canvas.zoomIn')} onClick={() => zoomCenter(1.2)}>
-              <Plus size={16} />
-            </TopBtn>
-            <TopBtn title={`${t('canvas.fit')} · 0`} onClick={() => fit(true)}>
-              <Maximize2 size={15} />
-            </TopBtn>
-            <div className="mx-1 h-5 w-px bg-edge" />
-            <div className="relative">
-              <TopBtn title={t('canvas.export')} onClick={() => setExportMenu((v) => !v)}>
-                <Download size={16} />
+            <div className="flex items-center justify-between border-b border-edge px-3 py-2">
+              <span className="text-xs font-semibold text-[rgb(var(--ink-0))]">{t('canvas.relations')}</span>
+              <button className="rounded-md p-0.5 text-zinc-400 hover:bg-highlight hover:text-zinc-100" onClick={() => setRelationsOpen(false)}>
+                <X size={14} />
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto p-3">
+              <Relations focus={{ type: 'canvas' as const, id: canvasId }} />
+            </div>
+          </div>
+        )}
+
+        {/* floating top-right: two clean grouped pills — view tools | zoom + export (Miro-style separation) */}
+        {chrome && (
+          <div className="pointer-events-auto absolute right-3 z-30 flex items-center gap-2" style={{ top: rOff + 12 }} onPointerDown={(e) => e.stopPropagation()}>
+            <div className="flex h-11 items-center gap-0.5 rounded-2xl border border-edge bg-card px-1.5 ring-1 ring-black/5 shadow-[var(--float-shadow)]">
+              <TopBtn active={showResolved} title={t('canvas.showResolved')} onClick={() => setShowResolved((v) => !v)}>
+                {showResolved ? <Eye size={17} /> : <EyeOff size={17} />}
               </TopBtn>
-              {exportMenu && (
-                <>
-                  <div className="fixed inset-0 z-40" onClick={() => setExportMenu(false)} />
-                  <div className="absolute right-0 top-11 z-50 w-52 rounded-2xl border border-edge bg-card p-1 text-sm shadow-[var(--float-shadow)]">
-                    <button className="flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left text-[rgb(var(--ink-300))] hover:bg-highlight hover:text-[rgb(var(--ink-0))]" onClick={() => exportPng('board')}>
-                      <ImageIcon size={14} /> {t('canvas.exportPngBoard')}
-                    </button>
-                    <button className="flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left text-[rgb(var(--ink-300))] hover:bg-highlight hover:text-[rgb(var(--ink-0))]" onClick={() => exportPng('frame')}>
-                      <ImageIcon size={14} /> {t('canvas.exportPngFrame')}
-                    </button>
-                    <button className="flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left text-[rgb(var(--ink-300))] hover:bg-highlight hover:text-[rgb(var(--ink-0))]" onClick={exportPdf}>
-                      <FileText size={14} /> {t('canvas.exportPdf')}
-                    </button>
+              <TopBtn active={grid !== 'none'} title={t('canvas.grid')} onClick={() => setGrid((g) => (g === 'dots' ? 'lines' : g === 'lines' ? 'none' : 'dots'))}>
+                <Grid3x3 size={17} />
+              </TopBtn>
+              <TopBtn active={snap} title={t('canvas.snap')} onClick={() => setSnap((s) => !s)}>
+                <Magnet size={17} />
+              </TopBtn>
+              <TopBtn active={showRulers} title={t('canvas.rulers')} onClick={() => setShowRulers((v) => !v)}>
+                <RulerIcon size={17} />
+              </TopBtn>
+              <TopBtn active={outlineOpen} title={t('canvas.outline')} onClick={() => setOutlineOpen((v) => !v)}>
+                <ListTree size={17} />
+              </TopBtn>
+              <div className="relative">
+                <TopBtn active={timerOpen} title="Таймер фокуса" onClick={() => setTimerOpen((v) => !v)}>
+                  <TimerIcon size={17} />
+                </TopBtn>
+                {timerOpen && (
+                  <div className="absolute right-0 z-50" style={{ top: 'calc(100% + 8px)' }}>
+                    <FocusTimer onClose={() => setTimerOpen(false)} />
                   </div>
-                </>
-              )}
+                )}
+              </div>
+              <TopBtn active={relationsOpen} title={t('canvas.relations')} onClick={() => setRelationsOpen((v) => !v)}>
+                <GitBranch size={17} />
+              </TopBtn>
+            </div>
+
+            <div className="flex h-11 items-center gap-0.5 rounded-2xl border border-edge bg-card px-1.5 ring-1 ring-black/5 shadow-[var(--float-shadow)]">
+              <TopBtn title={t('canvas.zoomOut')} onClick={() => zoomCenter(1 / 1.2)}>
+                <Minus size={17} />
+              </TopBtn>
+              <button
+                className="min-w-[44px] rounded-lg px-1 text-center text-xs font-medium tabular-nums text-[rgb(var(--ink-200))] transition-colors hover:text-[rgb(var(--ink-0))]"
+                title="100%"
+                onClick={() => zoomCenter(1 / cam.k)}
+              >
+                {Math.round(cam.k * 100)}%
+              </button>
+              <TopBtn title={t('canvas.zoomIn')} onClick={() => zoomCenter(1.2)}>
+                <Plus size={17} />
+              </TopBtn>
+              <TopBtn title={`${t('canvas.fit')} · 0`} onClick={() => fit(true)}>
+                <Maximize2 size={16} />
+              </TopBtn>
+              <div className="mx-1 h-5 w-px bg-edge" />
+              <div className="relative">
+                <TopBtn title={t('canvas.export')} onClick={() => setExportMenu((v) => !v)}>
+                  <Download size={17} />
+                </TopBtn>
+                {exportMenu && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setExportMenu(false)} />
+                    <div className="absolute right-0 top-12 z-50 w-52 rounded-2xl border border-edge bg-card p-1 text-sm shadow-[var(--float-shadow)]">
+                      <button className="flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left text-[rgb(var(--ink-200))] hover:bg-highlight hover:text-[rgb(var(--ink-0))]" onClick={() => exportPng('board')}>
+                        <ImageIcon size={14} /> {t('canvas.exportPngBoard')}
+                      </button>
+                      <button className="flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left text-[rgb(var(--ink-200))] hover:bg-highlight hover:text-[rgb(var(--ink-0))]" onClick={() => exportPng('frame')}>
+                        <ImageIcon size={14} /> {t('canvas.exportPngFrame')}
+                      </button>
+                      <button className="flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left text-[rgb(var(--ink-200))] hover:bg-highlight hover:text-[rgb(var(--ink-0))]" onClick={exportPdf}>
+                        <FileText size={14} /> {t('canvas.exportPdf')}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -2214,7 +1675,7 @@ export default function CanvasBoard() {
         {/* find on board (Ctrl+F) — centred pill under the top chrome */}
         {chrome && search != null && (
           <div
-            className="pointer-events-auto absolute left-1/2 z-30 flex -translate-x-1/2 items-center gap-0.5 rounded-xl border border-edge bg-card px-1.5 py-1 ring-1 ring-black/5 shadow-[var(--float-shadow)]"
+            className="pointer-events-auto absolute left-1/2 z-30 flex h-11 -translate-x-1/2 items-center gap-0.5 rounded-2xl border border-edge bg-card px-2 ring-1 ring-black/5 shadow-[var(--float-shadow)]"
             style={{ top: rOff + 12 }}
             onPointerDown={(e) => e.stopPropagation()}
           >
@@ -2350,6 +1811,17 @@ export default function CanvasBoard() {
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   opacity={penStyle.kind === 'highlighter' ? 0.4 : 1}
+                />
+              )}
+              {lassoDraft && lassoDraft.length > 1 && (
+                <polygon
+                  points={lassoDraft.map((p) => `${p.x},${p.y}`).join(' ')}
+                  fill={`rgb(${ACTIVE_RGB} / 0.08)`}
+                  stroke={ACTIVE}
+                  strokeWidth={1.5 / cam.k}
+                  strokeDasharray={`${5 / cam.k} ${3 / cam.k}`}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
                 />
               )}
             </g>
@@ -2612,7 +2084,7 @@ export default function CanvasBoard() {
               </div>
             ) : (
               <button
-                className="flex h-9 w-9 items-center justify-center rounded-lg border border-edge bg-surface text-zinc-400 shadow-[var(--float-shadow)] backdrop-blur transition-colors hover:text-zinc-100"
+                className="flex h-10 w-10 items-center justify-center rounded-xl border border-edge bg-card text-[rgb(var(--ink-200))] ring-1 ring-black/5 shadow-[var(--float-shadow)] backdrop-blur transition-colors hover:bg-highlight hover:text-[rgb(var(--ink-0))]"
                 onClick={() => setMinimapOpen(true)}
                 title={t('canvas.minimap')}
               >
@@ -2751,151 +2223,4 @@ export default function CanvasBoard() {
   )
 }
 
-function TopBtn({ active, title, onClick, children }: { active?: boolean; title: string; onClick: () => void; children: ReactNode }) {
-  return (
-    <button
-      onClick={onClick}
-      title={title}
-      className={`flex h-8 w-8 items-center justify-center rounded-xl transition-colors ${
-        active ? 'bg-highlight text-[rgb(var(--ink-0))]' : 'text-[rgb(var(--ink-400))] hover:bg-highlight hover:text-[rgb(var(--ink-0))]'
-      }`}
-    >
-      {children}
-    </button>
-  )
-}
-
-function MenuItem({ label, onClick, danger, disabled }: { label: string; onClick: () => void; danger?: boolean; disabled?: boolean }) {
-  return (
-    <button
-      disabled={disabled}
-      onClick={onClick}
-      className={`block w-full rounded-lg px-3 py-1.5 text-left transition-colors disabled:opacity-40 ${
-        danger ? 'text-danger hover:bg-highlight' : 'text-zinc-300 hover:bg-raised hover:text-white'
-      }`}
-    >
-      {label}
-    </button>
-  )
-}
-
-function SelectionFrame({
-  n,
-  cam,
-  resizable,
-  rotatable,
-  roundable,
-  onResize,
-  onRotate,
-  onRadius,
-}: {
-  n: CanvasNode
-  cam: { x: number; y: number; k: number }
-  resizable: boolean
-  rotatable: boolean
-  roundable: boolean
-  onResize: (e: React.PointerEvent, n: CanvasNode, sign: Sign) => void
-  onRotate: (e: React.PointerEvent, n: CanvasNode) => void
-  onRadius: (e: React.PointerEvent, n: CanvasNode, corner: Sign) => void
-}) {
-  const sx = cam.x + n.x * cam.k
-  const sy = cam.y + n.y * cam.k
-  const w = n.w * cam.k
-  const h = n.h * cam.k
-  // current corner radius (screen px) → place the round handles just inside each corner
-  const rWorld = n.radius ?? (n.type === 'shape' && n.shape === 'roundRect' ? ROUND_RECT_RADIUS : n.type === 'sticky' || n.type === 'image' ? 6 : 0)
-  const inset = Math.min(Math.max(rWorld * cam.k, 14), Math.min(w, h) / 2 - 2)
-  const showRound = roundable && !n.locked && Math.min(w, h) > 48
-  // text grows its own height (auto-height) → expose width handles only
-  const widthOnly = n.type === 'text'
-  const sideHandles = widthOnly ? SIDE_HANDLES.filter((hd) => hd.sign[1] === 0) : SIDE_HANDLES
-  const cornerHandles = widthOnly ? [] : HANDLES
-  return (
-    <div
-      className="pointer-events-none absolute"
-      style={{ left: sx, top: sy, width: w, height: h, transform: n.rotation ? `rotate(${n.rotation}deg)` : undefined, transformOrigin: 'center' }}
-    >
-      <div className="absolute inset-0 border" style={{ borderColor: ACTIVE }} />
-
-      {/* corner-radius handles (Figma): small circles inset from each corner */}
-      {showRound &&
-        HANDLES.map((hd) => {
-          const cx = hd.sign[0] < 0 ? inset : w - inset
-          const cy = hd.sign[1] < 0 ? inset : h - inset
-          return (
-            <div
-              key={`r-${hd.key}`}
-              className="pointer-events-auto absolute h-2 w-2 rounded-full border bg-[#fff]"
-              style={{ borderColor: ACTIVE, left: cx, top: cy, transform: 'translate(-50%, -50%)', cursor: 'pointer' }}
-              title="Radius"
-              onPointerDown={(e) => onRadius(e, n, hd.sign)}
-            />
-          )
-        })}
-
-      {!n.locked && resizable && (
-        <>
-          {/* side-midpoint handles — single-axis resize */}
-          {sideHandles.map((hd) => {
-            const px = hd.sign[0] < 0 ? 0 : hd.sign[0] > 0 ? w : w / 2
-            const py = hd.sign[1] < 0 ? 0 : hd.sign[1] > 0 ? h : h / 2
-            return (
-              <div
-                key={hd.key}
-                className="pointer-events-auto absolute h-2.5 w-2.5 rounded-[3px] border bg-[#fff] shadow-sm"
-                style={{ borderColor: ACTIVE, left: px, top: py, transform: 'translate(-50%, -50%)', cursor: hd.cursor }}
-                onPointerDown={(e) => onResize(e, n, hd.sign)}
-              />
-            )
-          })}
-          {/* corner handles — two-axis resize */}
-          {cornerHandles.map((hd) => {
-            const px = hd.sign[0] < 0 ? 0 : w
-            const py = hd.sign[1] < 0 ? 0 : h
-            return (
-              <div
-                key={hd.key}
-                className="pointer-events-auto absolute h-2.5 w-2.5 rounded-[3px] border bg-[#fff] shadow"
-                style={{ borderColor: ACTIVE, left: px, top: py, transform: 'translate(-50%, -50%)', cursor: hd.cursor }}
-                onPointerDown={(e) => onResize(e, n, hd.sign)}
-              />
-            )
-          })}
-        </>
-      )}
-      {!n.locked && rotatable && (
-        <>
-          <div
-            className="pointer-events-auto absolute h-3 w-3 rounded-full border bg-[#fff]"
-            style={{ borderColor: ACTIVE, left: w / 2, top: -24, transform: 'translate(-50%, -50%)', cursor: 'grab' }}
-            onPointerDown={(e) => onRotate(e, n)}
-          />
-          <div className="absolute" style={{ background: `rgb(${ACTIVE_RGB} / 0.6)`, left: w / 2 - 0.5, top: -24, width: 1, height: 24 }} />
-        </>
-      )}
-    </div>
-  )
-}
-
-function LinkModal({ initial, onClose, onSave }: { initial: string; onClose: () => void; onSave: (href: string) => void }) {
-  const { t } = useI18n()
-  const [v, setV] = useState(initial)
-  return (
-    <Modal title={t('canvas.link')} onClose={onClose} width="max-w-sm">
-      <input
-        autoFocus
-        className="input mb-4"
-        placeholder="https://…"
-        value={v}
-        onChange={(e) => setV(e.target.value)}
-        onKeyDown={(e) => e.key === 'Enter' && onSave(v.trim())}
-      />
-      <div className="flex justify-end gap-2">
-        <Button onClick={onClose}>{t('common.cancel')}</Button>
-        <Button variant="accent" onClick={() => onSave(v.trim())}>
-          {t('common.save')}
-        </Button>
-      </div>
-    </Modal>
-  )
-}
+// TopBtn / MenuItem / SelectionFrame / LinkModal now live in ../canvas/BoardParts

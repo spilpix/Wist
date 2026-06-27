@@ -1,44 +1,40 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
+  BookOpen,
   CalendarClock,
-  FolderKanban,
-  LayoutGrid,
   Columns3,
+  Compass,
+  History,
+  LayoutGrid,
   List as ListIcon,
+  ListTodo,
   Paperclip,
   Pencil,
   Pin,
   Plus,
   Search,
+  Sparkles,
   Star,
   StickyNote,
-  ListTodo,
+  Target,
   Trash2,
 } from 'lucide-react'
-import EmptyState from '../components/ui/EmptyState'
 import { SkeletonTiles } from '../components/ui/Skeleton'
 import ProgressRing from '../components/ui/ProgressRing'
 import ConfirmDialog from '../components/ui/ConfirmDialog'
 import ProjectModal from '../components/ProjectModal'
-import ProjectCover from '../components/ProjectCover'
 import DragHandle from '../components/ui/DragHandle'
 import { liftDragSource } from '../lib/mediaDrag'
 import { useProjectStore } from '../store/projectStore'
 import { toast } from '../store/toastStore'
 import { useFavoritesStore } from '../store/favoritesStore'
-import { PROJECT_STATUS_COLORS, PROJECT_STATUSES, type Project, type ProjectStatus } from '../types/models'
-import { useI18n } from '../i18n'
+import { PROJECT_STATUS_COLORS, hubColor, type HubRecentItem, type Project, type ProjectStatus } from '../types/models'
+import { DATE_LOCALE, useI18n } from '../i18n'
+import { daysUntil, timeAgo } from '../lib/date'
+import { updateProject, removeProject } from '../data/projects'
 
-// days until a YYYY-MM-DD deadline (negative = overdue)
-export function daysUntil(d: string): number {
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const due = new Date(`${d}T00:00:00`)
-  return Math.round((due.getTime() - today.getTime()) / 86_400_000)
-}
-
-// completed / total tasks for the progress ring
+// completed / total tasks for the progress ring (board + list views)
 export function projectProgress(p: Project): { done: number; total: number; pct: number } {
   const total = p.task_count ?? 0
   const open = p.open_task_count ?? 0
@@ -47,16 +43,21 @@ export function projectProgress(p: Project): { done: number; total: number; pct:
 }
 
 type ViewMode = 'gallery' | 'board' | 'list'
-// the order statuses appear in (active work first, archive last)
+// board groups by status (the structured/pipeline view); gallery + list lead by recency
 const STATUS_ORDER: ProjectStatus[] = ['active', 'review', 'idea', 'done', 'archived']
 
+// newest first, by the hub's true last activity (own stamp or freshest inner item)
+const byRecency = (a: Project, b: Project) =>
+  (b.last_activity || b.updated_at).localeCompare(a.last_activity || a.updated_at)
+
 export default function Projects() {
-  const { t } = useI18n()
+  const { t, tn, lang } = useI18n()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const { projects, loading, load } = useProjectStore()
   const [editing, setEditing] = useState<Project | null>(null)
   const [creating, setCreating] = useState(false)
+  const [seed, setSeed] = useState<Partial<Project> | null>(null)
   const [confirm, setConfirm] = useState<Project | null>(null)
   const [query, setQuery] = useState('')
   const [view, setView] = useState<ViewMode>(() => (localStorage.getItem('hubs:view') as ViewMode) || 'gallery')
@@ -78,18 +79,23 @@ export default function Projects() {
     }
   }, [searchParams, setSearchParams])
 
+  const openCreate = (s?: Partial<Project> | null) => {
+    setSeed(s ?? null)
+    setCreating(true)
+  }
+
   const togglePin = async (p: Project) => {
-    await window.wist.projects.update(p.id, { pinned: p.pinned ? 0 : 1 })
+    await updateProject(p.id, { pinned: p.pinned ? 0 : 1 })
     load()
   }
   const setStatus = async (p: Project, status: ProjectStatus) => {
     if (p.status === status) return
-    await window.wist.projects.update(p.id, { status })
+    await updateProject(p.id, { status })
     load()
   }
   const remove = async () => {
     if (!confirm) return
-    await window.wist.projects.remove(confirm.id)
+    await removeProject(confirm.id)
     setConfirm(null)
     load()
     toast(t('project.deleted'), 'success')
@@ -103,6 +109,17 @@ export default function Projects() {
     )
   }, [projects, query])
 
+  // "Продолжить" rail — the freshest hubs, a quick way back into recent work.
+  // Only worth showing once there are enough hubs that scanning the grid is slower.
+  const recentHubs = useMemo(() => [...projects].sort(byRecency).slice(0, 4), [projects])
+
+  // one-line orientation: weekday + date · pluralized hub count
+  const subline = useMemo(() => {
+    const date = new Date().toLocaleDateString(DATE_LOCALE[lang], { weekday: 'long', day: 'numeric', month: 'long' })
+    const cap = date.charAt(0).toUpperCase() + date.slice(1)
+    return `${cap} · ${tn('hub.hubsCount', projects.length)}`
+  }, [projects.length, lang, tn])
+
   const cardProps = (p: Project) => ({
     project: p,
     t,
@@ -114,59 +131,72 @@ export default function Projects() {
 
   if (loading && !projects.length)
     return (
-      <div className="page">
-        <SkeletonTiles count={6} />
+      <div className="hubs-skin min-h-full bg-bg">
+        <div className="page">
+          <SkeletonTiles count={6} />
+        </div>
       </div>
     )
 
   return (
-    <div className="page">
-      <div className="mb-6 flex flex-wrap items-center gap-3">
-        <h1 className="page-title !mb-0 mr-1">{t('nav.projects')}</h1>
-        <ViewToggle view={view} setView={setView} t={t} />
-        <div className="relative ml-auto">
-          <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
-          <input
-            className="input !w-56 !py-1.5 !pl-8 text-sm"
-            placeholder={t('common.search')}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
+    <div className="hubs-skin min-h-full bg-bg">
+      <div className="page">
+        {/* header — editorial serif title + orientation line, then tools on the right */}
+        <div className="mb-7 flex flex-wrap items-end gap-x-4 gap-y-3">
+          <div className="mr-auto">
+            <h1 className="hub-serif text-[34px] leading-none text-zinc-100">{t('hub.title')}</h1>
+            {!!projects.length && <div className="mt-2 text-[13px] text-zinc-400">{subline}</div>}
+          </div>
+          {!!projects.length && (
+            <>
+              <div className="relative">
+                <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+                <input
+                  className="input !w-52 !py-1.5 !pl-8 text-sm"
+                  placeholder={t('hub.searchPh')}
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                />
+              </div>
+              <ViewToggle view={view} setView={setView} t={t} />
+            </>
+          )}
+          <button className="btn-accent" onClick={() => openCreate()}>
+            <Plus size={16} /> {t('project.new')}
+          </button>
         </div>
-        <button className="btn-accent" onClick={() => setCreating(true)}>
-          <Plus size={16} /> {t('project.new')}
-        </button>
-      </div>
 
-      {!projects.length ? (
-        <EmptyState
-          icon={FolderKanban}
-          title={t('project.emptyTitle')}
-          subtitle={t('project.emptySubtitle')}
-          action={
-            <button className="btn-accent" onClick={() => setCreating(true)}>
-              <Plus size={16} /> {t('project.new')}
-            </button>
-          }
-        />
-      ) : !filtered.length ? (
-        <p className="px-1 py-12 text-center text-sm text-zinc-500">{t('common.noResults')}</p>
-      ) : view === 'board' ? (
-        <BoardView projects={filtered} t={t} cardProps={cardProps} onSetStatus={setStatus} />
-      ) : (
-        <GroupedView view={view} projects={filtered} t={t} cardProps={cardProps} />
-      )}
+        {!projects.length ? (
+          <HubEmptyState t={t} onBlank={() => openCreate()} onTemplate={(s) => openCreate(s)} />
+        ) : (
+          <>
+            {!query && recentHubs.length >= 4 && (
+              <ContinueRail items={recentHubs} t={t} onOpen={(p) => navigate(`/project/${p.id}`)} />
+            )}
+            {!filtered.length ? (
+              <p className="px-1 py-12 text-center text-sm text-zinc-500">{t('common.noResults')}</p>
+            ) : view === 'board' ? (
+              <BoardView projects={filtered} t={t} cardProps={cardProps} onSetStatus={setStatus} />
+            ) : (
+              <RecencyView view={view} projects={filtered} t={t} cardProps={cardProps} />
+            )}
+          </>
+        )}
+      </div>
 
       {(creating || editing) && (
         <ProjectModal
           project={editing}
+          seed={seed}
           onClose={() => {
             setCreating(false)
             setEditing(null)
+            setSeed(null)
           }}
           onSaved={() => {
             setCreating(false)
             setEditing(null)
+            setSeed(null)
             load()
           }}
         />
@@ -225,8 +255,109 @@ function ViewToggle({ view, setView, t }: { view: ViewMode; setView: (v: ViewMod
   )
 }
 
-// --- gallery + list share the same grouping (pinned, then by status) ---
-function GroupedView({
+// the round-cornered identity tile: emoji if set, else a serif monogram, on a soft
+// tint of the hub's colour. `sm` is the compact size used in the Continue rail.
+function HubIcon({ p, size = 'md' }: { p: Project; size?: 'sm' | 'md' }) {
+  const color = hubColor(p)
+  const dim = size === 'sm' ? 'h-9 w-9 text-base' : 'h-11 w-11 text-xl'
+  const letter = (p.name.trim().charAt(0) || '•').toUpperCase()
+  return (
+    <div
+      className={`flex ${dim} shrink-0 items-center justify-center rounded-xl`}
+      style={{ backgroundColor: `${color}24`, color }}
+    >
+      {p.icon ? <span className="leading-none">{p.icon}</span> : <span className="hub-serif leading-none">{letter}</span>}
+    </div>
+  )
+}
+
+// dot colour for a pulse item: notes carry the hub's identity colour; open tasks
+// glow terracotta; finished tasks fade.
+function pulseDotColor(it: HubRecentItem, hub: string): string {
+  if (it.kind === 'task') return it.done ? 'rgb(var(--ink-700))' : '#c4622d'
+  return hub
+}
+
+// ---------- the PKM hub card: identity · type · pulse · last activity ----------
+function HubCard({ project: p, t, onOpen, onEdit, onPin, onDelete }: CardProps) {
+  const color = hubColor(p)
+  const recent = p.recent ?? []
+  const notes = p.note_count ?? 0
+  const openTasks = p.open_task_count ?? 0
+  return (
+    <button
+      onClick={onOpen}
+      className="group relative flex flex-col rounded-2xl border border-edge bg-card p-4 text-left shadow-[var(--card-shadow)] transition-all duration-150 hover:-translate-y-0.5 hover:border-accent/40 hover:bg-raised hover:shadow-[var(--card-shadow-hover)]"
+    >
+      <div className="flex items-center gap-3">
+        <HubIcon p={p} />
+        <div className="min-w-0 flex-1">
+          <div className="hub-serif truncate text-[19px] leading-tight text-zinc-100">{p.name}</div>
+          <div className="truncate text-xs text-zinc-400">{p.kind?.trim() || t('hub.typeGeneric')}</div>
+        </div>
+      </div>
+
+      {/* pulse — the freshest items inside, so the hub reads as alive, not a folder */}
+      {recent.length > 0 ? (
+        <div className="mt-3 flex flex-col gap-1.5 border-t border-edge pt-3">
+          {recent.map((it) => (
+            <div key={`${it.kind}-${it.id}`} className="flex items-center gap-2 text-[12.5px]">
+              <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: pulseDotColor(it, color) }} />
+              <span className={`min-w-0 flex-1 truncate ${it.done ? 'text-zinc-500 line-through' : 'text-zinc-300'}`}>
+                {it.title?.trim() || t('hub.untitledItem')}
+              </span>
+              <span className="shrink-0 text-[11px] text-zinc-600">{timeAgo(it.at, t)}</span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="mt-3 border-t border-edge pt-3 text-[12.5px] italic text-zinc-600">{t('hub.pulseEmpty')}</div>
+      )}
+
+      {/* footer — counts at a glance (icon+number, language-neutral) + last touched */}
+      <div className="mt-3 flex items-center gap-3 text-[11.5px] text-zinc-600">
+        <span className="flex items-center gap-1" title={t('project.statNotes')}>
+          <StickyNote size={12} /> {notes}
+        </span>
+        {openTasks > 0 && (
+          <span className="flex items-center gap-1" title={t('project.statTasks')}>
+            <ListTodo size={12} /> {openTasks}
+          </span>
+        )}
+        <span className="ml-auto">{t('hub.editedAgo', { x: timeAgo(p.last_activity, t) })}</span>
+      </div>
+
+      <HoverActions p={p} t={t} onEdit={onEdit} onPin={onPin} onDelete={onDelete} />
+    </button>
+  )
+}
+
+// the Continue rail — compact chips for the most recently touched hubs
+function ContinueRail({ items, t, onOpen }: { items: Project[]; t: TFn; onOpen: (p: Project) => void }) {
+  return (
+    <section className="mb-7">
+      <SectionLabel icon={<History size={12} className="text-zinc-500" />} label={t('hub.continue')} />
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
+        {items.map((p) => (
+          <button
+            key={p.id}
+            onClick={() => onOpen(p)}
+            className="flex items-center gap-2.5 rounded-xl border border-edge bg-card px-3 py-2.5 text-left transition-colors hover:border-accent/40 hover:bg-raised"
+          >
+            <HubIcon p={p} size="sm" />
+            <div className="min-w-0">
+              <div className="truncate text-[13px] font-medium text-zinc-100">{p.name}</div>
+              <div className="truncate text-[11px] text-zinc-500">{timeAgo(p.last_activity, t)}</div>
+            </div>
+          </button>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+// gallery + list, led by recency: pinned first, then everything by last activity
+function RecencyView({
   view,
   projects,
   t,
@@ -237,11 +368,9 @@ function GroupedView({
   t: TFn
   cardProps: Projects_cardProps
 }) {
-  const pinned = projects.filter((p) => p.pinned)
-  const groups = STATUS_ORDER.map((status) => ({
-    status,
-    items: projects.filter((p) => !p.pinned && p.status === status),
-  })).filter((g) => g.items.length)
+  const sorted = [...projects].sort(byRecency)
+  const pinned = sorted.filter((p) => p.pinned)
+  const rest = sorted.filter((p) => !p.pinned)
 
   const renderItems = (items: Project[]) =>
     view === 'list' ? (
@@ -251,41 +380,93 @@ function GroupedView({
         ))}
       </div>
     ) : (
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-3">
         {items.map((p) => (
-          <ProjectCard key={p.id} {...cardProps(p)} />
+          <HubCard key={p.id} {...cardProps(p)} />
         ))}
       </div>
     )
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-7">
       {pinned.length > 0 && (
         <section>
-          <GroupLabel icon={<Pin size={12} className="fill-current text-zinc-400" />} label={t('hub.pinned')} count={pinned.length} />
+          <SectionLabel icon={<Pin size={12} className="fill-current text-zinc-400" />} label={t('hub.pinned')} count={pinned.length} />
           {renderItems(pinned)}
         </section>
       )}
-      {groups.map((g) => (
-        <section key={g.status}>
-          <GroupLabel
-            icon={<span className="h-2 w-2 rounded-full" style={{ backgroundColor: PROJECT_STATUS_COLORS[g.status] }} />}
-            label={t(`project.status.${g.status}` as 'project.status.active')}
-            count={g.items.length}
-          />
-          {renderItems(g.items)}
+      {rest.length > 0 && (
+        <section>
+          {pinned.length > 0 && <SectionLabel label={t('hub.allHubs')} count={rest.length} />}
+          {renderItems(rest)}
         </section>
-      ))}
+      )}
     </div>
   )
 }
 
-function GroupLabel({ icon, label, count }: { icon: React.ReactNode; label: string; count: number }) {
+function SectionLabel({ icon, label, count }: { icon?: React.ReactNode; label: string; count?: number }) {
   return (
     <div className="mb-3 flex items-center gap-2">
       {icon}
       <h2 className="text-xs font-semibold uppercase tracking-wider text-zinc-500">{label}</h2>
-      <span className="text-xs text-zinc-600">{count}</span>
+      {count !== undefined && <span className="text-xs text-zinc-600">{count}</span>}
+    </div>
+  )
+}
+
+// inviting empty state — an editorial headline + starter templates that pre-seed the
+// create modal, so the first hub is one click and a name away.
+function HubEmptyState({
+  t,
+  onBlank,
+  onTemplate,
+}: {
+  t: TFn
+  onBlank: () => void
+  onTemplate: (seed: Partial<Project>) => void
+}) {
+  const tpls: Array<{ icon: typeof Compass; color: string; kind: string; title: string; desc: string }> = [
+    { icon: Compass, color: '#8a9a5b', kind: t('hub.tplAreaKind'), title: t('hub.tplAreaTitle'), desc: t('hub.tplAreaDesc') },
+    { icon: Target, color: '#c4622d', kind: t('hub.tplProjectKind'), title: t('hub.tplProjectTitle'), desc: t('hub.tplProjectDesc') },
+    { icon: BookOpen, color: '#c89a3c', kind: t('hub.tplResourceKind'), title: t('hub.tplResourceTitle'), desc: t('hub.tplResourceDesc') },
+  ]
+  return (
+    <div className="mx-auto max-w-2xl py-12 text-center animate-fade-in">
+      <div className="mx-auto mb-5 flex h-14 w-14 animate-pop-in items-center justify-center rounded-2xl bg-raised ring-1 ring-edge">
+        <Sparkles size={24} className="text-accent" />
+      </div>
+      <h2 className="hub-serif text-[30px] leading-tight text-zinc-100">{t('hub.emptyTitle')}</h2>
+      <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-zinc-400">{t('hub.emptySubtitle')}</p>
+
+      <div className="mt-7 grid gap-3 sm:grid-cols-3">
+        {tpls.map((tpl) => {
+          const Icon = tpl.icon
+          return (
+            <button
+              key={tpl.kind}
+              onClick={() => onTemplate({ kind: tpl.kind, color: tpl.color })}
+              className="group flex flex-col items-start rounded-2xl border border-edge bg-card p-4 text-left transition-all hover:-translate-y-0.5 hover:border-accent/40 hover:bg-raised hover:shadow-[var(--card-shadow-hover)]"
+            >
+              <div
+                className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl"
+                style={{ backgroundColor: `${tpl.color}24`, color: tpl.color }}
+              >
+                <Icon size={18} />
+              </div>
+              <div className="hub-serif text-[17px] leading-tight text-zinc-100">{tpl.title}</div>
+              <div className="mt-1 text-xs leading-relaxed text-zinc-500">{tpl.desc}</div>
+            </button>
+          )
+        })}
+      </div>
+
+      <button
+        onClick={onBlank}
+        className="mt-5 inline-flex items-center gap-1.5 text-sm text-zinc-400 transition-colors hover:text-zinc-200"
+      >
+        <Plus size={15} /> {t('hub.emptyBlank')}
+      </button>
     </div>
   )
 }
@@ -347,7 +528,7 @@ function BoardView({
   )
 }
 
-// ---------- cards ----------
+// ---------- cards (board + list) ----------
 
 function CardStats({ p, t }: { p: Project; t: TFn }) {
   const left = p.deadline ? daysUntil(p.deadline) : null
@@ -365,46 +546,15 @@ function CardStats({ p, t }: { p: Project; t: TFn }) {
       </span>
       {p.deadline && (
         <span className={`ml-auto flex items-center gap-1 ${dueColor}`}>
-          <CalendarClock size={12} /> {left !== null ? t('hub.daysLeft').replace('{n}', String(left)) : p.deadline}
+          <CalendarClock size={12} /> {left !== null ? t('hub.daysLeft', { n: left }) : p.deadline}
         </span>
       )}
     </div>
   )
 }
 
-function ProjectCard({ project: p, t, onOpen, onEdit, onPin, onDelete }: CardProps) {
-  const accent = p.color || PROJECT_STATUS_COLORS[p.status]
-  const { pct } = projectProgress(p)
-
-  // design-system hubcard: cover band · bold title · "N задач · M заметки" · thin progress bar.
-  // Status is conveyed by the gallery group label, so the per-card pill is dropped (calmer card).
-  return (
-    <button onClick={onOpen} className="tile group relative flex flex-col overflow-hidden !border-edge text-left">
-      {p.cover_path ? (
-        <ProjectCover cover={p.cover_path} className="h-[66px] w-full shrink-0" />
-      ) : (
-        <div className="h-[66px] w-full shrink-0" style={{ backgroundImage: `linear-gradient(135deg, ${accent}, ${accent}99)` }} />
-      )}
-      <div className="flex flex-1 flex-col px-3.5 py-3">
-        <b className="truncate text-sm font-bold text-zinc-100">{p.name}</b>
-        <div className="mt-0.5 truncate text-xs text-zinc-500">
-          {p.task_count ?? 0} {t('hub.tasksShort')} · {p.note_count ?? 0} {t('hub.notesShort')}
-        </div>
-        <div className="mt-2.5 h-1.5 w-full overflow-hidden rounded-full bg-edge">
-          <div className="h-full rounded-full transition-all" style={{ width: `${Math.round(pct * 100)}%`, backgroundColor: accent }} />
-        </div>
-      </div>
-
-      <HoverActions p={p} t={t} onEdit={onEdit} onPin={onPin} onDelete={onDelete} />
-      {p.pinned && (
-        <Pin size={12} className="absolute left-2 top-2.5 fill-current text-zinc-400 opacity-100 group-hover:opacity-0" />
-      )}
-    </button>
-  )
-}
-
 function BoardCard({ project: p, t, onOpen, onEdit, onPin, onDelete }: CardProps) {
-  const accent = p.color || PROJECT_STATUS_COLORS[p.status]
+  const accent = hubColor(p)
   const { total, pct } = projectProgress(p)
   const dragged = useRef(false)
   return (
@@ -440,26 +590,26 @@ function BoardCard({ project: p, t, onOpen, onEdit, onPin, onDelete }: CardProps
 }
 
 function ListRow({ project: p, t, onOpen, onEdit, onPin, onDelete }: CardProps) {
-  const accent = p.color || PROJECT_STATUS_COLORS[p.status]
-  const { done, total, pct } = projectProgress(p)
-  const left = p.deadline ? daysUntil(p.deadline) : null
-  const dueColor = left === null ? 'text-zinc-500' : left < 0 ? 'text-danger' : left <= 3 ? 'text-st-onhold' : 'text-zinc-500'
+  const accent = hubColor(p)
   return (
     <div onClick={onOpen} className="group flex cursor-pointer items-center gap-3 px-4 py-2.5 transition-colors hover:bg-highlight">
-      <span className="h-7 w-1 shrink-0 rounded-full" style={{ backgroundColor: accent }} />
-      {total > 0 ? <ProgressRing value={pct} size={26} stroke={3} color={accent} /> : <span className="w-[26px]" />}
+      <HubIcon p={p} size="sm" />
       <div className="min-w-0 flex-1">
         <div className="truncate text-sm font-medium text-zinc-200 group-hover:text-white">{p.name}</div>
-        <div className="truncate text-[11px] text-zinc-500">{p.client || p.kind}</div>
+        <div className="truncate text-[11px] text-zinc-500">{p.kind?.trim() || t('hub.typeGeneric')}</div>
       </div>
-      <span
-        className="hidden shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide sm:inline"
-        style={{ backgroundColor: `${PROJECT_STATUS_COLORS[p.status]}26`, color: PROJECT_STATUS_COLORS[p.status] }}
-      >
-        {t(`project.status.${p.status}` as 'project.status.active')}
+      <span className="hidden shrink-0 items-center gap-3 text-[11px] text-zinc-500 sm:flex">
+        <span className="flex items-center gap-1" title={t('project.statNotes')}>
+          <StickyNote size={11} /> {p.note_count ?? 0}
+        </span>
+        {(p.open_task_count ?? 0) > 0 && (
+          <span className="flex items-center gap-1" title={t('project.statTasks')}>
+            <ListTodo size={11} /> {p.open_task_count}
+          </span>
+        )}
       </span>
-      {total > 0 && <span className="hidden w-14 shrink-0 text-right text-xs text-zinc-500 md:inline">{done}/{total}</span>}
-      {p.deadline && <span className={`hidden w-24 shrink-0 text-right text-xs md:inline ${dueColor}`}>{p.deadline}</span>}
+      <span className="hidden w-20 shrink-0 text-right text-[11px] text-zinc-600 md:inline">{timeAgo(p.last_activity, t)}</span>
+      <span className="h-7 w-1 shrink-0 rounded-full" style={{ backgroundColor: accent }} />
       <div className="flex shrink-0 gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
         <RowBtn title={t(p.pinned ? 'project.unpin' : 'project.pin')} onClick={onPin} active={!!p.pinned}>
           <Pin size={13} className={p.pinned ? 'fill-current' : ''} />
@@ -522,7 +672,7 @@ function HoverActions({
   const toggleFav = useFavoritesStore((s) => s.toggle)
   const fav = useFavoritesStore((s) => s.isPinned('project', p.id))
   return (
-    <div className="absolute right-2 top-2.5 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+    <div className="absolute right-2.5 top-2.5 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
       <span
         role="button"
         tabIndex={-1}

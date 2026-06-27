@@ -4,6 +4,7 @@ import Modal from '../ui/Modal'
 import ConfirmDialog from '../ui/ConfirmDialog'
 import ChipsInput from '../ui/ChipsInput'
 import DatePicker from '../ui/DatePicker'
+import Select from '../ui/Select'
 import MarkdownView from '../MarkdownView'
 import { toast } from '../../store/toastStore'
 import { PATCH_STATUSES, PATCH_STATUS_COLORS, type PatchStatus, type ProjectPatch } from '../../types/models'
@@ -255,13 +256,12 @@ function PatchModal({
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="mb-1 block text-xs font-medium text-zinc-400">{t('hub.patchStatusLabel')}</label>
-            <select className="select w-full" value={status} onChange={(e) => setStatus(e.target.value as PatchStatus)}>
-              {PATCH_STATUSES.map((s) => (
-                <option key={s} value={s}>
-                  {t(`hub.patchStatus.${s}` as 'hub.patchStatus.released')}
-                </option>
-              ))}
-            </select>
+            <Select
+              className="w-full"
+              value={status}
+              options={PATCH_STATUSES.map((s) => ({ value: s, label: t(`hub.patchStatus.${s}` as 'hub.patchStatus.released') }))}
+              onChange={(v) => setStatus(v as PatchStatus)}
+            />
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-zinc-400">{t('hub.patchDate')}</label>

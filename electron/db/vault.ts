@@ -1,6 +1,7 @@
 import path from 'node:path'
 import fs from 'node:fs'
 import { db } from './database'
+import { safeParse } from './_row'
 import type { VaultFile, VaultKind, VaultDiskEntry } from '../../src/types/models'
 
 const KIND_BY_EXT: Record<string, VaultKind> = {
@@ -14,16 +15,6 @@ const KIND_BY_EXT: Record<string, VaultKind> = {
 
 export function kindFor(filePath: string): VaultKind {
   return KIND_BY_EXT[path.extname(filePath).toLowerCase()] ?? 'other'
-}
-
-function safeParse(v: unknown): string[] {
-  if (typeof v !== 'string') return []
-  try {
-    const parsed = JSON.parse(v)
-    return Array.isArray(parsed) ? parsed.filter((x) => typeof x === 'string') : []
-  } catch {
-    return []
-  }
 }
 
 const rowToVault = (r: any): VaultFile => ({ ...r, tags: safeParse(r.tags) })

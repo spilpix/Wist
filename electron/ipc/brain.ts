@@ -16,8 +16,8 @@ import { getSettings, setSettings } from '../settings'
 // creation order (parents before children) so a restore inserts cleanly.
 const TABLES = [
   'projects', 'project_sections', 'project_assets', 'project_sessions', 'project_snapshots', 'project_patches',
-  'note_folders', 'notes', 'journal_entries', 'tasks', 'task_comments', 'vault_files',
-  'canvases', 'favorites',
+  'note_folders', 'notes', 'journal_entries', 'tasks', 'task_comments', 'task_attachments', 'vault_files',
+  'canvases', 'favorites', 'collections', 'collection_items', 'edges', 'ai_reports', 'object_types',
 ] as const
 
 function emitChange() {
@@ -82,6 +82,13 @@ function writeMarkdown(dir: string) {
   const write = (rel: string, content: string) => {
     const f = path.join(dir, rel)
     fs.mkdirSync(path.dirname(f), { recursive: true })
+    // Skip the write when the file is byte-identical. The Markdown mirror runs on every
+    // quit, so at scale this turns "rewrite every note" into "rewrite only what changed".
+    try {
+      if (fs.readFileSync(f, 'utf-8') === content) return
+    } catch {
+      /* not written yet */
+    }
     fs.writeFileSync(f, content, 'utf-8')
   }
   const s = brainStats()

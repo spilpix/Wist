@@ -8,15 +8,15 @@ import { coverGradient } from '../types/models'
 export default function ProjectCover({
   cover,
   className = '',
+  objectPosition = '50% 50%',
   children,
 }: {
   cover: string | null
   className?: string
+  objectPosition?: string
   children?: ReactNode
 }) {
   const grad = coverGradient(cover)
-  // a "gradient:" reference with an unknown id resolves to no gradient — don't try to
-  // load it as an image file (that would show a broken-image icon); render a neutral fill
   const isGradientRef = !!cover && cover.startsWith('gradient:')
   return (
     <div className={`relative overflow-hidden ${grad ? '' : isGradientRef ? 'bg-raised' : ''} ${className}`} style={grad ? { backgroundImage: grad } : undefined}>
@@ -26,6 +26,7 @@ export default function ProjectCover({
           alt=""
           loading="lazy"
           className="absolute inset-0 h-full w-full object-cover"
+          style={{ objectPosition }}
           draggable={false}
         />
       )}

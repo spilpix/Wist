@@ -1,4 +1,5 @@
 import { db } from './database'
+import * as edges from './edges'
 import type { Note, Project, Task } from '../../src/types/models'
 
 function arr(v: unknown): string[] {
@@ -45,14 +46,20 @@ export function restoreTrash(kind: string, id: number): void {
 export function purgeTrash(kind: string, id: number): void {
   const table = KIND_TABLE[kind]
   if (!table) return
-  // hard delete — FK cascades (project assets) / SET NULL (notes/tasks project_id) apply
+  // hard delete — FK cascades (project assets) / SET NULL (notes/tasks project_id) apply.
+  // edges have no FK, so clean the object's relation rows explicitly to avoid dangling refs.
   db().prepare(`DELETE FROM ${table} WHERE id = ?`).run(id)
+  edges.removeNode({ type: kind as edges.NodeType, id })
 }
 
 export function emptyTrash(): number {
+  const d = db()
   let changes = 0
-  for (const table of Object.values(KIND_TABLE)) {
-    changes += db().prepare(`DELETE FROM ${table} WHERE deleted_at IS NOT NULL`).run().changes
+  for (const [kind, table] of Object.entries(KIND_TABLE)) {
+    // collect ids first so we can drop their (FK-less) edges, then hard-delete the rows
+    const ids = (d.prepare(`SELECT id FROM ${table} WHERE deleted_at IS NOT NULL`).all() as Array<{ id: number }>).map((r) => r.id)
+    for (const id of ids) edges.removeNode({ type: kind as edges.NodeType, id })
+    changes += d.prepare(`DELETE FROM ${table} WHERE deleted_at IS NOT NULL`).run().changes
   }
   return changes
 }

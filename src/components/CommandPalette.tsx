@@ -2,14 +2,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Archive,
-  BarChart3,
+  CalendarDays,
+  Clock,
   FolderKanban,
+  Frame,
   Heart,
   Home,
   ListTodo,
   Moon,
   PenLine,
-  Plus,
   Search,
   Settings,
   Sun,
@@ -18,17 +19,44 @@ import {
 } from 'lucide-react'
 import { useUiStore } from '../store/uiStore'
 import { useSettingsStore, resolvedTheme } from '../store/settingsStore'
-import type { Note, Project, Task } from '../types/models'
+import { useHistoryStore } from '../store/historyStore'
+import type { Canvas, NoteSearchHit, Project, Task } from '../types/models'
 import { physKey } from '../lib/keyboard'
+import { isoDay, today } from '../lib/dates'
 import { useI18n, type TKey } from '../i18n'
+import { hueForRoute, hueForType, objColor, type ObjHue } from '../lib/objectColors'
 
 interface Item {
   id: string
-  group: 'pages' | 'actions' | 'notes' | 'tasks' | 'projects'
+  group: 'recent' | 'pages' | 'actions' | 'notes' | 'tasks' | 'projects' | 'canvases'
   label: string
   sublabel?: string
   icon: typeof Home
   run: () => void
+}
+
+// icon for a recent route, by its pathname
+function iconForPath(p: string): typeof Home {
+  if (p.startsWith('/notes')) return PenLine
+  if (p.startsWith('/project')) return FolderKanban
+  if (p.startsWith('/canvas')) return Frame
+  if (p.startsWith('/tasks')) return ListTodo
+  if (p.startsWith('/tree')) return TreePine
+  if (p.startsWith('/vault')) return Archive
+  return Home
+}
+
+// Capacities-style colour-coding for a result's icon (type hue, or route hue for pages)
+function itemHue(item: Item): ObjHue | null {
+  switch (item.group) {
+    case 'notes': return hueForType('note')
+    case 'tasks': return hueForType('task')
+    case 'projects': return hueForType('project')
+    case 'canvases': return hueForType('canvas')
+    case 'pages': return hueForRoute(item.id.slice(1))
+    case 'recent': return hueForRoute(item.id.slice(1).split('?')[0])
+    default: return null
+  }
 }
 
 function score(text: string, query: string): number {
@@ -56,7 +84,6 @@ const PAGES: Array<{ to: string; key: TKey; icon: typeof Home }> = [
   { to: '/projects', key: 'nav.projects', icon: FolderKanban },
   { to: '/tree', key: 'nav.tree', icon: TreePine },
   { to: '/trash', key: 'nav.trash', icon: Trash2 },
-  { to: '/stats', key: 'nav.statistics', icon: BarChart3 },
   { to: '/settings', key: 'nav.settings', icon: Settings },
 ]
 
@@ -69,9 +96,11 @@ export default function CommandPalette() {
 
   const [query, setQuery] = useState('')
   const [active, setActive] = useState(0)
-  const [notes, setNotes] = useState<Note[]>([])
+  const [noteHits, setNoteHits] = useState<NoteSearchHit[]>([])
   const [tasks, setTasks] = useState<Task[]>([])
   const [projects, setProjects] = useState<Project[]>([])
+  const [canvases, setCanvases] = useState<Canvas[]>([])
+  const recent = useHistoryStore((s) => s.entries)
   const listRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -89,10 +118,32 @@ export default function CommandPalette() {
     if (!open) return
     setQuery('')
     setActive(0)
-    window.wist.notes.list({}).then(setNotes)
+    setNoteHits([])
     window.wist.tasks.list().then(setTasks).catch(() => undefined)
     window.wist.projects.list().then(setProjects).catch(() => undefined)
+    window.wist.canvas.list().then(setCanvases).catch(() => undefined)
   }, [open])
+
+  // full-text note search (FTS5) — debounced, full body + Cyrillic + snippets
+  useEffect(() => {
+    if (!open) return
+    const q = query.trim()
+    if (!q) {
+      setNoteHits([])
+      return
+    }
+    let active = true
+    const h = setTimeout(() => {
+      window.wist.notes
+        .searchFts(q)
+        .then((r) => active && setNoteHits(r))
+        .catch(() => active && setNoteHits([]))
+    }, 110)
+    return () => {
+      active = false
+      clearTimeout(h)
+    }
+  }, [query, open])
 
   const close = useCallback(() => setPalette(false), [setPalette])
 
@@ -108,6 +159,18 @@ export default function CommandPalette() {
     const out: Item[] = []
     const q = query.trim()
 
+    // recent objects (quick-switcher) when there's no query yet
+    if (!q) {
+      const seen = new Set<string>()
+      for (const e of recent) {
+        const pn = e.path.split('?')[0]
+        if (pn === '/' || seen.has(pn)) continue
+        seen.add(pn)
+        out.push({ id: `r${e.path}`, group: 'recent', label: e.title || e.path, icon: iconForPath(e.path), run: () => go(e.path) })
+        if (out.length >= 6) break
+      }
+    }
+
     for (const p of PAGES) {
       const label = t(p.key)
       if (score(label, q) > 0) {
@@ -117,27 +180,10 @@ export default function CommandPalette() {
 
     const dark = resolvedTheme() === 'dark'
     const actions: Item[] = [
-      {
-        id: 'a-project',
-        group: 'actions',
-        label: t('cmdk.newProject'),
-        icon: FolderKanban,
-        run: () => go('/projects?new=1'),
-      },
-      {
-        id: 'a-note',
-        group: 'actions',
-        label: t('cmdk.newNote'),
-        icon: PenLine,
-        run: () => go('/notes?new=1'),
-      },
-      {
-        id: 'a-task',
-        group: 'actions',
-        label: t('cmdk.newTask'),
-        icon: ListTodo,
-        run: () => go('/tasks?focus=1'),
-      },
+      { id: 'a-today', group: 'actions', label: t('cmdk.today'), icon: CalendarDays, run: () => go(`/calendar?v=day&d=${isoDay(today())}`) },
+      { id: 'a-project', group: 'actions', label: t('cmdk.newProject'), icon: FolderKanban, run: () => go('/projects?new=1') },
+      { id: 'a-note', group: 'actions', label: t('cmdk.newNote'), icon: PenLine, run: () => go('/notes?new=1') },
+      { id: 'a-task', group: 'actions', label: t('cmdk.newTask'), icon: ListTodo, run: () => go('/tasks?focus=1') },
       {
         id: 'a-theme',
         group: 'actions',
@@ -152,33 +198,30 @@ export default function CommandPalette() {
     for (const a of actions) if (score(a.label, q) > 0) out.push(a)
 
     if (q) {
-      const scoredNotes = notes
-        .map((n) => ({ n, s: Math.max(score(n.title, q), score(n.content.slice(0, 200), q)) }))
-        .filter((x) => x.s > 0)
-        .sort((a, b) => b.s - a.s)
-        .slice(0, 6)
-      for (const { n } of scoredNotes) {
+      // notes — server-ranked full-text search (FTS5), full body + snippet
+      for (const h of noteHits.slice(0, 6)) {
         out.push({
-          id: `n${n.id}`,
+          id: `n${h.id}`,
           group: 'notes',
-          label: n.title || n.content.slice(0, 50),
+          label: h.title || t('notes.untitled'),
+          sublabel: h.snippet || undefined,
           icon: PenLine,
-          run: () => go(`/notes?open=${n.id}`),
+          run: () => go(`/notes?open=${h.id}`),
         })
       }
 
+      // tasks — incl. completed (search title + body); done sink below open ones
       const scoredTasks = tasks
-        .filter((tk) => !tk.done)
-        .map((tk) => ({ tk, s: score(tk.title, q) }))
+        .map((tk) => ({ tk, s: Math.max(score(tk.title, q), score(tk.note ?? '', q)) }))
         .filter((x) => x.s > 0)
-        .sort((a, b) => b.s - a.s)
-        .slice(0, 5)
+        .sort((a, b) => (a.tk.done === b.tk.done ? b.s - a.s : a.tk.done ? 1 : -1))
+        .slice(0, 6)
       for (const { tk } of scoredTasks) {
         out.push({
           id: `tk${tk.id}`,
           group: 'tasks',
           label: tk.title,
-          sublabel: tk.status,
+          sublabel: tk.done ? 'done' : tk.status,
           icon: ListTodo,
           run: () => go(`/tasks?open=${tk.id}`),
         })
@@ -190,18 +233,21 @@ export default function CommandPalette() {
         .sort((a, b) => b.s - a.s)
         .slice(0, 4)
       for (const { p } of scoredProjects) {
-        out.push({
-          id: `pr${p.id}`,
-          group: 'projects',
-          label: p.name,
-          sublabel: p.kind || undefined,
-          icon: FolderKanban,
-          run: () => go(`/project/${p.id}`),
-        })
+        out.push({ id: `pr${p.id}`, group: 'projects', label: p.name, sublabel: p.kind || undefined, icon: FolderKanban, run: () => go(`/project/${p.id}`) })
+      }
+
+      // canvases — boards by name
+      const scoredCanvases = canvases
+        .map((c) => ({ c, s: score(c.name, q) }))
+        .filter((x) => x.s > 0)
+        .sort((a, b) => b.s - a.s)
+        .slice(0, 4)
+      for (const { c } of scoredCanvases) {
+        out.push({ id: `cv${c.id}`, group: 'canvases', label: c.name || '—', icon: Frame, run: () => go(`/canvas/${c.id}`) })
       }
     }
     return out
-  }, [query, notes, tasks, projects, t, go, close, updateSettings])
+  }, [query, noteHits, tasks, projects, canvases, recent, t, go, close, updateSettings])
 
   useEffect(() => setActive(0), [query])
 
@@ -214,11 +260,13 @@ export default function CommandPalette() {
   if (!open) return null
 
   const GROUP_LABEL: Record<Item['group'], string> = {
+    recent: t('cmdk.recent'),
     pages: t('cmdk.pages'),
     actions: t('cmdk.actions'),
     notes: t('cmdk.notes'),
     tasks: t('nav.tasks'),
     projects: t('nav.projects'),
+    canvases: t('cmdk.canvases'),
   }
 
   let lastGroup: Item['group'] | null = null
@@ -261,6 +309,7 @@ export default function CommandPalette() {
             const header = item.group !== lastGroup
             lastGroup = item.group
             const Icon = item.icon
+            const hue = itemHue(item)
             return (
               <div key={item.id}>
                 {header && (
@@ -276,7 +325,7 @@ export default function CommandPalette() {
                     i === active ? 'bg-highlight text-zinc-100' : 'text-zinc-400'
                   }`}
                 >
-                  <Icon size={15} className={i === active ? 'text-zinc-100' : 'text-zinc-600'} />
+                  <Icon size={15} className={i === active ? 'text-zinc-100' : 'text-zinc-600'} style={hue && hue !== 'slate' ? { color: objColor(hue) } : undefined} />
                   <span className="min-w-0 flex-1 truncate">{item.label}</span>
                   {item.sublabel && <span className="text-[11px] uppercase tracking-wide text-zinc-600">{item.sublabel}</span>}
                 </button>

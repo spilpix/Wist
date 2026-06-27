@@ -12,7 +12,7 @@ import { useI18n } from '../i18n'
  * longer needs its own button in the sidebar. The dropdown is portaled to <body> and
  * fixed-positioned off the trigger's rect so it never gets clipped by the sidebar.
  */
-export default function ProfileMenu({ compact = false, active = false }: { compact?: boolean; active?: boolean }) {
+export default function ProfileMenu({ compact = false, active = false, placement = 'up' }: { compact?: boolean; active?: boolean; placement?: 'up' | 'down' }) {
   const { t, lang } = useI18n()
   const navigate = useNavigate()
   const update = useSettingsStore((s) => s.update)
@@ -67,7 +67,9 @@ export default function ProfileMenu({ compact = false, active = false }: { compa
 
   const menuStyle: CSSProperties = compact
     ? { left: (rect?.right ?? 0) + 8, bottom: window.innerHeight - (rect?.bottom ?? 0) }
-    : { left: rect?.left ?? 0, bottom: window.innerHeight - (rect?.top ?? 0) + 8 }
+    : placement === 'down'
+      ? { left: rect?.left ?? 0, top: (rect?.bottom ?? 0) + 8 }
+      : { left: rect?.left ?? 0, bottom: window.innerHeight - (rect?.top ?? 0) + 8 }
 
   return (
     <>

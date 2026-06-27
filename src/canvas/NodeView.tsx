@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { ArrowUpRight, CheckCircle2, Circle, MessageCircle, StickyNote as StickyIcon } from 'lucide-react'
 import type { CanvasNode, Note, Task } from '../types/models'
 import { shapePath } from './geometry'
@@ -148,7 +148,10 @@ function TextBlock({
       ? n.fontSize
       : isSticky
         ? Math.max(13, Math.min(30, Math.round(Math.min(n.w, n.h) * 0.16)))
-        : Math.min(160, Math.round(Math.min(n.w, n.h) * (isText ? 0.9 : 0.7)))
+        : n.type === 'shape'
+          ? // shapes get a comfortable cap like stickies — a one-word label must NOT balloon to fill the box
+            Math.max(13, Math.min(28, Math.round(Math.min(n.w, n.h) * 0.18)))
+          : Math.min(160, Math.round(Math.min(n.w, n.h) * 0.9))
   const family = fontCss(n.fontFamily)
   // sticky / shape: auto-FIT (shrink to fill the box); text: FIXED font, box auto-GROWS
   const fitSize = useFitFont(n.text ?? '', availW, availH, cap, 9, n.bold, n.italic, family)
@@ -230,13 +233,69 @@ function TextBlock({
       </div>
     )
   }
+  const { node: textContent, hasLists } = renderTextContent(n.text ?? '')
   return (
     <div className="absolute inset-0 flex overflow-hidden" style={{ padding: `${padY}px ${padX}px ${padBottom}px`, alignItems: vAlign }}>
-      <div className="w-full" style={style}>
-        {n.text || (ph ? <span style={{ opacity: 0.3 }}>{ph}</span> : null)}
+      <div className="w-full" style={hasLists ? { ...style, whiteSpace: 'normal' } : style}>
+        {n.text ? textContent : (ph ? <span style={{ opacity: 0.3 }}>{ph}</span> : null)}
       </div>
     </div>
   )
+}
+
+// Parse plain text with `- ` or `\d+. ` prefixes into list/paragraph ReactNodes.
+// Editing always uses the plain textarea — this is display-only.
+function renderTextContent(text: string): { node: ReactNode; hasLists: boolean } {
+  if (!/^[-*] /m.test(text) && !/^\d+\. /m.test(text)) return { node: text, hasLists: false }
+  type Chunk = { type: 'ul' | 'ol' | 'p'; lines: string[] }
+  const chunks: Chunk[] = []
+  for (const line of text.split('\n')) {
+    const ul = line.match(/^[-*] (.*)/)
+    const ol = line.match(/^\d+\. (.*)/)
+    const last = chunks[chunks.length - 1]
+    if (ul) {
+      if (last?.type === 'ul') last.lines.push(ul[1])
+      else chunks.push({ type: 'ul', lines: [ul[1]] })
+    } else if (ol) {
+      if (last?.type === 'ol') last.lines.push(ol[1])
+      else chunks.push({ type: 'ol', lines: [ol[1]] })
+    } else {
+      if (last?.type === 'p') last.lines.push(line)
+      else chunks.push({ type: 'p', lines: [line] })
+    }
+  }
+  const node = (
+    <>
+      {chunks.map((ch, i) =>
+        ch.type === 'ul' ? (
+          <ul key={i} style={{ paddingLeft: '1.2em', margin: 0, listStyleType: 'disc' }}>
+            {ch.lines.map((l, j) => <li key={j}>{l}</li>)}
+          </ul>
+        ) : ch.type === 'ol' ? (
+          <ol key={i} style={{ paddingLeft: '1.5em', margin: 0 }}>
+            {ch.lines.map((l, j) => <li key={j}>{l}</li>)}
+          </ol>
+        ) : (
+          <p key={i} style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{ch.lines.join('\n')}</p>
+        )
+      )}
+    </>
+  )
+  return { node, hasLists: true }
+}
+
+// strip markdown syntax for a clean note-card preview (no raw #, [[ ]], `, * on the board)
+function plainText(s: string): string {
+  return (s || '')
+    .replace(/!\[\[([^\]]+)\]\]/g, '$1')
+    .replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_m, a, b) => b || a)
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/^\s*[-*+]\s+/gm, '')
+    .replace(/[*_`~>#]/g, '')
+    .replace(/\n{2,}/g, '\n')
+    .trim()
 }
 
 // short footer time for a sticky (HH:MM today, else D MMM)
@@ -374,13 +433,15 @@ export default function NodeView({ node: n, note, task, editing, fileUrl, missin
         className="relative h-full w-full transition-shadow"
         style={{
           background: n.fill || 'rgb(var(--surface))',
-          border: dropActive ? '1px solid rgb(var(--accent-rgb))' : '1px solid rgb(var(--edge))',
+          border: dropActive ? '1px solid rgb(var(--accent-rgb))' : '1px solid rgb(var(--ink-0) / 0.18)',
           borderRadius: n.radius ?? 0,
-          boxShadow: dropActive ? '0 0 0 2px rgb(var(--accent-rgb) / 0.35), inset 0 0 0 9999px rgb(var(--accent-rgb) / 0.06)' : undefined,
+          boxShadow: dropActive
+            ? '0 0 0 2px rgb(var(--accent-rgb) / 0.35), inset 0 0 0 9999px rgb(var(--accent-rgb) / 0.06)'
+            : '0 1px 3px rgb(0 0 0 / 0.06)',
         }}
       >
         <div
-          className={`absolute -top-[23px] left-0 flex items-center text-[11px] font-semibold leading-none ${dropActive ? 'text-accent-bright' : 'text-zinc-400'}`}
+          className={`absolute -top-[23px] left-0 flex items-center text-[11px] font-semibold leading-none ${dropActive ? 'text-accent-bright' : 'text-[rgb(var(--ink-300))]'}`}
         >
           {editing ? (
             <AutoWidthInput
@@ -393,7 +454,7 @@ export default function NodeView({ node: n, note, task, editing, fileUrl, missin
                 e.stopPropagation()
               }}
               onPointerDown={(e) => e.stopPropagation()}
-              className="rounded-lg bg-card px-1.5 py-1 text-[11px] font-semibold text-zinc-100 outline-none ring-1 ring-accent"
+              className="rounded-lg bg-card px-1.5 py-1 text-[11px] font-semibold text-[rgb(var(--ink-0))] outline-none ring-1 ring-accent"
               placeholder={frameLabel}
               min={48}
             />
@@ -444,7 +505,7 @@ export default function NodeView({ node: n, note, task, editing, fileUrl, missin
             {done ? <CheckCircle2 size={18} className="text-[#46A758]" /> : <Circle size={18} />}
           </button>
           <div className="flex min-w-0 flex-1 flex-col">
-            <span className={`line-clamp-2 text-[13px] font-semibold ${done ? 'text-zinc-500 line-through' : 'text-zinc-100'}`}>
+            <span className={`line-clamp-2 text-[13px] font-semibold ${done ? 'text-zinc-500 line-through' : 'text-[rgb(var(--ink-0))]'}`}>
               {task ? task.title || missingTaskLabel : missingTaskLabel}
             </span>
             {task?.due_date && <span className="mt-1 text-[11px] tabular-nums text-zinc-500">{task.due_date}</span>}
@@ -468,11 +529,11 @@ export default function NodeView({ node: n, note, task, editing, fileUrl, missin
   return (
     <div className="h-full w-full overflow-hidden rounded-xl border bg-card transition-shadow hover:shadow-[var(--card-shadow-hover)]" style={{ borderColor: n.color || 'rgb(var(--edge))', borderTopWidth: 3, borderTopColor: accent }}>
       <button onPointerDown={(e) => e.stopPropagation()} onClick={() => note && onOpenNote()} className="flex h-full w-full flex-col items-start p-2.5 text-left">
-        <div className={`flex items-center gap-1.5 text-[13px] font-semibold ${note ? 'text-zinc-100' : 'text-zinc-500'}`}>
+        <div className={`flex items-center gap-1.5 text-[13px] font-semibold ${note ? 'text-[rgb(var(--ink-0))]' : 'text-zinc-500'}`}>
           <StickyIcon size={12} className="shrink-0 text-accent-bright" />
-          <span className="truncate">{note ? note.title || note.content.slice(0, 30) : missingNoteLabel}</span>
+          <span className="truncate">{note ? note.title || plainText(note.content).slice(0, 30) : missingNoteLabel}</span>
         </div>
-        {note?.content && <p className="mt-1 line-clamp-4 text-[11px] text-zinc-500">{note.content}</p>}
+        {note?.content && <p className="mt-1 line-clamp-4 text-[11px] leading-relaxed text-zinc-500">{plainText(note.content)}</p>}
       </button>
     </div>
   )

@@ -22,7 +22,11 @@ const TESTING = typeof __BARD_TESTING__ !== 'undefined' && __BARD_TESTING__
 // userData to %APPDATA%/Bard and orphan the existing database, settings,
 // covers, screenshots and world art. Pin it before anything touches the path.
 // The Testing build points at a SEPARATE folder so it can never touch real data.
-app.setPath('userData', path.join(app.getPath('appData'), TESTING ? 'WistTesting' : 'Wist'))
+// WIST_USER_DATA is a test-only escape hatch: smoke/screenshot scripts set it to a
+// throwaway temp dir so they run against an isolated DB and never touch real data.
+// It is never set in production (on Windows, Electron ignores the APPDATA env var —
+// it reads the OS known-folder API — so this explicit hook is the only safe isolation).
+app.setPath('userData', process.env.WIST_USER_DATA || path.join(app.getPath('appData'), TESTING ? 'WistTesting' : 'Wist'))
 
 // Custom scheme that streams local media (video, covers, screenshots) into the
 // renderer with Range support — file:// is blocked by web security.
@@ -165,7 +169,24 @@ function createWindow() {
   return mainWindow
 }
 
+// Single-instance guard. A second launch would open another process against the SAME
+// wist.db + WAL (a known path to a corrupt "malformed" image on the next start) and
+// collide on the local API port. Refuse the second instance and focus the running one.
+// The Testing build skips the lock so it can run alongside the real app (separate data).
+const gotInstanceLock = TESTING || app.requestSingleInstanceLock()
+if (!gotInstanceLock) app.quit()
+app.on('second-instance', () => {
+  if (!mainWindow) {
+    createWindow()
+    return
+  }
+  if (mainWindow.isMinimized()) mainWindow.restore()
+  mainWindow.show()
+  mainWindow.focus()
+})
+
 app.whenReady().then(() => {
+  if (!gotInstanceLock) return // lost the lock — we're quitting; don't touch the db/window
   app.setAppUserModelId(TESTING ? 'com.wist.testing' : 'com.wist.app') // proper taskbar identity on Windows
   registerMediaProtocol()
   openDatabase()

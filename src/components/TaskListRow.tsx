@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Bot, Trash2 } from 'lucide-react'
 import { TaskCheck, taskCircleColor, dueInfo } from './TaskRow'
+import TypeBadge from './TypeBadge'
 import type { Task } from '../types/models'
 import { useI18n } from '../i18n'
 
@@ -64,6 +65,7 @@ export default function TaskListRow({
     >
       {handle}
       <TaskCheck done={done} color={taskCircleColor(task)} onToggle={handleToggle} animating={pop} />
+      <TypeBadge typeId={task.props?.type} size={13} />
       <span className={`min-w-0 flex-1 truncate text-[14px] font-medium ${done ? 'text-zinc-500 line-through' : 'text-zinc-100'}`}>
         {task.title || t('tasks.untitled')}
       </span>

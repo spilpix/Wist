@@ -1,7 +1,7 @@
 import type { CanvasShape } from '../types/models'
 
 // active creation/interaction tool
-export type ToolKey = 'select' | 'hand' | 'frame' | 'sticky' | 'text' | 'shape' | 'connector' | 'pen' | 'image' | 'comment'
+export type ToolKey = 'select' | 'lasso' | 'hand' | 'frame' | 'sticky' | 'text' | 'shape' | 'connector' | 'pen' | 'image' | 'comment'
 
 // ── sticky-note palette — vivid, Miro-style ──────────────────────────────────
 export const STICKY_COLORS = [

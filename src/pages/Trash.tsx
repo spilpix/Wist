@@ -8,6 +8,7 @@ import { toast } from '../store/toastStore'
 import { formatRelative } from '../utils/formatters'
 import { useI18n } from '../i18n'
 import type { Note, Project, Task } from '../types/models'
+import { listTrash, restoreTrash, purgeTrash, emptyTrash } from '../data/trash'
 
 type Kind = 'project' | 'note' | 'task'
 interface Bin {
@@ -23,8 +24,7 @@ export default function Trash() {
 
   const load = useCallback(
     () =>
-      window.wist.trash
-        .list()
+      listTrash()
         .then(setData)
         .catch((e) => {
           console.error('trash load failed', e)
@@ -37,16 +37,16 @@ export default function Trash() {
   }, [load])
 
   const restore = async (kind: Kind, id: number) => {
-    await window.wist.trash.restore(kind, id)
+    await restoreTrash(kind, id)
     toast(t('trash.restored'), 'success')
     load()
   }
   const purge = async (kind: Kind, id: number) => {
-    await window.wist.trash.purge(kind, id)
+    await purgeTrash(kind, id)
     load()
   }
   const empty = async () => {
-    await window.wist.trash.empty()
+    await emptyTrash()
     setConfirmEmpty(false)
     load()
   }

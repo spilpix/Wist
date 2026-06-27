@@ -23,7 +23,7 @@ export default function ConfirmDialog({ open = true, title, message, confirmLabe
         <Button variant="subtle" onClick={onCancel}>
           {t('common.cancel')}
         </Button>
-        <Button variant={danger ? 'danger' : 'accent'} onClick={onConfirm}>
+        <Button variant={danger ? 'danger' : 'accent'} onClick={onConfirm} autoFocus>
           {confirmLabel ?? t('common.confirm')}
         </Button>
       </div>

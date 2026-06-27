@@ -1,4 +1,5 @@
 import http from 'node:http'
+import crypto from 'node:crypto'
 import { app } from 'electron'
 import { getSettings } from './settings'
 import * as tasks from './db/tasks'
@@ -56,10 +57,17 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse): Prom
     return
   }
 
-  // everything else requires the token
+  // everything else requires the token (constant-time compare so a bad token can't be
+  // brute-forced by timing — even though we're 127.0.0.1-only, it costs nothing)
   const auth = req.headers.authorization ?? ''
   const token = auth.startsWith('Bearer ') ? auth.slice(7) : (req.headers['x-api-key'] as string | undefined)
-  if (!settings.apiToken || token !== settings.apiToken) {
+  const tokenOk = (() => {
+    if (!settings.apiToken || !token) return false
+    const a = Buffer.from(String(token))
+    const b = Buffer.from(settings.apiToken)
+    return a.length === b.length && crypto.timingSafeEqual(a, b)
+  })()
+  if (!tokenOk) {
     json(res, 401, { error: 'Unauthorized: pass Authorization: Bearer <token> (see Bard Settings)' })
     return
   }

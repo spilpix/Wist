@@ -11,21 +11,22 @@ import GraphCanvas, {
 } from './GraphCanvas'
 import { useSettingsStore, resolvedTheme } from '../store/settingsStore'
 import { type Note, type Project, type ProjectAsset, type ProjectSection, type Task } from '../types/models'
+import { hueForType, objColorHex } from '../lib/objectColors'
 import { useI18n } from '../i18n'
 
 const DARK = { bg: '#191919', edge: '#363636', text: '#9b9b99', linkBoost: 1 }
 const LIGHT = { bg: '#ffffff', edge: '#c4c3c0', text: '#37352f', linkBoost: 2.3 }
 
-// node colours per hub node kind
-const KIND_HEX: Record<string, string> = {
-  hub: '#2383e2',
-  section: '#c9a96b',
-  folder: '#7aa8c4',
-  file: '#8a8278',
-  image: '#6fb06f',
-  link: '#a87dc4',
-  note: '#5b8def',
-  task: '#c47a7a',
+// map hub graph node kinds to the unified objectColors palette
+const KIND_TO_TYPE: Record<string, string> = {
+  hub: 'project',
+  section: 'folder',
+  folder: 'folder',
+  file: 'vault',
+  image: 'vault',
+  link: 'canvas',
+  note: 'note',
+  task: 'task',
 }
 
 /**
@@ -113,7 +114,10 @@ export default function HubGraph({
     return { nodes, edges, kindNames }
   }, [project, assets, sections, notes, tasks, kindNames])
 
-  const colorOf = useCallback((kind: string) => KIND_HEX[kind] ?? '#8a8278', [])
+  const colorOf = useCallback((kind: string) => {
+    const type = KIND_TO_TYPE[kind] ?? 'vault'
+    return objColorHex(hueForType(type))
+  }, [])
   const onNavigate = useCallback(
     (route: string) => {
       const [type, id] = route.split(':')
@@ -175,7 +179,7 @@ export default function HubGraph({
       <div className="absolute bottom-3 left-3 flex flex-wrap gap-x-3 gap-y-1 rounded-xl border border-edge bg-card/85 px-3 py-2 backdrop-blur">
         {legend.map((k) => (
           <span key={k} className="flex items-center gap-1.5 text-[11px] text-zinc-400">
-            <span className="h-2 w-2 rounded-full" style={{ backgroundColor: KIND_HEX[k] }} />
+            <span className="h-2 w-2 rounded-full" style={{ backgroundColor: objColorHex(hueForType(KIND_TO_TYPE[k] ?? 'vault')) }} />
             {kindNames[k]}
           </span>
         ))}

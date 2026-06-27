@@ -16,6 +16,7 @@ import { useMultiSelect } from '../lib/useMultiSelect'
 import { physKey } from '../lib/keyboard'
 import { toast } from '../store/toastStore'
 import { type Task, type TaskStatus } from '../types/models'
+import { useTasks, createTask, updateTask, removeTask, reorderTasks, clearCompletedTasks } from '../data/tasks'
 import { useI18n, t as tGlobal } from '../i18n'
 
 type TaskFilter = 'all' | 'today' | 'scheduled' | 'flagged'
@@ -27,7 +28,7 @@ type TFn = ReturnType<typeof useI18n>['t']
 export default function Tasks() {
   const { t } = useI18n()
   const [searchParams, setSearchParams] = useSearchParams()
-  const [tasks, setTasks] = useState<Task[] | null>(null)
+  const { data: tasks, reload: load, setData: setTasks } = useTasks()
   const [view, setView] = useState<View>(() => (localStorage.getItem('wist.tasksView') === 'board' ? 'board' : 'list'))
   const [tab, setTab] = useState<Tab>('todo')
   const [filter, setFilter] = useState<TaskFilter>('all')
@@ -38,27 +39,6 @@ export default function Tasks() {
   const sel = useMultiSelect()
   const [bulkConfirm, setBulkConfirm] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
-  const loadSeq = useRef(0)
-
-  const load = useCallback(() => {
-    const seq = ++loadSeq.current
-    return window.wist.tasks
-      .list()
-      .then((ts) => {
-        if (seq === loadSeq.current) setTasks(ts)
-      })
-      .catch((e) => {
-        console.error('tasks load failed', e)
-        setTasks((prev) => prev ?? [])
-      })
-  }, [])
-
-  useEffect(() => {
-    load()
-    return window.wist.events.onDataChanged((kind) => {
-      if (kind === 'tasks') load()
-    })
-  }, [load])
 
   // keep the open peek synced with fresh data
   useEffect(() => {
@@ -104,33 +84,32 @@ export default function Tasks() {
       else next.delete(task.id)
       return next
     })
-    await window.wist.tasks.update(task.id, { done: completing ? 1 : 0 })
+    await updateTask(task.id, { done: completing ? 1 : 0 })
     load()
   }
   const remove = async (task: Task) => {
     if (openTask?.id === task.id) setOpenTask(null)
-    await window.wist.tasks.remove(task.id)
+    await removeTask(task.id)
     load()
   }
   const move = async (id: number, status: TaskStatus) => {
     const task = (tasks ?? []).find((x) => x.id === id)
     if (!task || task.status === status) return
-    loadSeq.current++
     setTasks((prev) => (prev ?? []).map((x) => (x.id === id ? { ...x, status, done: status === 'done' ? 1 : 0 } : x)))
-    await window.wist.tasks.update(id, { status })
+    await updateTask(id, { status })
     load()
   }
   const addTo = async (text: string, status: TaskStatus) => {
     const v = text.trim()
     if (!v) return
-    await window.wist.tasks.create({ title: v, status })
+    await createTask({ title: v, status })
     load()
   }
   const quickAdd = async () => {
     const v = newTitle.trim()
     if (!v) return
     setNewTitle('')
-    await window.wist.tasks.create({ title: v, status: 'todo' })
+    await createTask({ title: v, status: 'todo' })
     load()
   }
 
@@ -172,7 +151,7 @@ export default function Tasks() {
   // coherent on the full, unfiltered todo list where row positions map 1:1 to the DB.
   const canReorder = tab === 'todo' && filter === 'all'
   const reorder = useCallback((ids: number[]) => {
-    window.wist.tasks.reorder(ids).then(load).catch((e) => console.error('task reorder failed', e))
+    reorderTasks(ids).then(load).catch((e) => console.error('task reorder failed', e))
   }, [load])
   const { onHandleDown, draggingId, overIndex } = useSortable(todoRows.map((r) => r.id), reorder)
 
@@ -183,7 +162,7 @@ export default function Tasks() {
     if (!ids.length) return
     if (openTask && sel.selectedIds.has(openTask.id)) setOpenTask(null)
     try {
-      await Promise.all(ids.map((id) => window.wist.tasks.remove(id)))
+      await Promise.all(ids.map((id) => removeTask(id)))
       sel.clear()
       toast(tGlobal('tasks.deletedN', { n: ids.length }))
       load()
@@ -347,7 +326,7 @@ export default function Tasks() {
               ) : (
                 done.length > 0 && (
                   <button
-                    onClick={async () => { await window.wist.tasks.clearCompleted(); load() }}
+                    onClick={async () => { await clearCompletedTasks(); load() }}
                     className="mt-1 flex items-center gap-2 rounded-lg px-2.5 py-2 text-[13px] text-zinc-500 transition-colors hover:text-danger"
                   >
                     <Trash2 size={14} /> {t('tasks.clearDone')}

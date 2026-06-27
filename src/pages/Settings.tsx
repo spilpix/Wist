@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import pkg from '../../package.json'
 import {
+  Boxes,
   Brain,
   Database,
   Download,
@@ -18,25 +19,19 @@ import {
   X,
 } from 'lucide-react'
 import ConfirmDialog from '../components/ui/ConfirmDialog'
+import ObjectTypesSettings from '../components/ObjectTypesSettings'
 import Spinner from '../components/ui/Spinner'
 import { useSettingsStore } from '../store/settingsStore'
 import { toast } from '../store/toastStore'
 import type { UpdateStatus } from '../types/models'
 import { useI18n, t as tGlobal, type TKey } from '../i18n'
+import { ACCENT_PRESETS } from '../lib/accents'
 
-const ACCENT_PRESETS: Array<{ nameKey: TKey; value: string }> = [
-  { nameKey: 'set.accent.brand', value: '' }, // Notion blue #2383E1 (both themes)
-  { nameKey: 'set.accent.amber', value: '#e67d22' },
-  { nameKey: 'set.accent.crail', value: '#c15f3c' },
-  { nameKey: 'set.accent.teal', value: '#3a8a8a' },
-  { nameKey: 'set.accent.blue', value: '#7aa8c4' },
-  { nameKey: 'set.accent.rose', value: '#c47a7a' },
-]
-
-type Cat = 'appearance' | 'api' | 'brain' | 'data'
+type Cat = 'appearance' | 'types' | 'api' | 'brain' | 'data'
 
 const CATEGORIES: Array<{ id: Cat; icon: typeof Palette; key: TKey }> = [
   { id: 'appearance', icon: Palette, key: 'set.appearance' },
+  { id: 'types', icon: Boxes, key: 'set.types' },
   { id: 'api', icon: Plug, key: 'set.api' },
   { id: 'brain', icon: Brain, key: 'set.brain' },
   { id: 'data', icon: Database, key: 'set.data' },
@@ -400,6 +395,12 @@ Authorization: Bearer <token>
                   </button>
                 </Row>
               </Card>
+            </Panel>
+          )}
+
+          {cat === 'types' && (
+            <Panel title={t('set.types')} desc={t('set.typesDesc')}>
+              <ObjectTypesSettings />
             </Panel>
           )}
         </div>

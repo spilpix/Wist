@@ -1,19 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { listNotes } from '../data/notes'
+import { listProjects } from '../data/projects'
+import { listTasks } from '../data/tasks'
+import { listCanvases } from '../data/canvas'
+import { listAllEdges } from '../data/edges'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
-  BookOpen,
-  CheckSquare,
-  ChevronRight,
-  ChevronsDownUp,
   CircleDashed,
-  EyeOff,
-  File as FileIcon,
-  FileText,
-  Folder,
   FolderKanban,
-  Frame,
-  Hash,
-  Layers,
   Maximize2,
   PanelLeftClose,
   PanelLeftOpen,
@@ -23,13 +17,11 @@ import {
   Settings2,
   Share2,
   X,
-  type LucideIcon,
 } from 'lucide-react'
 import EmptyState from '../components/ui/EmptyState'
 import Spinner from '../components/ui/Spinner'
 import GraphCanvas, {
   GRAPH_DEFAULTS,
-  type GraphData,
   type GraphEdge,
   type GraphGroup,
   type GraphHandle,
@@ -38,434 +30,265 @@ import GraphCanvas, {
   type GraphView,
 } from '../components/GraphCanvas'
 import { useSettingsStore, resolvedTheme } from '../store/settingsStore'
+import { hueForType, objColorHex } from '../lib/objectColors'
 import { useUiStore } from '../store/uiStore'
-import type {
-  Canvas,
-  Note,
-  NoteFolder,
-  Project,
-  ProjectAsset,
-  ProjectSection,
-  Task,
-  VaultFile,
-} from '../types/models'
+import type { Canvas, Note, Project, RawEdge, Task } from '../types/models'
 import { useI18n, type TKey } from '../i18n'
 
-const GRAPH_DARK = { bg: '#191919', edge: '#363636', text: '#9b9b99', linkBoost: 1 }
-const GRAPH_LIGHT = { bg: '#ffffff', edge: '#c4c3c0', text: '#37352f', linkBoost: 2.3 }
-const GROUP_COLORS = ['#22d3ee', '#34d399', '#a78bfa', '#38bdf8', '#fbbf24', '#fb923c', '#e879f9', '#f472b6']
+// ── Theme palettes ────────────────────────────────────────────────────────────
+// Obsidian-style graph: deep near-black canvas (dark) / soft off-white (light),
+// quiet edges so the bright dots pop.
+const GRAPH_DARK  = { bg: '#16161a', edge: '#3a3a44', text: '#a6a6b8', linkBoost: 1.5 }
+const GRAPH_LIGHT = { bg: '#fbfbfd', edge: '#cfd0da', text: '#5a5a6a', linkBoost: 1.5 }
+const GROUP_COLORS = ['#60a5fa', '#fb923c', '#c084fc', '#34d399', '#94a3b8', '#22d3ee']
 
-// The graph is a structured "map of Bard": a single root, one hub per section
-// (Библиотека, Проекты, Записи …), the sub-structure inside each (project → section
-// → file, folder → note …), and the real items as leaves. On top of that tree sit the
-// knowledge cross-links — shared-attribute tag hubs, foreign keys, wiki-links, mentions.
-type GraphKind =
-  | 'root'
-  | 'group'
-  | 'title'
-  | 'book'
-  | 'note'
-  | 'moment'
-  | 'project'
-  | 'task'
-  | 'tag'
-  | 'canvas'
-  | 'album'
-  | 'file'
-  | 'folder'
-  | 'section'
+// Node colour = the SINGLE object palette (objectColors → --obj-* OKLCH), resolved to a
+// concrete value for <canvas>. Theme-correct automatically (the vars flip with the theme),
+// and identical to the type colours used in the sidebar / badges / properties.
+const dotColor = (kind: string): string => objColorHex(hueForType(kind))
 
-// electric "neural / galaxy" palette — vivid cool neons (+ a few warm accents) that
-// bloom under the glow renderer, so nodes read as synapses / stars, not cardboard dots.
-const KIND_HEX: Record<GraphKind, string> = {
-  root: '#c4b5fd', // luminous violet core
-  group: '#5b6479', // section hubs — neutral slate so the coloured items pop against them
-  title: '#34d399', // emerald
-  book: '#fbbf24', // amber
-  note: '#38bdf8', // sky
-  moment: '#e879f9', // fuchsia
-  project: '#fb923c', // orange
-  task: '#f472b6', // pink
-  tag: '#818cf8', // indigo
-  canvas: '#22d3ee', // cyan
-  album: '#c084fc', // purple
-  file: '#7c8089', // neutral grey (structural)
-  folder: '#7c8089', // neutral grey (structural)
-  section: '#7c8089', // neutral grey (structural)
-}
-// monochrome mode — one calm neutral for everything; hubs read a touch brighter
-const MONO_HEX = (kind: GraphKind): string => (kind === 'root' ? '#cbd5e1' : kind === 'group' ? '#9aa3af' : '#7f8794')
-
-// leaf icon per node kind (sidebar tree)
-const KIND_ICON: Partial<Record<GraphKind, LucideIcon>> = {
-  book: BookOpen,
-  note: FileText,
-  project: FolderKanban,
-  task: CheckSquare,
-  tag: Hash,
-  canvas: Frame,
-  file: FileIcon,
-  folder: Folder,
-  section: Layers,
-}
-
-const CONTAINER_KINDS = new Set<GraphKind>(['project', 'section', 'folder'])
-
-// the top-level sections (разделы) — drive both the graph hubs and the sidebar
-interface CategoryDef {
-  key: string
-  labelKey: TKey
-  color: string
-  icon: LucideIcon
-}
-const CATEGORIES: CategoryDef[] = [
-  { key: 'projects', labelKey: 'nav.hub', color: '#e67d22', icon: FolderKanban },
-  { key: 'notes', labelKey: 'nav.notes', color: '#7aa8c4', icon: FileText },
-  { key: 'tasks', labelKey: 'nav.tasks', color: '#c47a7a', icon: CheckSquare },
-  { key: 'canvas', labelKey: 'nav.canvas', color: '#5b8bb0', icon: Frame },
-  { key: 'files', labelKey: 'nav.localFiles', color: '#8a8278', icon: Folder },
-  { key: 'tags', labelKey: 'world.tags', color: '#6b7686', icon: Hash },
-]
-const CATEGORY_KEYS = CATEGORIES.map((c) => c.key)
-
+// ── Data types ────────────────────────────────────────────────────────────────
 interface SourceData {
   notes: Note[]
-  noteFolders: NoteFolder[]
   projects: Project[]
-  projSections: Record<number, ProjectSection[]>
-  projAssets: Record<number, ProjectAsset[]>
   tasks: Task[]
   canvases: Canvas[]
-  vault: VaultFile[]
+  edges: RawEdge[]
 }
-const EMPTY_SRC: SourceData = {
-  notes: [],
-  noteFolders: [],
-  projects: [],
-  projSections: {},
-  projAssets: {},
-  tasks: [],
-  canvases: [],
-  vault: [],
-}
+const EMPTY_SRC: SourceData = { notes: [], projects: [], tasks: [], canvases: [], edges: [] }
 
-// one node in the sidebar tree
-interface ExplorerNode {
-  id: string
-  label: string
-  route: string
-  kind: GraphKind
-  children: ExplorerNode[]
-}
-interface ExplorerCategory {
+interface SidebarProject {
   key: string
+  id: number
   label: string
-  color: string
-  icon: LucideIcon
-  count: number
-  roots: ExplorerNode[]
+  linkedCount: number
 }
 interface World {
-  graph: GraphData
-  categories: ExplorerCategory[]
+  graph: { nodes: GraphNode[]; edges: GraphEdge[]; kindNames: Record<string, string> }
+  sidebarProjects: SidebarProject[]
   totalNodes: number
   totalEdges: number
+  orphanCount: number
 }
 
-const basename = (p: string | null | undefined): string => (p ? p.split(/[\\/]/).filter(Boolean).pop() ?? '' : '')
+// ── Connected-map algorithm (v9) ──────────────────────────────────────────────
+//
+// Goal: a clean, always-connected web like the reference design — every object
+// hangs off a structural anchor so there are NO floating islands.
+//
+//   root «Бард»  →  kind hubs (Проекты / Задачи / Заметки / Холсты)
+//                →  projects  →  their contained items (real `contains` edges)
+//                →  loose items hang off their kind hub
+//   `refers` edges are drawn as extra cross-links between items.
+//
+// Every node therefore has ≥1 line; the canvas focus/dim does the rest (hovering
+// a node lights its neighbours in accent and ghosts everything else).
 
-interface BuildOpts {
-  hidden: Set<string>
-  query: string
-  showOrphans: boolean
-  showTags: boolean
-  // 'map' = the structured tree (root → section hubs → items); 'links' = Obsidian-style,
-  // only the real cross-links (tags / FKs / wiki-links / mentions), no hubs
-  structural: boolean
+const ROOT_ID = '__root'
+const HUB_LABEL: Record<string, string> = {
+  project: 'Проекты',
+  task:    'Задачи',
+  note:    'Заметки',
+  canvas:  'Холсты',
 }
+const HUB_ORDER = ['project', 'note', 'task', 'canvas']
 
-/**
- * Build the whole graph + the sidebar tree in one pass (so node ids stay in lock-step).
- * Structural edges (root→section→item, project→section→file …) are solid; cross-links
- * (tags, FKs, wiki-links, mentions) are weak. A real link always beats an inferred one.
- */
-function buildWorld(src: SourceData, opts: BuildOpts, names: Record<string, string>): World {
-  const { hidden, query, showOrphans, showTags, structural } = opts
+function buildWorld(
+  src: SourceData,
+  opts: { query: string; showOrphans: boolean; dark: boolean }
+): World {
+  const { query, showOrphans } = opts
+  const q = query.trim().toLowerCase()
+
+  // 1. Object registry key="type:id" → display meta
+  interface ObjMeta { label: string; route: string; kind: string }
+  const meta = new Map<string, ObjMeta>()
+  for (const p of src.projects)
+    meta.set(`project:${p.id}`, { label: p.name, route: `/project/${p.id}`, kind: 'project' })
+  for (const n of src.notes)
+    meta.set(`note:${n.id}`, {
+      label: n.title || n.content.slice(0, 30) || '…',
+      route: `/notes?open=${n.id}`,
+      kind: 'note',
+    })
+  for (const t of src.tasks)
+    meta.set(`task:${t.id}`, { label: t.title || '…', route: '/tasks', kind: 'task' })
+  for (const c of src.canvases)
+    meta.set(`canvas:${c.id}`, { label: c.name, route: `/canvas/${c.id}`, kind: 'canvas' })
+
+  const matchesQuery = (label: string) => !q || label.toLowerCase().includes(q)
+
+  // 2. Partition edges → project containment
+  const containsEdges = src.edges.filter((e) => e.kind === 'contains')
+  const refersEdges   = src.edges.filter((e) => e.kind === 'refers')
+
+  const projectItems = new Map<string, string[]>() // projectKey → [itemKey]
+  const containedSet = new Set<string>()           // itemKeys that live in a project
+  for (const e of containsEdges) {
+    const pk = `${e.src_type}:${e.src_id}`
+    const ik = `${e.dst_type}:${e.dst_id}`
+    if (!meta.has(pk) || !meta.has(ik)) continue
+    if (!projectItems.has(pk)) projectItems.set(pk, [])
+    projectItems.get(pk)!.push(ik)
+    containedSet.add(ik)
+  }
+
+  // 3. Node + edge accumulators
   const nodes: GraphNode[] = []
   const index = new Map<string, number>()
-  const parentOf = new Map<string, string | null>()
-  const catOf = new Map<string, string>()
-  const kindOf = new Map<string, GraphKind>()
-  const edges: GraphEdge[] = []
-  const edgeAt = new Map<string, number>()
-
-  const add = (node: GraphNode, category: string, parent: string | null) => {
-    if (index.has(node.id)) return
+  const push = (node: GraphNode): number => {
+    const existing = index.get(node.id)
+    if (existing !== undefined) return existing
     index.set(node.id, nodes.length)
     nodes.push(node)
-    parentOf.set(node.id, parent)
-    catOf.set(node.id, category)
-    kindOf.set(node.id, node.kind as GraphKind)
+    return nodes.length - 1
   }
-  const link = (aId: string, bId: string, weak = false) => {
-    const a = index.get(aId)
-    const b = index.get(bId)
+  const addObj = (key: string, ix: number, iy: number): boolean => {
+    if (index.has(key)) return true
+    const m = meta.get(key)
+    if (!m || !matchesQuery(m.label)) return false
+    push({
+      id: key, kind: m.kind, label: m.label, sub: null, route: m.route,
+      initialX: ix, initialY: iy,
+    })
+    return true
+  }
+
+  const graphEdges: GraphEdge[] = []
+  const edgeSet = new Set<string>()
+  const link = (aKey: string, bKey: string, weak: boolean) => {
+    const a = index.get(aKey), b = index.get(bKey)
     if (a === undefined || b === undefined || a === b) return
-    const key = a < b ? `${a}-${b}` : `${b}-${a}`
-    const at = edgeAt.get(key)
-    if (at !== undefined) {
-      if (!weak && edges[at].weak) edges[at].weak = false
-      return
-    }
-    edgeAt.set(key, edges.length)
-    edges.push({ a, b, weak })
+    const ek = a < b ? `${a}-${b}` : `${b}-${a}`
+    if (edgeSet.has(ek)) return
+    edgeSet.add(ek)
+    graphEdges.push({ a, b, weak })
   }
 
-  // shared-attribute hubs (tags / genres / tools / category) → cluster items
-  const facets = new Map<string, { label: string; members: Set<string> }>()
-  const facet = (raw: string | null | undefined, owner: string) => {
-    if (raw == null) return
-    const label = String(raw).trim()
-    const key = label.toLowerCase()
-    if (key.length < 2) return
-    let f = facets.get(key)
-    if (!f) facets.set(key, (f = { label, members: new Set() }))
-    f.members.add(owner)
-  }
+  // 4. ROOT anchor at centre
+  push({
+    id: ROOT_ID, kind: 'root', label: 'Бард', sub: null, route: '',
+    initialX: 0, initialY: 0, hub: true,
+  })
 
-  const ROOT = 'root'
-  add({ id: ROOT, kind: 'root', label: names.root, sub: null, route: '' }, 'root', null)
-
-  // a section hub is created lazily, only when it actually gets a child
-  const catId = (k: string) => `grp:${k}`
-  const ensureCat = (k: string): string => {
-    const id = catId(k)
-    if (!index.has(id)) {
-      add({ id, kind: 'group', label: names[`cat.${k}`] ?? k, sub: null, route: '' }, k, ROOT)
-      link(ROOT, id)
-    }
+  // 5. Kind hubs (lazy — only created when they hold something)
+  const hubs = new Map<string, string>() // kind → hubId
+  const hubPos = new Map<string, { x: number; y: number }>()
+  const ensureHub = (kind: string): string => {
+    const existing = hubs.get(kind)
+    if (existing) return existing
+    const id = `__hub:${kind}`
+    const slot = HUB_ORDER.indexOf(kind)
+    const i = slot >= 0 ? slot : HUB_ORDER.length + hubs.size
+    const ang = (i / Math.max(4, HUB_ORDER.length)) * Math.PI * 2 - Math.PI / 2
+    const hx = Math.cos(ang) * 300, hy = Math.sin(ang) * 300
+    push({
+      id, kind, label: HUB_LABEL[kind] ?? kind, sub: null, route: '',
+      initialX: hx, initialY: hy, hub: true,
+    })
+    hubs.set(kind, id)
+    hubPos.set(kind, { x: hx, y: hy })
+    link(ROOT_ID, id, true)
     return id
   }
 
-  // ---------- Проекты → секции → файлы ----------
-  const projectByName = new Map<string, string>()
-  if (!hidden.has('projects')) {
-    for (const p of src.projects) {
-      const pid = `pr${p.id}`
-      add({ id: pid, kind: 'project', label: p.name, sub: p.client ?? p.kind ?? null, route: `/project/${p.id}` }, 'projects', ensureCat('projects'))
-      link(ensureCat('projects'), pid)
-      projectByName.set(p.name.trim().toLowerCase(), pid)
-      for (const tl of p.tools) facet(tl, pid)
-      facet(p.kind, pid)
-      facet(p.client, pid)
-      for (const s of src.projSections[p.id] ?? []) {
-        add({ id: `sec${s.id}`, kind: 'section', label: s.name, sub: null, route: `/project/${p.id}` }, 'projects', pid)
-        link(pid, `sec${s.id}`)
-      }
-      for (const a of src.projAssets[p.id] ?? []) {
-        const akind: GraphKind = a.kind === 'folder' ? 'folder' : 'file'
-        const label = a.label || basename(a.path) || a.url || '—'
-        const parent = a.section_id != null && index.has(`sec${a.section_id}`) ? `sec${a.section_id}` : pid
-        add({ id: `as${a.id}`, kind: akind, label, sub: null, route: `/project/${p.id}` }, 'projects', parent)
-        link(parent, `as${a.id}`)
-      }
-    }
-  }
-
-  // ---------- Записи → папки → заметки ----------
-  const noteByName = new Map<string, string>()
-  if (!hidden.has('notes')) {
-    const folderId = (id: number) => `nf${id}`
-    for (const f of src.noteFolders) {
-      add({ id: folderId(f.id), kind: 'folder', label: f.name, sub: null, route: '/notes' }, 'notes', null)
-    }
-    for (const f of src.noteFolders) {
-      const parent = f.parent_id != null && index.has(folderId(f.parent_id)) ? folderId(f.parent_id) : ensureCat('notes')
-      parentOf.set(folderId(f.id), parent)
-      link(parent, folderId(f.id))
-    }
-    for (const nt of src.notes) {
-      const id = `n${nt.id}`
-      const parent = nt.folder_id != null && index.has(folderId(nt.folder_id)) ? folderId(nt.folder_id) : ensureCat('notes')
-      add(
-        {
-          id,
-          kind: 'note',
-          label: nt.title || nt.content.slice(0, 30) || '…',
-          sub: nt.tags.length ? '#' + nt.tags.join(' #') : null,
-          route: `/notes?open=${nt.id}`,
-        },
-        'notes',
-        parent
-      )
-      link(parent, id)
-      if (nt.title) noteByName.set(nt.title.trim().toLowerCase(), id)
-      for (const tg of nt.tags) facet(tg, id)
-    }
-  }
-
-  // ---------- Задачи ----------
-  const taskByName = new Map<string, string>()
-  if (!hidden.has('tasks')) {
-    for (const tk of src.tasks) {
-      const id = `tk${tk.id}`
-      add({ id, kind: 'task', label: tk.title || names['cat.tasks'], sub: tk.project_name ?? null, route: '/tasks' }, 'tasks', ensureCat('tasks'))
-      link(ensureCat('tasks'), id)
-      taskByName.set(tk.title.trim().toLowerCase(), id)
-      for (const tg of tk.tags) facet(tg, id)
-    }
-  }
-
-  // ---------- Холсты ----------
-  if (!hidden.has('canvas')) {
-    for (const c of src.canvases) {
-      const id = `cv${c.id}`
-      add({ id, kind: 'canvas', label: c.name, sub: null, route: `/canvas/${c.id}` }, 'canvas', ensureCat('canvas'))
-      link(ensureCat('canvas'), id)
-    }
-  }
-
-  // ---------- Файлы (vault-дерево) ----------
-  if (!hidden.has('files')) {
-    const vfId = (id: number) => `vf${id}`
-    for (const v of src.vault) {
-      const isFolder = v.kind === 'folder' || v.kind === 'diskfolder'
-      add({ id: vfId(v.id), kind: isFolder ? 'folder' : 'file', label: v.name, sub: null, route: '/vault' }, 'files', null)
-    }
-    for (const v of src.vault) {
-      const parent = v.parent_id != null && index.has(vfId(v.parent_id)) ? vfId(v.parent_id) : ensureCat('files')
-      parentOf.set(vfId(v.id), parent)
-      link(parent, vfId(v.id))
-    }
-  }
-
-  // ---------- cross-links (knowledge layer) ----------
-  if (!hidden.has('notes')) {
-    for (const nt of src.notes) {
-      if (nt.project_id != null) link(`n${nt.id}`, `pr${nt.project_id}`, true)
-    }
-  }
-  if (!hidden.has('tasks')) {
-    for (const tk of src.tasks) {
-      if (tk.project_id != null) link(`tk${tk.id}`, `pr${tk.project_id}`, true)
-    }
-  }
-
-  // ---------- tag hubs ----------
-  if (showTags) {
-    for (const [key, f] of facets) {
-      if (f.members.size < 2) continue
-      const id = `tag:${key}`
-      add({ id, kind: 'tag', label: '#' + f.label, sub: null, route: '' }, 'tags', null)
-      for (const owner of f.members) link(owner, id, true)
-    }
-  }
-
-  // ---------- wiki-links + soft mentions (note bodies) ----------
-  if (!hidden.has('notes')) {
-    for (const nt of src.notes) {
-      for (const m of nt.content.matchAll(/\[\[([^\]]+)\]\]/g)) {
-        const key = m[1].trim().toLowerCase()
-        const target = noteByName.get(key) ?? projectByName.get(key) ?? taskByName.get(key)
-        if (target) link(`n${nt.id}`, target)
-      }
-    }
-    const mentionNames: Array<{ key: string; id: string }> = []
-    for (const mp of [projectByName, noteByName, taskByName]) {
-      for (const [k, id] of mp) if (k.length >= 4) mentionNames.push({ key: k, id })
-    }
-    for (const nt of src.notes) {
-      if (!nt.content) continue
-      const hay = nt.content.toLowerCase()
-      const self = `n${nt.id}`
-      for (const { key, id } of mentionNames) if (id !== self && hay.includes(key)) link(self, id, true)
-    }
-  }
-
-  // ---------- filters (mode + search + orphans) ----------
-  let keepIdx = nodes.map((_, i) => i)
-  const q = query.trim().toLowerCase()
-  if (q) {
-    keepIdx = keepIdx.filter((i) => {
-      const n = nodes[i]
-      if (structural && n.kind === 'root') return true
-      return n.label.toLowerCase().includes(q) || (n.sub?.toLowerCase().includes(q) ?? false)
+  // 6. Projects → "Проекты" hub, then their contained items
+  let orphanCount = 0
+  const visibleProjects = src.projects.filter((p) => matchesQuery(p.name))
+  visibleProjects.forEach((p, pi) => {
+    const key = `project:${p.id}`
+    const hub = ensureHub('project')
+    const hp = hubPos.get('project')!
+    const ang = (pi / Math.max(1, visibleProjects.length)) * Math.PI * 2
+    const px = hp.x + Math.cos(ang) * 150, py = hp.y + Math.sin(ang) * 150
+    if (!addObj(key, px, py)) return
+    link(hub, key, false)
+    const items = projectItems.get(key) ?? []
+    items.forEach((ik, i) => {
+      const a = (i / Math.max(1, items.length)) * Math.PI * 2
+      const r = 95 + Math.floor(i / 8) * 30
+      if (addObj(ik, px + Math.cos(a) * r, py + Math.sin(a) * r)) link(key, ik, false)
     })
-  }
-  // 'Связи' mode: drop the structural skeleton (root + section hubs) so only the items
-  // and their REAL cross-links remain — an organic, Obsidian-style web.
-  if (!structural) keepIdx = keepIdx.filter((i) => nodes[i].kind !== 'root' && nodes[i].kind !== 'group')
-  // edges actually drawn: everything in 'map' mode, only the weak cross-links in 'links'
-  const effEdges = structural ? edges : edges.filter((e) => e.weak)
-  if (!showOrphans) {
-    const keptSet = new Set(keepIdx)
-    const deg = new Map<number, number>()
-    for (const e of effEdges) {
-      if (keptSet.has(e.a) && keptSet.has(e.b)) {
-        deg.set(e.a, (deg.get(e.a) ?? 0) + 1)
-        deg.set(e.b, (deg.get(e.b) ?? 0) + 1)
-      }
-    }
-    keepIdx = keepIdx.filter((i) => (deg.get(i) ?? 0) > 0)
-  }
-
-  // ---------- canvas graph (remapped to kept set) ----------
-  const remap = new Map<number, number>()
-  const outNodes = keepIdx.map((i, k) => {
-    remap.set(i, k)
-    return nodes[i]
   })
-  const outEdges = effEdges
-    .filter((e) => remap.has(e.a) && remap.has(e.b))
-    .map((e) => ({ a: remap.get(e.a)!, b: remap.get(e.b)!, weak: e.weak }))
-  const graph: GraphData = { nodes: outNodes, edges: outEdges, kindNames: names }
 
-  // ---------- sidebar tree (kept items, nested by structural parent) ----------
-  const keptIds = new Set(outNodes.map((n) => n.id))
-  const nearestKeptParent = (id: string): string | null => {
-    let p = parentOf.get(id) ?? null
-    while (p) {
-      const k = kindOf.get(p)
-      if (keptIds.has(p) && k !== 'group' && k !== 'root') return p
-      p = parentOf.get(p) ?? null
+  // 7. Loose items (not contained in a project) → hang off their kind hub
+  if (showOrphans) {
+    const looseByKind = new Map<string, string[]>()
+    for (const [key, m] of meta) {
+      if (m.kind === 'project') continue
+      if (index.has(key) || containedSet.has(key)) continue
+      if (!matchesQuery(m.label)) continue
+      if (!looseByKind.has(m.kind)) looseByKind.set(m.kind, [])
+      looseByKind.get(m.kind)!.push(key)
     }
-    return null
-  }
-  const exById = new Map<string, ExplorerNode>()
-  const catRoots = new Map<string, ExplorerNode[]>()
-  for (const n of outNodes) {
-    if (n.kind === 'group' || n.kind === 'root') continue
-    exById.set(n.id, { id: n.id, label: n.label, route: n.route, kind: n.kind as GraphKind, children: [] })
-  }
-  for (const n of outNodes) {
-    const ex = exById.get(n.id)
-    if (!ex) continue
-    const dp = nearestKeptParent(n.id)
-    if (dp && exById.has(dp)) {
-      exById.get(dp)!.children.push(ex)
-    } else {
-      const cat = catOf.get(n.id) ?? 'misc'
-      if (!catRoots.has(cat)) catRoots.set(cat, [])
-      catRoots.get(cat)!.push(ex)
+    for (const [kind, keys] of looseByKind) {
+      const hub = ensureHub(kind)
+      const hp = hubPos.get(kind)!
+      keys.forEach((key, i) => {
+        const a = (i / Math.max(1, keys.length)) * Math.PI * 2
+        const r = 120 + Math.floor(i / 10) * 34
+        if (addObj(key, hp.x + Math.cos(a) * r, hp.y + Math.sin(a) * r)) {
+          link(hub, key, true)
+          orphanCount++
+        }
+      })
     }
+  } else {
+    for (const [key, m] of meta)
+      if (m.kind !== 'project' && !index.has(key) && !containedSet.has(key)) orphanCount++
   }
-  const sortNodes = (arr: ExplorerNode[]) => {
-    arr.sort((a, b) => {
-      const ca = CONTAINER_KINDS.has(a.kind) ? 0 : 1
-      const cb = CONTAINER_KINDS.has(b.kind) ? 0 : 1
-      return ca - cb || a.label.localeCompare(b.label)
-    })
-    for (const n of arr) if (n.children.length) sortNodes(n.children)
-  }
-  const countTree = (arr: ExplorerNode[]): number => arr.reduce((s, n) => s + 1 + countTree(n.children), 0)
-  const categories: ExplorerCategory[] = CATEGORIES.map((c) => {
-    const roots = catRoots.get(c.key) ?? []
-    sortNodes(roots)
-    return { key: c.key, label: names[`cat.${c.key}`] ?? c.key, color: c.color, icon: c.icon, count: countTree(roots), roots }
-  }).filter((c) => c.roots.length)
 
-  return { graph, categories, totalNodes: outNodes.length, totalEdges: outEdges.length }
+  // 8. `refers` cross-links (drawn as real beams between any two visible items)
+  for (const e of refersEdges)
+    link(`${e.src_type}:${e.src_id}`, `${e.dst_type}:${e.dst_id}`, false)
+
+  // 8b. tag nodes from `tagged` edges — surface inline #tags as their own cluster,
+  // hanging off whatever objects carry them (Obsidian-style tag clusters)
+  const taggedEdges = src.edges.filter((e) => e.kind === 'tagged')
+  let tagSeed = 0
+  for (const e of taggedEdges) {
+    const srcKey = `${e.src_type}:${e.src_id}`
+    if (!index.has(srcKey)) continue // only when the source object is already on the graph
+    const tagKey = `tag:${e.dst_id}`
+    if (!index.has(tagKey)) {
+      const label = `#${e.dst_id}`
+      if (!matchesQuery(label)) continue
+      const ang = tagSeed++ * 2.39996 // golden-angle spread so seeds don't pile up
+      push({
+        id: tagKey, kind: 'tag', label, sub: null, route: '',
+        initialX: Math.cos(ang) * 240, initialY: Math.sin(ang) * 240,
+      })
+    }
+    link(srcKey, tagKey, false)
+  }
+
+  // 9. Sidebar projects
+  const sidebarProjects: SidebarProject[] = src.projects
+    .filter((p) => index.has(`project:${p.id}`))
+    .map((p) => ({
+      key: `project:${p.id}`,
+      id: p.id,
+      label: p.name,
+      linkedCount: (projectItems.get(`project:${p.id}`) ?? []).filter((k) => index.has(k)).length,
+    }))
+
+  // structural anchors (root + hubs) shouldn't inflate the user-facing object count
+  const realNodes = nodes.filter((n) => n.kind !== 'root' && !n.id.startsWith('__hub:')).length
+
+  return {
+    graph: {
+      nodes,
+      edges: graphEdges,
+      kindNames: { project: 'Проект', task: 'Задача', note: 'Заметка', canvas: 'Холст', tag: 'Тег' },
+    },
+    sidebarProjects,
+    totalNodes: realNodes,
+    totalEdges: graphEdges.length,
+    orphanCount,
+  }
 }
+
+// ── Component ─────────────────────────────────────────────────────────────────
 
 export default function MemoryTree() {
   const { t } = useI18n()
@@ -476,186 +299,102 @@ export default function MemoryTree() {
   const dark = (themeSetting === 'system' ? resolvedTheme() : themeSetting ?? 'light') === 'dark'
   const palette = dark ? GRAPH_DARK : GRAPH_LIGHT
 
-  // the graph has its own explorer rail — fold the app sidebar away while it's open,
-  // then restore whatever the user had on the way out (without touching their pref).
+  // Fold app sidebar while the graph is open, restore on exit
   const setSidebarCollapsed = useUiStore((s) => s.setSidebarCollapsed)
   useEffect(() => {
-    const wasCollapsed = useUiStore.getState().sidebarCollapsed
+    const was = useUiStore.getState().sidebarCollapsed
     setSidebarCollapsed(true, false)
-    return () => setSidebarCollapsed(wasCollapsed, false)
+    return () => setSidebarCollapsed(was, false)
   }, [setSidebarCollapsed])
 
   const [src, setSrc] = useState<SourceData | null>(null)
-  const [hidden, setHidden] = useState<Set<string>>(new Set())
   const [query, setQuery] = useState('')
   const [showOrphans, setShowOrphans] = useState(true)
-  const [showTags, setShowTags] = useState(true)
-  const [collapsedCats, setCollapsedCats] = useState<Set<string>>(new Set())
-  const [openNodes, setOpenNodes] = useState<Set<string>>(new Set())
-  const [panelOpen, setPanelOpen] = useState(false)
   const [explorerOpen, setExplorerOpen] = useState(true)
-  // 'map' = structured hubs+items; false = links-only (Obsidian-style web)
-  const [structural, setStructural] = useState<boolean>(() => localStorage.getItem('wist.graphStructural') !== '0')
-  const [mono, setMono] = useState<boolean>(() => localStorage.getItem('wist.graphMono') === '1')
-  const [view, setView] = useState<GraphView>(() => {
-    try {
-      const raw = JSON.parse(localStorage.getItem('wist.graphView') ?? 'null')
-      return raw && typeof raw === 'object' ? { ...GRAPH_DEFAULTS, ...raw } : { ...GRAPH_DEFAULTS }
-    } catch {
-      return { ...GRAPH_DEFAULTS }
-    }
-  })
-  // persist the view sliders + the two mode toggles (Obsidian remembers these)
-  useEffect(() => {
-    try {
-      localStorage.setItem('wist.graphView', JSON.stringify(view))
-    } catch {
-      /* storage unavailable */
-    }
-  }, [view])
-  useEffect(() => {
-    try {
-      localStorage.setItem('wist.graphStructural', structural ? '1' : '0')
-      localStorage.setItem('wist.graphMono', mono ? '1' : '0')
-    } catch {
-      /* storage unavailable */
-    }
-  }, [structural, mono])
+  const [panelOpen, setPanelOpen] = useState(false)
   const [tip, setTip] = useState<(GraphTip & { x: number; y: number }) | null>(null)
+
   const [groups, setGroups] = useState<GraphGroup[]>(() => {
-    try {
-      const raw = JSON.parse(localStorage.getItem('wist.graphGroups') ?? '[]')
-      return Array.isArray(raw) ? raw : []
-    } catch {
-      return []
-    }
+    try { const r = JSON.parse(localStorage.getItem('wist.graphGroups') ?? '[]'); return Array.isArray(r) ? r : [] }
+    catch { return [] }
   })
   const saveGroups = (next: GraphGroup[]) => {
     setGroups(next)
-    try {
-      localStorage.setItem('wist.graphGroups', JSON.stringify(next))
-    } catch {
-      /* storage unavailable */
-    }
+    try { localStorage.setItem('wist.graphGroups', JSON.stringify(next)) } catch { /* ok */ }
   }
 
+  // v2 key — resets the persisted view so the new spread-out defaults take effect
+  const [view, setView] = useState<GraphView>(() => {
+    try {
+      const r = JSON.parse(localStorage.getItem('wist.graphView2') ?? 'null')
+      return r && typeof r === 'object' ? { ...GRAPH_DEFAULTS, ...r } : { ...GRAPH_DEFAULTS }
+    } catch { return { ...GRAPH_DEFAULTS } }
+  })
+  useEffect(() => {
+    try { localStorage.setItem('wist.graphView2', JSON.stringify(view)) } catch { /* ok */ }
+  }, [view])
+
+  // deep-link focus: /tree?focus=tag:work (or note:12 / project:3 …) flies to that node
+  // once the data has loaded and the layout has had a moment to seed
+  const [searchParams] = useSearchParams()
+  const focusKey = searchParams.get('focus')
+  useEffect(() => {
+    if (!src || !focusKey) return
+    const h = setTimeout(() => graphRef.current?.focus(focusKey), 900)
+    return () => clearTimeout(h)
+  }, [src, focusKey])
+
+  // Data load — notes, projects, tasks, canvases + all edges
   useEffect(() => {
     let cancelled = false
     const safe = <T,>(p: Promise<T>, d: T): Promise<T> => p.catch(() => d)
     ;(async () => {
-      const [notes, noteFolders, projects, tasks, canvases] = await Promise.all([
-        safe(window.wist.notes.list({}), [] as Note[]),
-        safe(window.wist.noteFolders.list(), [] as NoteFolder[]),
-        safe(window.wist.projects.list(), [] as Project[]),
-        safe(window.wist.tasks.list({}), [] as Task[]),
-        safe(window.wist.canvas.list(), [] as Canvas[]),
+      const [notes, projects, tasks, canvases, edges] = await Promise.all([
+        safe(listNotes({}), [] as Note[]),
+        safe(listProjects(), [] as Project[]),
+        safe(listTasks({}), [] as Task[]),
+        safe(listCanvases(), [] as Canvas[]),
+        safe(listAllEdges(), [] as RawEdge[]),
       ])
-      const projSections: Record<number, ProjectSection[]> = {}
-      const projAssets: Record<number, ProjectAsset[]> = {}
-      await Promise.all(
-        projects.flatMap((p) => [
-          safe(window.wist.projects.sections(p.id), [] as ProjectSection[]).then((s) => {
-            projSections[p.id] = s
-          }),
-          safe(window.wist.projects.assets(p.id), [] as ProjectAsset[]).then((a) => {
-            projAssets[p.id] = a
-          }),
-        ])
-      )
-      // walk the vault tree, but cap the work so a huge library can't stall the graph
-      const vault: VaultFile[] = []
-      let budget = 240
-      const walk = async (parentId: number | null, depth: number) => {
-        if (budget <= 0 || depth > 5) return
-        const entries = await safe(window.wist.vault.list(parentId), [] as VaultFile[])
-        for (const e of entries) {
-          if (budget <= 0) break
-          vault.push(e)
-          budget--
-          if ((e.kind === 'folder' || e.kind === 'diskfolder') && depth < 5) await walk(e.id, depth + 1)
-        }
-      }
-      await walk(null, 0)
-      if (!cancelled) setSrc({ notes, noteFolders, projects, projSections, projAssets, tasks, canvases, vault })
-    })().catch((e) => {
-      // a failed load must never leave the graph stuck on the spinner
-      console.error('graph load failed', e)
+      if (!cancelled) setSrc({ notes, projects, tasks, canvases, edges })
+    })().catch((err) => {
+      console.error('graph load failed', err)
       if (!cancelled) setSrc((prev) => prev ?? EMPTY_SRC)
     })
-    return () => {
-      cancelled = true
-    }
+    return () => { cancelled = true }
   }, [])
 
-  // tooltip heads + section labels in one map (the builder reads `cat.<key>`)
-  const names = useMemo<Record<string, string>>(() => {
-    const m: Record<string, string> = {
-      root: 'Bard',
-      group: t('world.kind.group'),
-      title: t('world.kind.title'),
-      book: t('world.kind.book'),
-      note: t('world.kind.note'),
-      moment: t('world.kind.moment'),
-      project: t('world.kind.project'),
-      task: t('world.kind.task'),
-      tag: t('world.kind.tag'),
-      canvas: t('world.kind.canvas'),
-      album: t('world.kind.album'),
-      file: t('world.kind.file'),
-      folder: t('world.kind.folder'),
-      section: t('world.kind.section'),
-    }
-    for (const c of CATEGORIES) m[`cat.${c.key}`] = t(c.labelKey)
-    return m
-  }, [t])
-
   const world = useMemo(
-    () => (src ? buildWorld(src, { hidden, query, showOrphans, showTags, structural }, names) : null),
-    [src, hidden, query, showOrphans, showTags, structural, names]
+    () => (src ? buildWorld(src, { query, showOrphans, dark }) : null),
+    [src, query, showOrphans, dark]
   )
-  const graph = world?.graph ?? { nodes: [], edges: [], kindNames: names }
+  const graph = world?.graph ?? { nodes: [], edges: [], kindNames: {} }
 
   const onTip = useCallback((wt: GraphTip | null) => {
     if (!wt) return setTip(null)
     const rect = containerRef.current?.getBoundingClientRect()
     if (rect) setTip({ ...wt, x: wt.clientX - rect.left, y: wt.clientY - rect.top })
   }, [])
-  const colorOf = useCallback(
-    (kind: string) => (mono ? MONO_HEX(kind as GraphKind) : KIND_HEX[kind as GraphKind] ?? '#7f8794'),
-    [mono]
-  )
-  // root / section / tag hubs carry no route — clicking one just re-centres the graph
+  // depends on `dark` only to rebuild when the theme flips (dotColor reads the live CSS vars)
+  const colorOf = useCallback((kind: string) => dotColor(kind), [dark])
   const onNavigate = useCallback((route: string) => { if (route) navigate(route) }, [navigate])
 
-  const toggleCat = (key: string) =>
-    setCollapsedCats((prev) => {
-      const next = new Set(prev)
-      next.has(key) ? next.delete(key) : next.add(key)
-      return next
-    })
-  const toggleOpen = (id: string) =>
-    setOpenNodes((prev) => {
-      const next = new Set(prev)
-      next.has(id) ? next.delete(id) : next.add(id)
-      return next
-    })
-  const toggleHidden = (key: string) => {
-    if (key === 'tags') return setShowTags((v) => !v)
-    setHidden((prev) => {
-      const next = new Set(prev)
-      next.has(key) ? next.delete(key) : next.add(key)
-      return next
-    })
-  }
+  // Slider helper
+  type NumKey = 'nodeScale' | 'linkWidth' | 'linkDistance' | 'repel' | 'labelFade' | 'centerForce' | 'linkForce'
+  const slider = (labelKey: TKey, key: NumKey, min: number, max: number, step: number) => (
+    <label key={key} className="block">
+      <span className="mb-1 block text-[11px] text-zinc-500">{t(labelKey)}</span>
+      <input
+        type="range" min={min} max={max} step={step} value={view[key]}
+        onChange={(e) => setView((v) => ({ ...v, [key]: Number(e.target.value) }))}
+        className="w-full"
+      />
+    </label>
+  )
 
   if (!src) return <Spinner />
 
-  const total =
-    src.notes.length +
-    src.projects.length +
-    src.tasks.length +
-    src.canvases.length +
-    src.vault.length
+  const total = src.notes.length + src.projects.length + src.tasks.length + src.canvases.length
   if (total === 0) {
     return (
       <div className="page">
@@ -664,103 +403,31 @@ export default function MemoryTree() {
     )
   }
 
-  type NumKey = 'nodeScale' | 'linkWidth' | 'linkDistance' | 'repel' | 'labelFade' | 'centerForce' | 'linkForce'
-  const slider = (labelKey: TKey, key: NumKey, min: number, max: number, step: number) => (
-    <label className="block">
-      <span className="mb-1 flex items-center justify-between text-[11px] text-zinc-500">{t(labelKey)}</span>
-      <input
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={view[key]}
-        onChange={(e) => setView((v) => ({ ...v, [key]: Number(e.target.value) }))}
-        className="w-full"
-      />
-    </label>
-  )
-
-  // recursive Obsidian-style tree row. Indentation comes from nesting each level's
-  // children in a container whose LEFT BORDER is the indent guide (the "path" line);
-  // it brightens while the parent row is hovered (peer-hover).
-  const renderNode = (node: ExplorerNode): JSX.Element => {
-    const hasChildren = node.children.length > 0
-    const isOpen = openNodes.has(node.id)
-    const Icon = KIND_ICON[node.kind] ?? FileIcon
-    return (
-      <div key={node.id}>
-        <div
-          className="group/row peer/row flex cursor-pointer items-center gap-1 rounded-md py-[3px] pl-1 pr-1.5 text-[13px] text-zinc-300 transition-colors hover:bg-highlight hover:text-white"
-          title={node.label}
-          onMouseEnter={() => graphRef.current?.highlight(node.id)}
-          onMouseLeave={() => graphRef.current?.highlight(null)}
-          onClick={() => (hasChildren ? toggleOpen(node.id) : graphRef.current?.focus(node.id))}
-          onDoubleClick={() => node.route && navigate(node.route)}
-        >
-          {hasChildren ? (
-            <ChevronRight
-              size={13}
-              className={`shrink-0 text-zinc-600 transition-transform ${isOpen ? 'rotate-90' : ''}`}
-            />
-          ) : (
-            <span className="w-[13px] shrink-0" />
-          )}
-          <Icon size={13} className="shrink-0 text-zinc-500" />
-          <span className="flex-1 truncate">{node.label}</span>
-          {hasChildren && <span className="text-[10px] tabular-nums text-zinc-600 opacity-0 group-hover/row:opacity-100">{node.children.length}</span>}
-        </div>
-        {hasChildren && isOpen && (
-          <div className="ml-[11px] border-l border-edge pl-1.5 transition-colors peer-hover/row:border-zinc-600">
-            {node.children.map(renderNode)}
-          </div>
-        )}
-      </div>
-    )
-  }
-
-  const categories = world?.categories ?? []
-  // sections the user explicitly hid (incl. tags when the tags toggle is off) — listed
-  // in a restorable "Скрытые" strip at the bottom so a hidden section is never lost
-  const hiddenCats = CATEGORIES.filter((c) => (c.key === 'tags' ? !showTags : hidden.has(c.key)))
-  const allOpen = categories.length > 0 && categories.every((c) => !collapsedCats.has(c.key))
-  const toggleAll = () => setCollapsedCats(allOpen ? new Set(categories.map((c) => c.key)) : new Set())
+  // focus accent — matches the app's WhatsApp teal-green theme
+  const acc = dark ? '#00d2a8' : '#008069'
 
   return (
     <div className="flex h-full min-h-0">
-      {/* ───────── explorer sidebar (Notes-style: icon toolbar + tree, no title) ───────── */}
+
+      {/* ── Explorer sidebar ── */}
       <aside
         className={`flex shrink-0 flex-col bg-surface transition-[width] duration-200 ease-out ${
-          explorerOpen ? 'w-[264px] border-r border-edge' : 'w-0 overflow-hidden'
+          explorerOpen ? 'w-[248px] border-r border-edge' : 'w-0 overflow-hidden'
         }`}
       >
-        {/* toolbar */}
+        {/* Toolbar */}
         <div className="flex items-center gap-0.5 border-b border-edge px-1.5 py-1.5">
-          <button
-            title={allOpen ? t('world.collapseAll') : t('world.expandAll')}
-            onClick={toggleAll}
-            className="rounded p-1.5 text-zinc-500 transition-colors hover:bg-highlight hover:text-zinc-200"
-          >
-            <ChevronsDownUp size={15} />
-          </button>
-          <button
-            title={t('world.tags')}
-            onClick={() => setShowTags((v) => !v)}
-            className={`rounded p-1.5 transition-colors hover:bg-highlight ${showTags ? 'bg-highlight text-zinc-200' : 'text-zinc-500 hover:text-zinc-200'}`}
-          >
-            <Hash size={15} />
-          </button>
           <button
             title={t('world.orphans')}
             onClick={() => setShowOrphans((v) => !v)}
-            className={`rounded p-1.5 transition-colors hover:bg-highlight ${showOrphans ? 'bg-highlight text-zinc-200' : 'text-zinc-500 hover:text-zinc-200'}`}
+            className={`rounded p-1.5 transition-colors hover:bg-highlight ${
+              showOrphans ? 'text-zinc-200' : 'text-zinc-600 hover:text-zinc-200'
+            }`}
           >
             <CircleDashed size={15} />
           </button>
           <div className="flex-1" />
-          <span
-            className="px-1 text-[10px] tabular-nums text-zinc-600"
-            title={t('world.counts', { n: world?.totalNodes ?? 0, m: world?.totalEdges ?? 0 })}
-          >
+          <span className="px-1 text-[10px] tabular-nums text-zinc-600">
             {world?.totalNodes ?? 0}·{world?.totalEdges ?? 0}
           </span>
           <button
@@ -772,7 +439,7 @@ export default function MemoryTree() {
           </button>
         </div>
 
-        {/* search */}
+        {/* Search */}
         <div className="px-2 pb-1 pt-2">
           <div className="relative">
             <Search size={13} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-600" />
@@ -785,78 +452,58 @@ export default function MemoryTree() {
           </div>
         </div>
 
-        {/* tree */}
-        <div className="min-h-0 flex-1 overflow-y-auto px-1 py-1">
-          {categories.length === 0 && hiddenCats.length === 0 && (
-            <div className="px-3 py-10 text-center text-xs text-zinc-600">{t('world.nothing')}</div>
+        {/* Project list */}
+        <div className="min-h-0 flex-1 overflow-y-auto px-1.5 py-1">
+          {(world?.sidebarProjects ?? []).length === 0 && !query && (
+            <div className="px-2 py-8 text-center text-[12px] text-zinc-600">{t('world.nothing')}</div>
           )}
-          {categories.map((cat) => {
-            const open = !collapsedCats.has(cat.key)
-            const Icon = cat.icon
-            return (
-              <div key={cat.key} className="mb-px">
-                <div className="group/cat flex items-center rounded pr-1 hover:bg-highlight/60">
-                  <button
-                    onClick={() => toggleCat(cat.key)}
-                    className="flex min-w-0 flex-1 items-center gap-1.5 py-1 pl-1.5 pr-1 text-left"
-                  >
-                    <ChevronRight size={12} className={`shrink-0 text-zinc-600 transition-transform ${open ? 'rotate-90' : ''}`} />
-                    <Icon size={14} className="shrink-0 text-zinc-500" />
-                    <span className="flex-1 truncate text-[11px] font-semibold uppercase tracking-[0.06em] text-zinc-400">{cat.label}</span>
-                    <span className="shrink-0 tabular-nums text-[10px] text-zinc-600">{cat.count}</span>
-                  </button>
-                  <button
-                    onClick={() => toggleHidden(cat.key)}
-                    title={t('world.hide')}
-                    className="shrink-0 rounded p-1 text-zinc-600 opacity-0 transition-all hover:text-zinc-200 group-hover/cat:opacity-100"
-                  >
-                    <EyeOff size={12} />
-                  </button>
-                </div>
-                <div className={`collapse-morph ${open ? 'is-open' : ''}`}>
-                  <div>
-                    <div className="my-0.5 ml-[15px] border-l border-edge pl-1.5">{cat.roots.map(renderNode)}</div>
-                  </div>
-                </div>
-              </div>
-            )
-          })}
+          {(world?.sidebarProjects ?? []).map((p) => (
+            <button
+              key={p.key}
+              onClick={() => graphRef.current?.focus(p.key)}
+              className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[13px] text-zinc-300 transition-colors hover:bg-highlight hover:text-white"
+            >
+              <FolderKanban size={13} className="shrink-0" style={{ color: dotColor('project') }} />
+              <span className="min-w-0 flex-1 truncate">{p.label}</span>
+              {p.linkedCount > 0 && (
+                <span className="shrink-0 text-[10px] tabular-nums text-zinc-600">{p.linkedCount}</span>
+              )}
+            </button>
+          ))}
 
-          {/* hidden sections — click a chip to bring it back */}
-          {hiddenCats.length > 0 && (
+          {/* Asteroid belt indicator */}
+          {(world?.orphanCount ?? 0) > 0 && (
             <div className="mt-2 border-t border-edge pt-2">
-              <div className="px-2 pb-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-zinc-600">{t('world.hidden')}</div>
-              <div className="flex flex-wrap gap-1 px-1.5">
-                {hiddenCats.map((c) => {
-                  const CIcon = c.icon
-                  return (
-                    <button
-                      key={c.key}
-                      onClick={() => toggleHidden(c.key)}
-                      title={t('world.show')}
-                      className="group/hid flex items-center gap-1.5 rounded-md border border-edge bg-raised px-2 py-1 text-[11px] text-zinc-500 transition-colors hover:bg-highlight hover:text-zinc-200"
-                    >
-                      <CIcon size={12} className="shrink-0 text-zinc-500 opacity-70" />
-                      <span className="truncate">{t(c.labelKey)}</span>
-                      <EyeOff size={11} className="shrink-0 text-zinc-600 transition-colors group-hover/hid:text-zinc-300" />
-                    </button>
-                  )
-                })}
+              <div className="flex items-center gap-2 px-2 py-1 text-[12px] text-zinc-600">
+                <CircleDashed size={12} className="shrink-0" />
+                <span>{world!.orphanCount} {t('world.asteroids' as TKey)}</span>
               </div>
             </div>
           )}
         </div>
 
-        <div className="border-t border-edge px-3 py-2 text-[10px] leading-relaxed text-zinc-600">{t('world.explorerHint')}</div>
+        <div className="border-t border-edge px-3 py-2 text-[10px] leading-relaxed text-zinc-600">
+          {t('world.explorerHint')}
+        </div>
       </aside>
 
-      {/* ───────── graph canvas ───────── */}
+      {/* ── Graph canvas ── */}
       <div ref={containerRef} className="relative min-w-0 flex-1 overflow-hidden" style={{ background: palette.bg }}>
-        <GraphCanvas ref={graphRef} data={graph} accent="#a78bfa" colorOf={colorOf} groups={groups} view={view} palette={palette} onNavigate={onNavigate} onTip={onTip} />
+        <GraphCanvas
+          ref={graphRef}
+          data={graph}
+          accent={acc}
+          colorOf={colorOf}
+          groups={groups}
+          view={view}
+          palette={palette}
+          onNavigate={onNavigate}
+          onTip={onTip}
+        />
 
-        {/* top-left: reopen the explorer (when hidden) + the Карта / Связи view switch */}
-        <div className="absolute left-3 top-3 flex items-center gap-1.5">
-          {!explorerOpen && (
+        {/* Top-left: re-open sidebar */}
+        {!explorerOpen && (
+          <div className="absolute left-3 top-3">
             <button
               onClick={() => setExplorerOpen(true)}
               title={t('world.showTree')}
@@ -864,25 +511,10 @@ export default function MemoryTree() {
             >
               <PanelLeftOpen size={14} />
             </button>
-          )}
-          <div className="flex items-center rounded-lg border border-edge bg-surface/90 p-0.5 text-[12px] font-medium backdrop-blur">
-            <button
-              onClick={() => setStructural(true)}
-              title={t('world.mapHint')}
-              className={`rounded-md px-2.5 py-1 transition-colors ${structural ? 'bg-accent text-[#fff]' : 'text-zinc-400 hover:text-zinc-200'}`}
-            >
-              {t('world.map')}
-            </button>
-            <button
-              onClick={() => setStructural(false)}
-              title={t('world.linksHint')}
-              className={`rounded-md px-2.5 py-1 transition-colors ${!structural ? 'bg-accent text-[#fff]' : 'text-zinc-400 hover:text-zinc-200'}`}
-            >
-              {t('world.links')}
-            </button>
           </div>
-        </div>
+        )}
 
+        {/* Top-right controls */}
         <div className="absolute right-3 top-3 flex gap-1.5">
           <button
             onClick={() => graphRef.current?.animate()}
@@ -909,16 +541,23 @@ export default function MemoryTree() {
           </button>
         </div>
 
+        {/* Settings panel */}
         {panelOpen && (
-          <div className="absolute right-3 top-14 max-h-[82vh] w-64 space-y-4 overflow-y-auto rounded-2xl border border-edge bg-surface/95 p-3.5 backdrop-blur" style={{ boxShadow: 'var(--float-shadow)' }}>
+          <div
+            className="absolute right-3 top-14 max-h-[82vh] w-64 space-y-4 overflow-y-auto rounded-2xl border border-edge bg-surface/95 p-3.5 backdrop-blur"
+            style={{ boxShadow: 'var(--float-shadow)' }}
+          >
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-zinc-300">{t('world.view')}</span>
-              <button className="flex items-center gap-1 text-[11px] text-zinc-500 hover:text-zinc-300" onClick={() => setView({ ...GRAPH_DEFAULTS })}>
+              <button
+                className="flex items-center gap-1 text-[11px] text-zinc-500 hover:text-zinc-300"
+                onClick={() => setView({ ...GRAPH_DEFAULTS })}
+              >
                 <RotateCcw size={11} /> {t('world.reset')}
               </button>
             </div>
 
-            {/* Groups — colour rules by query (kind:, tag:, or text) */}
+            {/* Color groups */}
             <div className="space-y-1.5">
               <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-zinc-500">{t('world.groups')}</div>
               {groups.map((g) => (
@@ -929,17 +568,32 @@ export default function MemoryTree() {
                     value={g.query}
                     onChange={(e) => saveGroups(groups.map((x) => (x.id === g.id ? { ...x, query: e.target.value } : x)))}
                   />
-                  <label className="relative h-5 w-5 shrink-0 cursor-pointer rounded-full border border-edge" style={{ backgroundColor: g.color }} title={t('world.groupColor')}>
-                    <input type="color" value={g.color} onChange={(e) => saveGroups(groups.map((x) => (x.id === g.id ? { ...x, color: e.target.value } : x)))} className="absolute inset-0 cursor-pointer opacity-0" />
+                  <label
+                    className="relative h-5 w-5 shrink-0 cursor-pointer rounded-full border border-edge"
+                    style={{ backgroundColor: g.color }}
+                  >
+                    <input
+                      type="color" value={g.color}
+                      onChange={(e) => saveGroups(groups.map((x) => (x.id === g.id ? { ...x, color: e.target.value } : x)))}
+                      className="absolute inset-0 cursor-pointer opacity-0"
+                    />
                   </label>
-                  <button className="shrink-0 text-zinc-600 transition-colors hover:text-danger" onClick={() => saveGroups(groups.filter((x) => x.id !== g.id))}>
+                  <button
+                    className="shrink-0 text-zinc-600 transition-colors hover:text-danger"
+                    onClick={() => saveGroups(groups.filter((x) => x.id !== g.id))}
+                  >
                     <X size={13} />
                   </button>
                 </div>
               ))}
               <button
                 className="w-full rounded-lg border border-edge bg-raised py-1 text-[11px] text-zinc-400 transition-colors hover:bg-highlight hover:text-zinc-200"
-                onClick={() => saveGroups([...groups, { id: Math.random().toString(36).slice(2), query: '', color: GROUP_COLORS[groups.length % GROUP_COLORS.length] }])}
+                onClick={() =>
+                  saveGroups([
+                    ...groups,
+                    { id: Math.random().toString(36).slice(2), query: '', color: GROUP_COLORS[groups.length % GROUP_COLORS.length] },
+                  ])
+                }
               >
                 + {t('world.newGroup')}
               </button>
@@ -950,16 +604,19 @@ export default function MemoryTree() {
               <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-zinc-500">{t('world.display')}</div>
               <label className="flex cursor-pointer items-center justify-between text-[11px] text-zinc-500">
                 {t('world.arrows')}
-                <input type="checkbox" checked={view.arrows} onChange={(e) => setView((v) => ({ ...v, arrows: e.target.checked }))} className="h-3.5 w-3.5 accent-[var(--accent)]" />
+                <input
+                  type="checkbox" checked={view.arrows}
+                  onChange={(e) => setView((v) => ({ ...v, arrows: e.target.checked }))}
+                  className="h-3.5 w-3.5 accent-[var(--accent)]"
+                />
               </label>
               {slider('world.labels', 'labelFade', 0, 2, 0.05)}
               {slider('world.nodeSize', 'nodeScale', 0.5, 2, 0.05)}
               {slider('world.linkWidth', 'linkWidth', 0.4, 2.5, 0.05)}
-              <label className="flex cursor-pointer items-center justify-between text-[11px] text-zinc-500">
-                {t('world.mono')}
-                <input type="checkbox" checked={mono} onChange={(e) => setMono(e.target.checked)} className="h-3.5 w-3.5 accent-[var(--accent)]" />
-              </label>
-              <button className="w-full rounded-lg bg-raised py-1 text-[11px] font-medium text-zinc-300 transition-colors hover:bg-highlight hover:text-white" onClick={() => graphRef.current?.animate()}>
+              <button
+                className="w-full rounded-lg bg-raised py-1 text-[11px] font-medium text-zinc-300 transition-colors hover:bg-highlight hover:text-white"
+                onClick={() => graphRef.current?.animate()}
+              >
                 {t('world.animate')}
               </button>
             </div>
@@ -975,9 +632,14 @@ export default function MemoryTree() {
           </div>
         )}
 
+        {/* Empty-graph overlay */}
         {graph.nodes.length === 0 && (
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-sm text-zinc-600">{t('world.nothing')}</div>
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-sm text-zinc-600">
+            {t('world.nothing')}
+          </div>
         )}
+
+        {/* Hover tooltip */}
         {tip && (
           <div
             className="pointer-events-none absolute z-10 max-w-xs rounded-xl border border-edge bg-raised px-3 py-2"

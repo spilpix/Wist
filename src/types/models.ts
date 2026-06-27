@@ -8,6 +8,34 @@ export type UpdateStatus =
   | { state: 'ready'; version: string }
   | { state: 'error'; message: string }
 
+// A typed user property (Capacities-style), stored in an object's `props` JSON bag.
+export type PropType = 'text' | 'number' | 'date' | 'checkbox' | 'url' | 'select'
+export interface PropField {
+  id: string // stable id for React keys / reorder
+  name: string // display name
+  type: PropType
+  value: string | number | boolean | null
+  options?: string[] // choices when type === 'select'
+}
+// Free-form per-object JSON bag. User properties live under `fields`; more keys
+// (object type, cover, …) can be added later without a schema change.
+export interface ObjectProps {
+  fields?: PropField[]
+  type?: number // object type id (Capacities-style) → object_types row
+  category?: string // 'plan' for hub plan documents
+}
+
+// A user-defined object type (Capacities): icon + colour + preset properties that
+// seed an object's props.fields when the type is assigned.
+export interface ObjectType {
+  id: number
+  name: string
+  icon: string // lucide icon key (see TYPE_ICONS)
+  hue: string // colour key from the --obj-* palette (see objectColors)
+  fields: PropField[] // preset property templates
+  created_at: string
+}
+
 export interface Note {
   id: number
   title: string
@@ -20,8 +48,20 @@ export interface Note {
   created_at: string
   updated_at: string
   deleted_at: string | null
+  props?: ObjectProps // typed user properties (Capacities-style)
   // derived
   project_name?: string | null
+}
+
+// a daily note (Capacities-style): one row per calendar day, keyed by `day` = 'YYYY-MM-DD'.
+// Powers the Calendar page; stored in the `journal_entries` table (migration 003).
+export interface JournalEntry {
+  id: number
+  day: string // 'YYYY-MM-DD'
+  mood: number | null // 1..5, optional
+  content: string
+  created_at: string
+  updated_at: string
 }
 
 // a folder in the Notes vault — nests via parent_id (NULL = root)
@@ -59,6 +99,51 @@ export interface FavoriteInput {
   route?: string | null
 }
 
+// ---------- edges: the universal relations layer ----------
+// every object is a NODE (type, id); every relationship is a directed EDGE
+// `src --kind--> dst`. One table powers containment, references and (later) tags.
+export type NodeType = 'task' | 'note' | 'project' | 'canvas' | 'vault' | 'tag'
+export type EdgeKind = 'contains' | 'refers' | 'tagged'
+
+export interface NodeRef {
+  type: NodeType
+  id: string | number
+}
+
+export interface RawEdge {
+  id: number
+  src_type: NodeType
+  src_id: string
+  kind: EdgeKind
+  dst_type: NodeType
+  dst_id: string
+}
+
+// a node resolved against its live source row, ready to render
+export interface ResolvedNode {
+  type: NodeType
+  id: string
+  label: string
+  route: string | null
+  cover: string | null
+  missing?: boolean // source row was deleted — render a tombstone, still unlinkable
+}
+
+// one neighbour of a focus node + the edge connecting them
+export interface RelatedEdge {
+  edgeId: number
+  kind: EdgeKind
+  direction: 'in' | 'out' // out = focus → node; in = node → focus
+  node: ResolvedNode
+}
+
+// a full-text search hit (FTS5) — title + a content snippet around the match
+export interface NoteSearchHit {
+  id: number
+  title: string
+  snippet: string
+}
+
 export type TaskPriority = 'none' | 'low' | 'high'
 export type TaskStatus = 'todo' | 'doing' | 'done'
 
@@ -78,6 +163,7 @@ export interface Task {
   created_at: string
   completed_at: string | null
   deleted_at: string | null
+  props?: ObjectProps // typed user properties (Capacities-style)
   // derived
   project_name?: string | null
 }
@@ -118,6 +204,16 @@ export type ProjectKind = string // free-text type (suggestions in PROJECT_KIND_
 export type ProjectStatus = 'idea' | 'active' | 'review' | 'done' | 'archived'
 export type ProjectAssetKind = 'folder' | 'file' | 'url' | 'image'
 
+// one recent item inside a hub — the "pulse" preview on the hub card. Notes carry
+// updated_at; tasks have no updated_at, so their created_at stands in.
+export interface HubRecentItem {
+  kind: 'note' | 'task'
+  id: number
+  title: string
+  at: string // timestamp the row was last touched (note.updated_at / task.created_at)
+  done: 0 | 1 // tasks only — strike through completed ones
+}
+
 export interface Project {
   id: number
   name: string
@@ -126,6 +222,7 @@ export interface Project {
   status: ProjectStatus
   color: string | null
   cover_path: string | null
+  icon: string | null // emoji avatar for the hub header
   deadline: string | null // YYYY-MM-DD
   tools: string[]
   description: string | null
@@ -139,6 +236,8 @@ export interface Project {
   note_count?: number
   open_task_count?: number
   task_count?: number // total non-deleted tasks — for the progress ring
+  recent?: HubRecentItem[] // 3 freshest notes/tasks — the card "pulse" (list query only)
+  last_activity?: string // newest of (updated_at, freshest item) — "last edited" sort/label
 }
 
 export interface ProjectAsset {
@@ -371,25 +470,36 @@ export const PROJECT_STATUS_COLORS: Record<ProjectStatus, string> = {
   archived: '#4a4744',
 }
 
-// type suggestions only — the project "type" field is free-text (any string allowed)
-export const PROJECT_KIND_SUGGESTIONS = ['Видео', 'Моушн', 'Монтаж', '3D', 'Дизайн', 'VFX', 'Анимация']
+// type suggestions only — the hub "type" field is free-text (any string allowed).
+// PKM-flavoured now: a hub is a place/area of knowledge, not a video deliverable.
+export const PROJECT_KIND_SUGGESTIONS = ['Область жизни', 'Проект', 'Ресурс', 'Заметки', 'Дневник', 'Архив']
 
 // tool suggestions only — tools are free tags now
 export const PROJECT_TOOL_SUGGESTIONS = ['Blender', 'DaVinci', 'After Effects', 'Photoshop', 'Premiere', 'Cinema 4D', 'Figma']
 
-export const PROJECT_COLORS = ['#e67d22', '#7aa8c4', '#6fb06f', '#c9a96b', '#a87dc4', '#c47a7a', '#3a8a8a', '#8a8278']
+export const PROJECT_COLORS = ['#c4622d', '#c89a3c', '#8a9a5b', '#5f8a82', '#6f8bb0', '#9a7aa0', '#c07d6a', '#a98c6b']
+
+// warm identity palette — when a hub has no explicit colour, it still gets a stable
+// one (by id) so its icon tile + pulse dots feel intentional, not grey. Hues sit in
+// the terracotta family so they harmonise with the Hubs skin.
+export const HUB_PALETTE = ['#c4622d', '#c89a3c', '#8a9a5b', '#5f8a82', '#6f8bb0', '#9a7aa0', '#c07d6a', '#b08a4a']
+
+/** Stable accent for a hub: explicit colour, else a warm one derived from its id. */
+export function hubColor(p: Pick<Project, 'id' | 'color'>): string {
+  return p.color || HUB_PALETTE[Math.abs(p.id) % HUB_PALETTE.length]
+}
 
 // preset cover gradients (id → CSS background) — pickable in the project modal,
 // stored as cover_path = "gradient:<id>" and rendered by <ProjectCover/>.
 export const COVER_TEMPLATES: Array<{ id: string; css: string }> = [
-  { id: 'tangerine', css: 'linear-gradient(135deg, #E67D22, #C15F3C)' },
-  { id: 'peach', css: 'linear-gradient(135deg, #FFB38A, #E67D22)' },
-  { id: 'espresso', css: 'linear-gradient(135deg, #847A6D, #2C2418)' },
-  { id: 'dusk', css: 'linear-gradient(160deg, #2C2418, #E67D22)' },
-  { id: 'ocean', css: 'linear-gradient(135deg, #7AA8C4, #3A8A8A)' },
-  { id: 'forest', css: 'linear-gradient(135deg, #6FB06F, #3A8A8A)' },
-  { id: 'grape', css: 'linear-gradient(135deg, #A87DC4, #C47A7A)' },
-  { id: 'sand', css: 'linear-gradient(135deg, #F4F3EE, #B1ADA1)' },
+  { id: 'tangerine', css: 'linear-gradient(135deg, #FF9F45, #F2682C)' },
+  { id: 'peach', css: 'linear-gradient(135deg, #FFC59E, #FF8A5B)' },
+  { id: 'espresso', css: 'linear-gradient(135deg, #A38B72, #4A3B28)' },
+  { id: 'dusk', css: 'linear-gradient(160deg, #6D5DF0, #C86DD7)' },
+  { id: 'ocean', css: 'linear-gradient(135deg, #4F9DF0, #38C6C9)' },
+  { id: 'forest', css: 'linear-gradient(135deg, #56C271, #2BA39B)' },
+  { id: 'grape', css: 'linear-gradient(135deg, #A66CE6, #E06AA0)' },
+  { id: 'sand', css: 'linear-gradient(135deg, #F4F2EC, #CFC9BB)' },
 ]
 
 /** resolve a cover_path to a CSS gradient, or null if it's a real image / unset */

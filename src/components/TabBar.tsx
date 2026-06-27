@@ -6,6 +6,7 @@ import { useTabStore } from '../store/tabStore'
 import { useUiStore } from '../store/uiStore'
 import { usePreviewStore } from '../store/previewStore'
 import { routeMeta } from '../lib/routeMeta'
+import { colorForPath } from '../lib/typeColors'
 import { dragHasDroppable } from '../lib/mediaDrag'
 import { useSpringNav } from '../lib/useSpringNav'
 import { useI18n } from '../i18n'
@@ -140,7 +141,12 @@ export default function TabBar() {
       return { id: el.dataset.tabId as string, left: r.left, width: r.width }
     })
     if (!items.length || !tabs[index]) return
-    dragRef.current = { id: tabs[index].id, index, path: tabs[index].path, startX: e.clientX, items, moved: false, order: null }
+    const tab = tabs[index]
+    // index by the tab's position in the rendered strip, not the full store array — so
+    // skipped tabs (the pinned Home, the tiled island) don't throw the geometry math off
+    const di = items.findIndex((it) => it.id === tab.id)
+    if (di < 0) return // not in the strip (Home/island) — not draggable
+    dragRef.current = { id: tab.id, index: di, path: tab.path, startX: e.clientX, items, moved: false, order: null }
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', endDrag)
     window.addEventListener('pointercancel', endDrag)
@@ -196,10 +202,11 @@ export default function TabBar() {
         </div>
       )}
       {tabs.map((tab, i) => {
-        if (islandIds.has(tab.id)) return null // shown inside the island instead
+        if (islandIds.has(tab.id) || tab.path === '/') return null // Home is a pinned button; island shown separately
         const { icon: Icon, label } = routeMeta(tab.path, t)
         const active = tab.id === activeId
         const dragging = view?.id === tab.id
+        const tint = active ? colorForPath(tab.path) : null // colour only the active tab's icon (сдержанно)
         const shift = view && !dragging ? view.shift[tab.id] ?? 0 : 0
         const style: React.CSSProperties = dragging
           ? { transform: `translateX(${view!.dx}px)`, zIndex: 30, transition: 'none', boxShadow: 'var(--float-shadow)' }
@@ -249,9 +256,9 @@ export default function TabBar() {
               spring.armed === tab.id ? '!bg-accent/10 !ring-1 !ring-accent/70' : ''
             }`}
           >
-            {/* icon inherits the chip's ink (neutral) — the white pill + ring is the active
-                signal, never a colour, just like Notion */}
-            <Icon size={15} className="shrink-0" />
+            {/* the active tab's icon is tinted by document type (sidebar = where things
+                live, tabs = what's open); inactive tabs keep neutral ink so the bar stays calm */}
+            <Icon size={15} className="shrink-0" style={tint ? { color: tint } : undefined} />
             <span className="min-w-0 flex-1 truncate">{tab.title || label}</span>
             <button
               data-tab-close

@@ -44,6 +44,11 @@ function loadSplitRatio(): number {
 interface UiState {
   paletteOpen: boolean
   setPalette: (open: boolean) => void
+  // global quick-capture: a frictionless "jot a thought" overlay reachable from anywhere
+  // (Ctrl/Cmd+Shift+N). Capture-first — no "where does it go" decision; lands in today's
+  // daily note. Opened by hotkey or the command palette.
+  captureOpen: boolean
+  setCapture: (open: boolean) => void
   sidebarCollapsed: boolean
   toggleSidebar: () => void
   /** Set collapse state directly. persist=false is for transient, route-driven
@@ -64,6 +69,8 @@ interface UiState {
 export const useUiStore = create<UiState>((set) => ({
   paletteOpen: false,
   setPalette: (paletteOpen) => set({ paletteOpen }),
+  captureOpen: false,
+  setCapture: (captureOpen) => set({ captureOpen }),
   sidebarCollapsed: loadCollapsed(),
   toggleSidebar: () =>
     set((s) => {

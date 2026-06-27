@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Check, Pause, Play, RotateCcw, Target } from 'lucide-react'
 import ProgressRing from '../ui/ProgressRing'
+import Select from '../ui/Select'
 import { SessionModal, fmtClock, localStamp } from './sessionShared'
 import { type Task } from '../../types/models'
 import { useI18n } from '../../i18n'
@@ -170,19 +171,13 @@ export default function HubFocus({ projectId, accent }: { projectId: number; acc
             </div>
 
             {tasks.length > 0 && (
-              <select
-                className="select !h-9 max-w-[11rem] !py-0 text-sm"
-                value={taskId ?? ''}
-                onChange={(e) => setTaskId(e.target.value ? Number(e.target.value) : null)}
-                title={t('hub.focusTask')}
-              >
-                <option value="">{t('hub.focusNoTask')}</option>
-                {tasks.map((x) => (
-                  <option key={x.id} value={x.id}>
-                    {x.title}
-                  </option>
-                ))}
-              </select>
+              <Select
+                className="max-w-[11rem]"
+                ariaLabel={t('hub.focusTask')}
+                value={taskId != null ? String(taskId) : ''}
+                options={[{ value: '', label: t('hub.focusNoTask') }, ...tasks.map((x) => ({ value: String(x.id), label: x.title }))]}
+                onChange={(v) => setTaskId(v ? Number(v) : null)}
+              />
             )}
 
             <button className="btn-accent !py-2" onClick={startFocus}>

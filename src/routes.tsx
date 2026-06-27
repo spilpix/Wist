@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import Spinner from './components/ui/Spinner'
 import Home from './pages/Home'
 import Favorites from './pages/Favorites'
+import Calendar from './pages/Calendar'
 import Notes from './pages/Notes'
 import Tasks from './pages/Tasks'
 import Vault from './pages/Vault'
@@ -30,6 +31,7 @@ export function pageRouteElements() {
     <>
       <Route path="/" element={<Home />} />
       <Route path="/favorites" element={<Favorites />} />
+      <Route path="/calendar" element={<Calendar />} />
       <Route path="/notes" element={<Notes />} />
       <Route path="/tasks" element={<Tasks />} />
       <Route path="/vault" element={<Vault />} />

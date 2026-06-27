@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { ArrowLeft, ArrowRight, Columns2, Moon, PanelLeft, Sun, Unlink } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Columns2, Home, Moon, PanelLeft, Sun, Unlink } from 'lucide-react'
 import Sidebar from './Sidebar'
 import TabBar from './TabBar'
 import Tooltip from './ui/Tooltip'
@@ -24,6 +24,7 @@ import { useI18n } from '../i18n'
 function TopBar() {
   const { t } = useI18n()
   const navigate = useNavigate()
+  const location = useLocation()
   const settings = useSettingsStore((s) => s.settings)
   const update = useSettingsStore((s) => s.update)
   const dark = (settings?.theme === 'system' ? resolvedTheme() : settings?.theme ?? 'light') === 'dark'
@@ -31,6 +32,7 @@ function TopBar() {
   // re-open control — so there's a discoverable way back without hunting for the edge strip
   const sidebarCollapsed = useUiStore((s) => s.sidebarCollapsed)
   const toggleSidebar = useUiStore((s) => s.toggleSidebar)
+  const atHome = location.pathname === '/'
 
   const toolBtn = 'app-no-drag rounded-lg p-1.5 text-zinc-500 transition-colors hover:bg-raised hover:text-zinc-200'
 
@@ -43,28 +45,40 @@ function TopBar() {
           </button>
         </Tooltip>
       )}
+
+      {/* navigation cluster — pinned Home anchor + history arrows. Home is a fixed button
+          (not a closeable tab), so the open-document tabs to its right never include '/'. */}
+      <Tooltip label={t('nav.home')} side="bottom">
+        <button className={`${toolBtn} ${atHome ? 'bg-raised text-zinc-100' : ''}`} onClick={() => navigate('/')}>
+          <Home size={16} />
+        </button>
+      </Tooltip>
       <Tooltip label={t('app.back')} shortcut="Alt ←" side="bottom">
         <button className={toolBtn} onClick={() => navigate(-1)}>
           <ArrowLeft size={16} />
         </button>
       </Tooltip>
       <Tooltip label={t('app.forward')} shortcut="Alt →" side="bottom">
-        <button className={`${toolBtn} mr-1`} onClick={() => navigate(1)}>
+        <button className={toolBtn} onClick={() => navigate(1)}>
           <ArrowRight size={16} />
         </button>
       </Tooltip>
 
+      {/* divider between navigation and the open-document tabs */}
+      <span className="mx-1.5 h-5 w-px shrink-0 self-center bg-edge" aria-hidden />
+
       <TabBar />
 
       {/* guaranteed window-drag strip — flex-1 TabBar can't consume it */}
-      {/* grows to fill the gap between the (content-width) tabs and the theme icon — this
+      {/* grows to fill the gap between the (content-width) tabs and the right controls — this
           whole span drags the window; the tab strip shrinks before this does */}
       <div className="app-drag h-full min-w-[2.5rem] flex-1 self-stretch" aria-hidden />
 
+      {/* accent colour now lives in Settings — the top bar stays calm (just the theme toggle) */}
       <Tooltip label={t('cmdk.toggleTheme')} side="bottom">
         <button
           onClick={() => update({ theme: dark ? 'light' : 'dark' })}
-          className="app-no-drag mr-[140px] shrink-0 rounded-lg p-1.5 text-zinc-500 transition-colors hover:bg-raised hover:text-zinc-200"
+          className="app-no-drag ml-1 mr-[148px] shrink-0 rounded-lg p-1.5 text-zinc-500 transition-colors hover:bg-raised hover:text-zinc-200"
         >
           {dark ? <Sun size={14} /> : <Moon size={14} />}
         </button>

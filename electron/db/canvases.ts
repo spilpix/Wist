@@ -1,4 +1,5 @@
 import { db, now } from './database'
+import * as edges from './edges'
 import type { Canvas, CanvasData } from '../../src/types/models'
 
 const EMPTY: CanvasData = { nodes: [], edges: [] }
@@ -62,9 +63,19 @@ export function updateCanvas(id: number, patch: { name?: string; data?: CanvasDa
     values.push(now(), id)
     db().prepare(`UPDATE canvases SET ${sets.join(', ')} WHERE id = ?`).run(...values)
   }
+  // mirror the board's note/task cards into the universal edges graph (never let a
+  // graph hiccup block the board's autosave)
+  if (patch.data !== undefined) {
+    try {
+      edges.syncCanvasCards(id, patch.data)
+    } catch (e) {
+      console.error('canvas edge sync failed', e)
+    }
+  }
   return getCanvas(id)!
 }
 
 export function deleteCanvas(id: number): void {
   db().prepare('DELETE FROM canvases WHERE id = ?').run(id)
+  edges.removeNode({ type: 'canvas', id }) // edges have no FK — clean them explicitly
 }

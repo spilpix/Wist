@@ -2,42 +2,39 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ---------- theme tokens (authentic Notion palette) ---------- */
-/* Dark is the default; accent = Notion blue #2383E1 (signal only), same hue in both
-   themes. .force-dark pins dark tokens on a subtree (player, hero cards).
-   Surfaces follow Notion's real greys: dark canvas #191919 with a LIGHTER #202020
-   sidebar rail; light warm greys with the iconic warm-black ink #37352F. */
+/* ---------- theme tokens (authentic Notion surfaces + Notion-blue accent) ---------- */
+/* Surfaces: authentic Notion dark (#191919 canvas, #202020 sidebar).
+   Accent: Notion blue #2383E2 — ONE clean signal colour; every selection, chip
+   and status tint resolves to the same blue family so nothing reads "muddy". */
 :root,
 .force-dark {
   --accent: #2383e2; /* Notion blue */
   --accent-rgb: 35 131 226;
-  --accent-hover-rgb: 76 156 232; /* #4C9CE8 */
-  --accent-bright-rgb: 99 169 236; /* #63A9EC foreground accent (active labels/icons) */
-  --accent-subtle: 28 56 80; /* #1C3850 badge / tag bg */
+  --accent-hover-rgb: 51 142 232; /* #338EE8 */
+  --accent-bright-rgb: 99 169 236; /* #63A9EC foreground on dark */
+  --accent-subtle: 27 47 68; /* #1B2F44 deep blue chip bg */
 
-  --bg: 25 25 25; /* #191919 main canvas (authentic Notion dark) */
+  --bg: 25 25 25; /* #191919 — Notion dark canvas */
   --surface: 32 32 32; /* #202020 panels */
-  --sidebar: 32 32 32; /* #202020 sidebar rail — LIGHTER than the canvas, like Notion */
-  --card: 37 37 37; /* #252525 cards / modals */
-  --raised: 47 47 47; /* #2F2F2F subtle elevated fill — chips / ghost buttons */
+  --sidebar: 32 32 32; /* #202020 sidebar (lighter than canvas, like Notion) */
+  --card: 38 38 38; /* #262626 cards / modals */
+  --raised: 48 48 48; /* #303030 elevated fill */
   --input-bg: 38 38 38; /* #262626 inputs */
-  --highlight: 44 44 44; /* #2C2C2C row hover / active selection (content) */
-  --sidebar-active: 56 56 56; /* #383838 active nav row — sidebar only */
-  --edge: 54 54 54; /* #363636 borders / dividers */
+  --highlight: 44 44 44; /* #2C2C2C row hover */
+  --sidebar-active: 30 45 64; /* #1E2D40 — soft blue active row (ties the accent) */
+  --edge: 54 54 54; /* #363636 borders */
 
-  --ink-0: 211 211 209; /* #D3D3D1 primary text / headings (Notion white @ ~81%) */
+  --ink-0: 211 211 209; /* #D3D3D1 — Notion primary text */
   --ink-100: 211 211 209;
-  --ink-200: 178 178 176; /* #B2B2B0 strong secondary */
-  --ink-300: 159 159 156; /* #9F9F9C */
-  --ink-400: 154 154 151; /* #9A9A97 secondary / muted (Notion dark gray) */
-  --ink-500: 138 138 135; /* #8A8A87 */
-  --ink-600: 120 120 117; /* #787875 placeholders */
-  --ink-700: 100 100 97; /* #646461 */
-  --ink-800: 78 78 76; /* #4E4E4C disabled / tracks */
+  --ink-200: 178 178 176; /* #B2B2B0 */
+  --ink-300: 155 155 152; /* #9B9B98 */
+  --ink-400: 138 138 135; /* #8A8A87 Notion muted */
+  --ink-500: 120 120 117; /* #787875 */
+  --ink-600: 100 100 97; /* #646461 */
+  --ink-700: 78 78 76; /* #4E4E4C */
+  --ink-800: 56 56 54; /* #383836 */
 
-  /* block colours — a semantic name → {text, bg} pair, hand-tuned per theme
-     (Notion's own values). A block stores the NAME; tints derive from these two
-     theme-correct hexes, never from a transparent-mix that drifts across themes. */
+  /* block colours — Notion dark palette */
   --c-default-text: #d3d3d1; --c-default-bg: #373737;
   --c-gray-text: #9b9b9b;   --c-gray-bg: #2f2f2f;
   --c-brown-text: #ba856a;  --c-brown-bg: #4a3228;
@@ -45,70 +42,82 @@
   --c-yellow-text: #caa23c; --c-yellow-bg: #564a28;
   --c-green-text: #529e72;  --c-green-bg: #243d30;
   --c-blue-text: #5e87c9;   --c-blue-bg: #1e3a5f;
-  --c-purple-text: #9d68d3; --c-purple-bg: #3c2d49;
+  --c-purple-text: #9d68d3; --c-purple-bg: #3c2d49; /* Notion purple — distinct from the blue accent */
   --c-pink-text: #d15796;   --c-pink-bg: #4e2c3c;
   --c-red-text: #df5452;    --c-red-bg: #522e2e;
 
-  /* status palette — reference tokens, mirrored by the JS maps in src/types/models.ts */
+  /* status palette */
   --st-active: #6fb06f;
   --st-active-bg: #1e2b1e;
   --st-pause: #c9a96b;
   --st-pause-bg: #2b2618;
-  --st-done: #7aa8c4;
-  --st-done-bg: #1a2430;
+  --st-done: #5e9bea;       /* Notion blue family */
+  --st-done-bg: #16314a;
   --st-urgent: #e67d22;
   --st-urgent-bg: #3a2010;
-  --st-review: #a87dc4;
+  --st-review: #9b88f2;
   --st-error: #c47a7a;
   --st-render: #3a8a8a;
   --st-archive: #6a6058;
 
   --scrollbar: #3a3a3a;
-  /* inline surfaces stay nearly flat; real depth is reserved for floating layers */
-  --card-shadow: 0 1px 2px rgb(0 0 0 / 0.20);
-  --card-shadow-hover: 0 4px 16px rgb(0 0 0 / 0.32);
+  --card-shadow: 0 1px 2px rgb(0 0 0 / 0.22);
+  --card-shadow-hover: 0 4px 16px rgb(0 0 0 / 0.34);
   --float-shadow: 0 10px 34px rgb(0 0 0 / 0.46);
   --palette-shadow: 0 24px 80px rgb(0 0 0 / 0.55);
   --c-success: 111 176 111;
   --c-danger: 196 122 122;
+  /* Capacities object palette — dark */
+  --obj-blue-fg: oklch(0.72 0.13 250);    --obj-blue-soft: oklch(0.245 0.05 250);
+  --obj-cyan-fg: oklch(0.72 0.10 218);    --obj-cyan-soft: oklch(0.24 0.04 218);
+  --obj-teal-fg: oklch(0.72 0.09 192);    --obj-teal-soft: oklch(0.24 0.03 192);
+  --obj-green-fg: oklch(0.72 0.10 155);   --obj-green-soft: oklch(0.24 0.04 155);
+  --obj-lime-fg: oklch(0.76 0.13 135);    --obj-lime-soft: oklch(0.255 0.04 135);
+  --obj-yellow-fg: oklch(0.80 0.12 85);   --obj-yellow-soft: oklch(0.265 0.04 85);
+  --obj-orange-fg: oklch(0.78 0.13 55);   --obj-orange-soft: oklch(0.265 0.04 55);
+  --obj-red-fg: oklch(0.72 0.15 25);      --obj-red-soft: oklch(0.250 0.05 25);
+  --obj-pink-fg: oklch(0.75 0.14 358);    --obj-pink-soft: oklch(0.255 0.04 358);
+  --obj-purple-fg: oklch(0.730 0.140 305); --obj-purple-soft: oklch(0.335 0.055 305);
+  --obj-indigo-fg: oklch(0.715 0.130 275); --obj-indigo-soft: oklch(0.330 0.052 275);
+  --obj-slate-fg: oklch(0.700 0.018 250);  --obj-slate-soft: oklch(0.330 0.010 250);
   color-scheme: dark;
 }
 
 /* over-media contexts (player chrome, hero cards) want crisp white primary text */
 .force-dark {
   --ink-0: 255 255 255;
-  --ink-100: 244 244 245;
+  --ink-100: 244 242 252;
 }
 
 [data-theme='light'] {
-  /* Notion light: white canvas, #F7F7F5 sidebar, blue accent, warm #37352F ink */
+  /* Notion light + Notion-blue accent */
   --accent: #2383e2; /* Notion blue */
   --accent-rgb: 35 131 226;
-  --accent-hover-rgb: 27 114 203; /* #1B72CB */
-  --accent-bright-rgb: 31 111 191; /* #1F6FBF darker for legible accent text on white */
-  --accent-subtle: 231 243 248; /* #E7F3F8 Notion blue bg */
+  --accent-hover-rgb: 24 110 195; /* #186EC3 */
+  --accent-bright-rgb: 26 102 184; /* #1A66B8 foreground on light */
+  --accent-subtle: 234 241 252; /* #EAF1FC soft blue chip bg */
 
-  --bg: 255 255 255; /* #FFFFFF main canvas */
-  --surface: 247 246 243; /* #F7F6F3 panels (Notion) */
-  --sidebar: 247 247 245; /* #F7F7F5 sidebar rail (authentic Notion warm grey) */
-  --card: 255 255 255; /* #FFFFFF cards / modals */
-  --raised: 236 235 233; /* #ECEBE9 elevated fill / hover */
-  --input-bg: 244 243 241; /* #F4F3F1 inputs (the visible --edge border carries the boundary) */
-  --highlight: 239 238 236; /* #EFEEEC row hover / active selection (content) */
-  --sidebar-active: 232 231 228; /* #E8E7E4 active nav row — sidebar only */
-  --edge: 229 228 225; /* #E5E4E1 universal hairline border / divider (Notion warm border) */
+  --bg: 255 255 255; /* #FFFFFF Notion light canvas */
+  --surface: 247 246 243; /* #F7F6F3 panels */
+  --sidebar: 247 247 245; /* #F7F7F5 sidebar — authentic Notion */
+  --card: 255 255 255; /* #FFFFFF cards */
+  --raised: 236 235 233; /* #ECEBE9 elevated fill */
+  --input-bg: 244 243 241; /* #F4F3F1 inputs */
+  --highlight: 239 238 236; /* #EFEEEC hover */
+  --sidebar-active: 228 238 251; /* #E4EEFB soft blue active row (ties the accent) */
+  --edge: 229 228 225; /* #E5E4E1 borders — Notion warm hairline */
 
-  --ink-0: 55 53 47; /* #37352F — the iconic Notion warm near-black */
+  --ink-0: 55 53 47; /* #37352F — Notion iconic warm near-black */
   --ink-100: 55 53 47;
-  --ink-200: 73 71 64; /* #494740 strong secondary */
-  --ink-300: 96 94 86; /* #605E56 secondary */
-  --ink-400: 120 119 116; /* #787774 muted (Notion gray) */
-  --ink-500: 120 119 116; /* #787774 muted text */
-  --ink-600: 145 144 140; /* #91908C placeholders */
+  --ink-200: 73 71 64; /* #494740 */
+  --ink-300: 96 94 86; /* #605E56 */
+  --ink-400: 120 119 116; /* #787774 Notion gray */
+  --ink-500: 120 119 116;
+  --ink-600: 145 144 140; /* #91908C */
   --ink-700: 175 174 170; /* #AFAEAA */
   --ink-800: 222 221 217; /* #DEDDD9 */
 
-  /* block colours (light) — Notion text (table 2) + background-highlight (table 3) */
+  /* block colours — Notion light (authentic) */
   --c-default-text: #37352f; --c-default-bg: #ffffff;
   --c-gray-text: #787774;   --c-gray-bg: #f1f1ef;
   --c-brown-text: #9f6b53;  --c-brown-bg: #f4eeee;
@@ -116,19 +125,30 @@
   --c-yellow-text: #cb912f; --c-yellow-bg: #fbf3db;
   --c-green-text: #448361;  --c-green-bg: #edf3ec;
   --c-blue-text: #337ea9;   --c-blue-bg: #e7f3f8;
-  --c-purple-text: #9065b0; --c-purple-bg: #f6f3f9;
+  --c-purple-text: #9065b0; --c-purple-bg: #f6f3f9; /* Notion purple — distinct from the blue accent */
   --c-pink-text: #c14c8a;   --c-pink-bg: #faf1f5;
   --c-red-text: #d44c47;    --c-red-bg: #fdebec;
 
   --scrollbar: #cbc9c4;
-  /* soft Notion float — a visible hairline (--edge) defines the card; the shadow
-     adds just enough lift so it reads as raised off the white page. */
   --card-shadow: 0 1px 2px rgb(15 15 15 / 0.05), 0 1px 1px rgb(15 15 15 / 0.04);
   --card-shadow-hover: 0 6px 18px rgb(15 15 15 / 0.10);
   --float-shadow: 0 10px 34px rgb(15 15 15 / 0.13);
   --palette-shadow: 0 24px 80px rgb(15 15 15 / 0.20);
   --c-success: 21 128 61;
   --c-danger: 185 28 28;
+  /* Capacities object palette — light (pastels: L↓ C↑ for visible chips) */
+  --obj-blue-fg: oklch(0.46 0.17 250);    --obj-blue-soft: oklch(0.90 0.07 250);
+  --obj-cyan-fg: oklch(0.48 0.14 218);    --obj-cyan-soft: oklch(0.90 0.06 218);
+  --obj-teal-fg: oklch(0.48 0.12 192);    --obj-teal-soft: oklch(0.90 0.05 192);
+  --obj-green-fg: oklch(0.48 0.13 155);   --obj-green-soft: oklch(0.90 0.07 155);
+  --obj-lime-fg: oklch(0.52 0.15 135);    --obj-lime-soft: oklch(0.91 0.08 135);
+  --obj-yellow-fg: oklch(0.58 0.14 85);   --obj-yellow-soft: oklch(0.93 0.07 85);
+  --obj-orange-fg: oklch(0.56 0.16 55);   --obj-orange-soft: oklch(0.92 0.07 55);
+  --obj-red-fg: oklch(0.50 0.19 25);      --obj-red-soft: oklch(0.91 0.07 25);
+  --obj-pink-fg: oklch(0.54 0.17 358);    --obj-pink-soft: oklch(0.91 0.07 358);
+  --obj-purple-fg: oklch(0.50 0.17 305);  --obj-purple-soft: oklch(0.90 0.07 305);
+  --obj-indigo-fg: oklch(0.48 0.16 275);  --obj-indigo-soft: oklch(0.90 0.07 275);
+  --obj-slate-fg: oklch(0.48 0.03 250);   --obj-slate-soft: oklch(0.91 0.03 250);
   color-scheme: light;
 }
 
@@ -136,21 +156,22 @@
 [data-theme='light'] .force-dark {
   --bg: 25 25 25;
   --surface: 32 32 32;
-  --card: 37 37 37;
-  --raised: 47 47 47;
+  --card: 38 38 38;
+  --raised: 48 48 48;
   --input-bg: 38 38 38;
   --highlight: 44 44 44;
-  --sidebar-active: 56 56 56;
+  --accent-subtle: 27 47 68;
+  --sidebar-active: 30 45 64;
   --edge: 54 54 54;
   --ink-0: 255 255 255;
-  --ink-100: 244 244 245;
-  --ink-200: 212 212 211;
-  --ink-300: 181 181 179;
-  --ink-400: 155 155 153;
-  --ink-500: 130 130 128;
-  --ink-600: 110 110 108;
-  --ink-700: 86 86 84;
-  --ink-800: 55 55 53;
+  --ink-100: 211 211 209;
+  --ink-200: 178 178 176;
+  --ink-300: 155 155 152;
+  --ink-400: 138 138 135;
+  --ink-500: 120 120 117;
+  --ink-600: 100 100 97;
+  --ink-700: 78 78 76;
+  --ink-800: 56 56 54;
   --c-default-text: #d3d3d1; --c-default-bg: #373737;
   --c-gray-text: #9b9b9b;   --c-gray-bg: #2f2f2f;
   --c-brown-text: #ba856a;  --c-brown-bg: #4a3228;
@@ -162,14 +183,69 @@
   --c-pink-text: #d15796;   --c-pink-bg: #4e2c3c;
   --c-red-text: #df5452;    --c-red-bg: #522e2e;
   --scrollbar: #3a3a3a;
-  /* inline surfaces stay nearly flat; real depth is reserved for floating layers */
-  --card-shadow: 0 1px 2px rgb(0 0 0 / 0.20);
-  --card-shadow-hover: 0 4px 16px rgb(0 0 0 / 0.32);
-  --float-shadow: 0 10px 34px rgb(0 0 0 / 0.46);
-  --palette-shadow: 0 24px 80px rgb(0 0 0 / 0.55);
-  --c-success: 111 176 111;
-  --c-danger: 196 122 122;
+  --card-shadow: 0 1px 3px rgb(0 0 0 / 0.32), 0 1px 2px rgb(0 0 0 / 0.22);
+  --card-shadow-hover: 0 4px 20px rgb(0 0 0 / 0.44);
+  --float-shadow: 0 10px 40px rgb(0 0 0 / 0.58);
+  --palette-shadow: 0 24px 90px rgb(0 0 0 / 0.68);
+  --c-success: 74 222 128;
+  --c-danger: 248 113 113;
   color-scheme: dark;
+}
+
+/* ---------- Instrument Serif — self-hosted editorial display face ---------- */
+/* Bundled (not CDN) so the desktop app keeps its character offline. */
+@font-face {
+  font-family: 'Instrument Serif';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./assets/fonts/InstrumentSerif-Regular.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Instrument Serif';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./assets/fonts/InstrumentSerif-Italic.ttf') format('truetype');
+}
+
+/* ---------- Hubs pilot skin: warm terracotta + serif (scoped) ---------- */
+/* Re-tints ONLY the Hubs screen by overriding the shared surface/ink/accent
+   vars on a wrapper. Every Tailwind utility inside (bg-card, border-edge,
+   text-zinc-*, btn-accent, ring-accent…) resolves to these warm values, so the
+   whole subtree warms up with no per-component edits. Rest of the app is
+   untouched — this is the opt-in pilot before any global reskin. */
+.hubs-skin {
+  --bg: 26 21 18; /* #1A1512 warm near-black canvas */
+  --surface: 33 26 21; /* #211A15 */
+  --card: 33 26 21; /* #211A15 cards */
+  --raised: 43 34 26; /* #2B221A elevated fill / hover */
+  --input-bg: 38 30 24; /* #261E18 */
+  --highlight: 40 31 24; /* #281F18 row hover */
+  --edge: 51 39 29; /* #33271D warm hairline */
+  --accent: #c4622d; /* terracotta — the single signal colour */
+  --accent-rgb: 196 98 45;
+  --accent-hover-rgb: 211 114 60; /* #D3723C */
+  --accent-bright-rgb: 220 128 73; /* #DC8049 foreground on dark */
+  --accent-subtle: 42 28 18; /* #2A1C12 */
+  --ink-0: 236 227 216; /* #ECE3D8 warm off-white */
+  --ink-100: 236 227 216;
+  --ink-200: 207 194 179; /* #CFC2B3 */
+  --ink-300: 178 162 144; /* #B2A290 */
+  --ink-400: 162 147 127; /* #A2937F muted */
+  --ink-500: 140 125 106; /* #8C7D6A */
+  --ink-600: 115 104 85; /* #736855 faint */
+  --ink-700: 92 79 63; /* #5C4F3F */
+  --ink-800: 60 49 38; /* #3C3126 */
+  --scrollbar: #4a3a2c;
+  --card-shadow: 0 1px 2px rgb(0 0 0 / 0.30);
+  --card-shadow-hover: 0 8px 26px rgb(0 0 0 / 0.44);
+}
+/* editorial display face — used for the page title + hub names + empty state */
+.hub-serif {
+  font-family: 'Instrument Serif', Georgia, 'Times New Roman', serif;
+  font-weight: 400;
+  letter-spacing: 0;
 }
 
 html,

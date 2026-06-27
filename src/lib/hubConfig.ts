@@ -3,12 +3,12 @@
 // independently ("настроить под себя"). Validated on read; bad/legacy values fall back
 // to the defaults so a corrupt entry can never break the page.
 
-export type HubTabId = 'overview' | 'files' | 'tasks' | 'notes' | 'sessions' | 'patches' | 'graph'
+export type HubTabId = 'overview' | 'files' | 'tasks' | 'notes' | 'plans' | 'sessions' | 'patches' | 'graph'
 
-export const ALL_HUB_TABS: HubTabId[] = ['overview', 'files', 'tasks', 'notes', 'sessions', 'patches', 'graph']
+export const ALL_HUB_TABS: HubTabId[] = ['overview', 'files', 'tasks', 'notes', 'plans', 'sessions', 'patches', 'graph']
 
-// patches + graph are power features → off by default, the rest on
-export const DEFAULT_HUB_TABS: HubTabId[] = ['overview', 'files', 'tasks', 'notes', 'sessions']
+// patches + graph are power features → off by default; plans on by default
+export const DEFAULT_HUB_TABS: HubTabId[] = ['overview', 'files', 'tasks', 'notes', 'plans', 'sessions']
 
 // The Overview is the workspace command center. Focus (a pomodoro / deep-work timer)
 // and References now live here as widgets instead of a separate tab/section, so you can
@@ -70,7 +70,30 @@ function readList<T extends string>(key: string, allowed: readonly T[], fallback
 }
 
 export function loadHubTabs(id: number): HubTabId[] {
-  return readList<HubTabId>(tabsKey(id), ALL_HUB_TABS, DEFAULT_HUB_TABS)
+  const had = localStorage.getItem(tabsKey(id)) != null
+  const list = readList<HubTabId>(tabsKey(id), ALL_HUB_TABS, DEFAULT_HUB_TABS)
+  if (had) {
+    // inject newly-added tabs into existing saved configs so old hubs pick them up
+    const inject: Array<{ tab: HubTabId; after: HubTabId | null }> = [
+      { tab: 'plans', after: 'notes' },
+      { tab: 'graph', after: null },
+    ]
+    let result = [...list]
+    let changed = false
+    for (const { tab, after } of inject) {
+      if (result.includes(tab)) continue
+      changed = true
+      if (after) {
+        const idx = result.indexOf(after)
+        result.splice(idx >= 0 ? idx + 1 : result.length, 0, tab)
+      } else {
+        result.push(tab)
+      }
+    }
+    if (changed) saveHubTabs(id, result)
+    return result
+  }
+  return list
 }
 export function saveHubTabs(id: number, tabs: HubTabId[]): void {
   try {

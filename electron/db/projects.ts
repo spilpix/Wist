@@ -1,15 +1,6 @@
 import { db, now } from './database'
-import type { Project, ProjectAsset, ProjectSection } from '../../src/types/models'
-
-function safeParse(v: unknown): string[] {
-  if (typeof v !== 'string') return []
-  try {
-    const parsed = JSON.parse(v)
-    return Array.isArray(parsed) ? parsed.filter((x) => typeof x === 'string') : []
-  } catch {
-    return []
-  }
-}
+import { safeParse } from './_row'
+import type { HubRecentItem, Project, ProjectAsset, ProjectSection } from '../../src/types/models'
 
 const rowToProject = (row: any): Project => ({ ...row, tools: safeParse(row.tools) })
 
@@ -23,11 +14,33 @@ const SELECT = `
   FROM projects p
 `
 
+// the 3 freshest items inside a hub — its card "pulse". notes carry updated_at;
+// tasks have none, so created_at stands in. Both are unioned and ordered together.
+const RECENT_SQL = `
+  SELECT kind, id, title, at, done FROM (
+    SELECT 'note' AS kind, id, title, updated_at AS at, 0 AS done
+      FROM notes WHERE project_id = ? AND deleted_at IS NULL
+    UNION ALL
+    SELECT 'task' AS kind, id, title, created_at AS at, done
+      FROM tasks WHERE project_id = ? AND deleted_at IS NULL
+  ) ORDER BY at DESC LIMIT 3
+`
+
 export function listProjects(): Project[] {
   const rows = db()
     .prepare(`${SELECT} WHERE p.deleted_at IS NULL ORDER BY p.pinned DESC, p.sort ASC, p.updated_at DESC`)
     .all() as any[]
-  return rows.map(rowToProject)
+  // one tiny query per hub (a personal app has a handful) attaches the pulse + a
+  // real last-activity stamp: notes/tasks edits never bump projects.updated_at, so
+  // we take the newest of the hub's own stamp and its freshest item.
+  const recentStmt = db().prepare(RECENT_SQL)
+  return rows.map((row) => {
+    const p = rowToProject(row)
+    const recent = recentStmt.all(p.id, p.id) as HubRecentItem[]
+    p.recent = recent
+    p.last_activity = recent.length && recent[0].at > p.updated_at ? recent[0].at : p.updated_at
+    return p
+  })
 }
 
 export function getProject(id: number): Project | null {
@@ -41,8 +54,8 @@ const STATUSES = ['idea', 'active', 'review', 'done', 'archived']
 export function createProject(data: Partial<Project>): Project {
   const info = db()
     .prepare(
-      `INSERT INTO projects (name, client, kind, status, color, cover_path, deadline, tools, description, pinned)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO projects (name, client, kind, status, color, cover_path, icon, deadline, tools, description, pinned)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .run(
       (data.name ?? '').trim() || 'Untitled',
@@ -51,6 +64,7 @@ export function createProject(data: Partial<Project>): Project {
       data.status && STATUSES.includes(data.status) ? data.status : 'active',
       data.color ?? null,
       data.cover_path ?? null,
+      data.icon ?? null,
       data.deadline ?? null,
       JSON.stringify(Array.isArray(data.tools) ? data.tools : []),
       data.description ?? null,
@@ -62,7 +76,7 @@ export function createProject(data: Partial<Project>): Project {
 export function updateProject(id: number, patch: Partial<Project>): Project {
   const sets: string[] = []
   const values: any[] = []
-  for (const key of ['name', 'client', 'kind', 'color', 'cover_path', 'deadline', 'description'] as const) {
+  for (const key of ['name', 'client', 'kind', 'color', 'cover_path', 'icon', 'deadline', 'description'] as const) {
     if (patch[key] === undefined) continue
     sets.push(`${key} = ?`)
     values.push(patch[key])

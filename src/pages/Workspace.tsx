@@ -4,7 +4,7 @@ import {
   Crown, Flag, FolderKanban, Globe, List, LogOut,
   MessageSquare, MoreVertical, Pencil, Plus, Send, Trash2, UserMinus, Users, X,
 } from 'lucide-react'
-import { supabase } from '../lib/supabase'
+import { supabase, subscribe } from '../data/cloud'
 import {
   useWorkspaceStore,
   type SharedComment,
@@ -22,6 +22,7 @@ import Tabs from '../components/ui/Tabs'
 import ConfirmDialog from '../components/ui/ConfirmDialog'
 import CanvasSection from '../components/workspace/CanvasSection'
 import FilesSection from '../components/workspace/FilesSection'
+import PlainEditor from '../components/notes/PlainEditor'
 import {
   Avatar, COLUMNS, dueLabel, PRIORITIES, PRIORITY_META, PROJECT_COLORS, timeAgo,
 } from '../lib/wsUi'
@@ -259,9 +260,11 @@ function ProjectView({
   const [dropCol, setDropCol] = useState<string | null>(null)
   const [adding, setAdding] = useState<string | null>(null)
   const [addText, setAddText] = useState('')
+  const [openNoteId, setOpenNoteId] = useState<string | null>(null) // shared doc open in the notes view
 
   useEffect(() => {
     setLoading(true)
+    setOpenNoteId(null) // leaving a project closes any open doc
     Promise.all([
       supabase.from('shared_tasks').select('*').eq('project_id', project.id).order('created_at'),
       supabase.from('shared_notes').select('*').eq('project_id', project.id).order('updated_at', { ascending: false }),
@@ -318,9 +321,18 @@ function ProjectView({
 
   const addNote = async () => {
     const { data } = await supabase.from('shared_notes').insert({
-      workspace_id: workspaceId, project_id: project.id, title: 'Без названия', content: '', created_by: userId,
+      workspace_id: workspaceId, project_id: project.id, title: t('workspace.untitledNote'), content: '', created_by: userId,
     }).select().single()
-    if (data) setNotes((p) => [data, ...p])
+    if (data) {
+      setNotes((p) => [data, ...p])
+      setOpenNoteId(data.id) // open the fresh doc straight away
+    }
+  }
+
+  // follow a [[wikilink]] from one shared doc to another (by title, within this project)
+  const openNoteByTitle = (title: string) => {
+    const n = notes.find((x) => (x.title || '').trim().toLowerCase() === title.trim().toLowerCase())
+    if (n) setOpenNoteId(n.id)
   }
 
   const color = project.color || PROJECT_COLORS[0]
@@ -414,16 +426,32 @@ function ProjectView({
               )}
 
               {view === 'notes' && (
-                <div className="mx-auto max-w-2xl p-6 space-y-2">
-                  <button className="btn w-full text-sm" onClick={addNote}><Plus size={14} /> {t('workspace.addNote')}</button>
-                  {notes.length === 0 && <p className="py-6 text-center text-xs text-zinc-600">{t('workspace.noNotesHint')}</p>}
-                  {notes.map((note) => (
-                    <div key={note.id} className="rounded-lg border border-edge bg-raised p-3">
-                      <div className="text-sm font-medium text-zinc-200">{note.title || t('workspace.untitledNote')}</div>
-                      {note.content && <div className="mt-1 line-clamp-3 text-xs text-zinc-500">{note.content}</div>}
-                    </div>
-                  ))}
-                </div>
+                openNoteId && notes.some((n) => n.id === openNoteId) ? (
+                  <SharedDocView
+                    note={notes.find((n) => n.id === openNoteId)!}
+                    allNotes={notes}
+                    projectId={project.id}
+                    workspaceId={workspaceId}
+                    userId={userId}
+                    onBack={() => setOpenNoteId(null)}
+                    onOpenByTitle={openNoteByTitle}
+                  />
+                ) : (
+                  <div className="mx-auto max-w-2xl p-6 space-y-2">
+                    <button className="btn w-full text-sm" onClick={addNote}><Plus size={14} /> {t('workspace.addNote')}</button>
+                    {notes.length === 0 && <p className="py-6 text-center text-xs text-zinc-600">{t('workspace.noNotesHint')}</p>}
+                    {notes.map((note) => (
+                      <button
+                        key={note.id}
+                        onClick={() => setOpenNoteId(note.id)}
+                        className="block w-full rounded-lg border border-edge bg-raised p-3 text-left transition-colors hover:border-zinc-600"
+                      >
+                        <div className="text-sm font-medium text-zinc-200">{note.title || t('workspace.untitledNote')}</div>
+                        {note.content && <div className="mt-1 line-clamp-3 text-xs text-zinc-500">{note.content}</div>}
+                      </button>
+                    ))}
+                  </div>
+                )
               )}
             </>
           )}
@@ -433,6 +461,142 @@ function ProjectView({
           <TaskDetail task={openTask} members={members} userId={userId} workspaceId={workspaceId}
             onClose={() => setOpenTaskId(null)} onPatch={patchTask} onDelete={deleteTask} />
         )}
+      </div>
+    </div>
+  )
+}
+
+// ─── Shared document editor (team notes on the real PlainEditor) ─────────────
+// A team note rendered with the same editor as personal notes: [[wikilinks]] (scoped
+// to this project's shared notes), slash menu, autosave (debounced 700ms to Supabase),
+// and realtime adoption of remote edits while you're not actively typing.
+function SharedDocView({
+  note,
+  allNotes,
+  projectId,
+  workspaceId,
+  userId,
+  onBack,
+  onOpenByTitle,
+}: {
+  note: SharedNote
+  allNotes: SharedNote[]
+  projectId: string
+  workspaceId: string
+  userId: string
+  onBack: () => void
+  onOpenByTitle: (title: string) => void
+}) {
+  const { t } = useI18n()
+  const [title, setTitle] = useState(note.title)
+  const [content, setContent] = useState(note.content || '')
+  const latest = useRef({ title: note.title, content: note.content || '' })
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const editing = useRef(false)
+
+  useEffect(() => {
+    setTitle(note.title)
+    setContent(note.content || '')
+    latest.current = { title: note.title, content: note.content || '' }
+  }, [note.id])
+
+  const flush = useCallback(() => {
+    if (saveTimer.current) {
+      clearTimeout(saveTimer.current)
+      saveTimer.current = null
+    }
+    supabase
+      .from('shared_notes')
+      .update({ title: latest.current.title, content: latest.current.content, updated_at: new Date().toISOString() })
+      .eq('id', note.id)
+  }, [note.id])
+
+  const schedule = useCallback(() => {
+    if (saveTimer.current) clearTimeout(saveTimer.current)
+    saveTimer.current = setTimeout(flush, 700)
+  }, [flush])
+
+  // flush pending edits when the doc switches or unmounts
+  useEffect(() => () => flush(), [flush])
+
+  // realtime: adopt remote edits unless the user is actively editing this doc
+  useEffect(() => {
+    const ch = supabase
+      .channel(`shared_note:${note.id}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'shared_notes', filter: `id=eq.${note.id}` },
+        (payload) => {
+          if (editing.current) return
+          const row = payload.new as SharedNote
+          setTitle(row.title)
+          setContent(row.content || '')
+          latest.current = { title: row.title, content: row.content || '' }
+        }
+      )
+      .subscribe()
+    return () => {
+      supabase.removeChannel(ch)
+    }
+  }, [note.id])
+
+  const onTitle = (v: string) => {
+    setTitle(v)
+    latest.current = { ...latest.current, title: v }
+    schedule()
+  }
+  const onBody = (md: string) => {
+    setContent(md)
+    latest.current = { ...latest.current, content: md }
+    schedule()
+  }
+
+  // [[ ]] autocomplete over the OTHER shared notes in this project (id is just a list key)
+  const noteTitles = allNotes.filter((n) => n.id !== note.id && (n.title || '').trim()).map((n, i) => ({ id: i, title: n.title }))
+
+  const createLinked = async (linkTitle: string) => {
+    await supabase
+      .from('shared_notes')
+      .insert({ workspace_id: workspaceId, project_id: projectId, title: linkTitle, content: '', created_by: userId })
+    // the project's realtime subscription refetches the list; the [[link]] resolves on open
+  }
+
+  return (
+    <div
+      className="flex h-full min-w-0 flex-1 flex-col animate-fade-in"
+      onFocusCapture={() => {
+        editing.current = true
+      }}
+      onBlurCapture={() => {
+        editing.current = false
+        flush()
+      }}
+    >
+      <div className="flex items-center gap-2 border-b border-edge px-6 py-2.5">
+        <button onClick={() => { flush(); onBack() }} className="rounded-lg p-1 text-zinc-500 transition-colors hover:bg-raised hover:text-zinc-200">
+          <ArrowLeft size={16} />
+        </button>
+        <input
+          value={title}
+          onChange={(e) => onTitle(e.target.value)}
+          placeholder={t('workspace.untitledNote')}
+          className="min-w-0 flex-1 bg-transparent text-sm font-semibold text-white outline-none placeholder:text-zinc-600"
+        />
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="mx-auto max-w-2xl px-6 py-8">
+          <PlainEditor
+            key={note.id}
+            noteKey={note.id}
+            value={content}
+            onChange={onBody}
+            t={t}
+            placeholder={t('notes.bodyPlaceholder')}
+            noteTitles={noteTitles}
+            onOpenLink={onOpenByTitle}
+            onCreateLink={createLinked}
+          />
+        </div>
       </div>
     </div>
   )
@@ -482,12 +646,9 @@ function TaskDetail({ task, members, userId, workspaceId, onClose, onPatch, onDe
   useEffect(() => {
     supabase.from('shared_comments').select('*').eq('task_id', task.id).order('created_at')
       .then(({ data }) => setComments(data ?? []))
-    const ch = supabase.channel(`task:${task.id}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'shared_comments', filter: `task_id=eq.${task.id}` },
-        () => supabase.from('shared_comments').select('*').eq('task_id', task.id).order('created_at')
-          .then(({ data }) => setComments(data ?? [])))
-      .subscribe()
-    return () => { supabase.removeChannel(ch) }
+    return subscribe(`task:${task.id}`, 'shared_comments', `task_id=eq.${task.id}`, () =>
+      supabase.from('shared_comments').select('*').eq('task_id', task.id).order('created_at').then(({ data }) => setComments(data ?? []))
+    )
   }, [task.id])
 
   const cyclePriority = () => {

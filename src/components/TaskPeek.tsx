@@ -1,14 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Bell, CalendarDays, ChevronDown, ChevronRight, Clock, Copy, Flag, FolderKanban, ImagePlus, Trash2, X } from 'lucide-react'
+import { Bell, CalendarDays, ChevronDown, ChevronRight, Clock, Copy, Flag, FileText, FolderKanban, Frame, Hash, ImagePlus, ListTodo, PenLine, Plus, Search, Trash2, X } from 'lucide-react'
 import DatePicker from './ui/DatePicker'
 import TimeSelect from './ui/TimeSelect'
+import Relations from './Relations'
+import PropertyEditor from './PropertyEditor'
+import TypePicker, { mergeTypeFields } from './TypePicker'
 import { LinkField } from './TaskDetailModal'
 import { formatRelative } from '../utils/formatters'
 import { physKey } from '../lib/keyboard'
 import { toast } from '../store/toastStore'
-import { type Task, type TaskAttachment, type TaskComment, type TaskPriority, type TaskStatus } from '../types/models'
-import { useI18n, DATE_LOCALE } from '../i18n'
+import { type NodeRef, type NodeType, type PropField, type RelatedEdge, type ResolvedNode, type Task, type TaskAttachment, type TaskComment, type TaskPriority, type TaskStatus } from '../types/models'
+import { useI18n, type TKey, DATE_LOCALE } from '../i18n'
 
 type LinkOption = { id: number; name: string }
 const PRIORITIES: TaskPriority[] = ['none', 'low', 'high']
@@ -80,14 +83,16 @@ function PillSelect<T extends string>({
 /** A property row: muted icon+label (fixed width) on the left, the control on the right. */
 function Prop({ icon: Icon, label, children }: { icon: typeof Clock; label: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-start gap-3.5 py-1.5 text-[13.5px]">
-      <span className="flex w-[120px] shrink-0 items-center gap-2 pt-1 text-zinc-500">
+    <div className="flex items-start gap-3 py-1 text-[13.5px]">
+      <span className="flex w-[104px] shrink-0 items-center gap-2 pt-1 text-zinc-500">
         <Icon size={15} className="shrink-0" /> {label}
       </span>
       <div className="min-w-0 flex-1">{children}</div>
     </div>
   )
 }
+
+// NodeChip + the "Связи" relations panel now live in ./Relations (shared with Notes).
 
 /**
  * The Notion "peek" detail — the right column of the tasks card. Срок + Статус are
@@ -106,10 +111,10 @@ export default function TaskPeek({ task, onClose, onChanged }: { task: Task; onC
   const [remindDate, setRemindDate] = useState(task.remind_at ? task.remind_at.slice(0, 10) : '')
   const [remindTime, setRemindTime] = useState(task.remind_at ? task.remind_at.slice(11, 16) : '')
   const [projectId, setProjectId] = useState(task.project_id)
-  const [projects, setProjects] = useState<LinkOption[]>([])
-  const [more, setMore] = useState(
-    task.priority !== 'none' || !!task.remind_at || task.project_id != null
-  )
+  const [projects, setProjects] = useState<Array<LinkOption & { color: string | null }>>([])
+  // "more" now gates only the bulky Напоминание block — Срок/Статус/Приоритет/Проект
+  // are always visible (compact rows), so a task reads at a glance
+  const [more, setMore] = useState(!!task.remind_at)
   const [comments, setComments] = useState<TaskComment[]>([])
   const [attachments, setAttachments] = useState<TaskAttachment[]>([])
   const [dragOver, setDragOver] = useState(false)
@@ -139,16 +144,42 @@ export default function TaskPeek({ task, onClose, onChanged }: { task: Task; onC
   const loadComments = () => window.wist.tasks.comments(task.id).then(setComments).catch(() => setComments([]))
   const loadAttachments = () => window.wist.tasks.attachments(task.id).then(setAttachments).catch(() => setAttachments([]))
   useEffect(() => {
-    window.wist.projects.list().then((ps) => setProjects(ps.map((p) => ({ id: p.id, name: p.name })))).catch(() => undefined)
+    window.wist.projects.list().then((ps) => setProjects(ps.map((p) => ({ id: p.id, name: p.name, color: p.color })))).catch(() => undefined)
     loadComments()
     loadAttachments()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [task.id])
 
   const projectName = projects.find((p) => p.id === projectId)?.name ?? (projectId === task.project_id ? task.project_name ?? null : null)
+  const projectColor = projects.find((p) => p.id === projectId)?.color ?? null
 
   const savedTitle = useRef(task.title)
   const savedNote = useRef(task.note ?? '')
+
+  // Re-sync display state when the open task is updated elsewhere (same id, fresh object —
+  // the dock keys by id, so it doesn't remount). Property fields (status/priority/due/
+  // reminder/project) are set via pickers, so adopting them can't clobber typing. Title &
+  // note are free-text: only adopt the external value when that field isn't focused.
+  useEffect(() => {
+    setStatus(task.status)
+    setPriority(task.priority)
+    setDue(task.due_date ?? '')
+    setRemindDate(task.remind_at ? task.remind_at.slice(0, 10) : '')
+    setRemindTime(task.remind_at ? task.remind_at.slice(11, 16) : '')
+    setProjectId(task.project_id)
+    if (document.activeElement !== titleRef.current) {
+      setTitle(task.title)
+      savedTitle.current = task.title
+    }
+    if (document.activeElement !== noteRef.current) {
+      setNote(task.note ?? '')
+      savedNote.current = task.note ?? ''
+    }
+    // adopt external property changes only when no property field is focused
+    if (!propsBoxRef.current?.contains(document.activeElement)) setPropFields(task.props?.fields ?? [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [task.status, task.priority, task.due_date, task.remind_at, task.project_id, task.title, task.note, task.props])
+
   const patch = async (p: Partial<Task>) => {
     await window.wist.tasks.update(task.id, p)
     onChanged()
@@ -166,6 +197,30 @@ export default function TaskPeek({ task, onClose, onChanged }: { task: Task; onC
       patch({ note: note.trim() || null })
     }
   }
+
+  // typed user properties (Capacities-style): local state for snappy edits, debounced
+  // save, flushed on unmount so a quick close can't drop a pending edit
+  const [propFields, setPropFields] = useState<PropField[]>(task.props?.fields ?? [])
+  const propsBoxRef = useRef<HTMLDivElement>(null)
+  const propsTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const propsDirty = useRef(false)
+  const fieldsRef = useRef(propFields)
+  fieldsRef.current = propFields
+  const flushProps = () => {
+    if (!propsDirty.current) return
+    propsDirty.current = false
+    patch({ props: { ...(task.props ?? {}), fields: fieldsRef.current } })
+  }
+  const onPropsChange = (fields: PropField[]) => {
+    setPropFields(fields)
+    propsDirty.current = true
+    if (propsTimer.current) clearTimeout(propsTimer.current)
+    propsTimer.current = setTimeout(flushProps, 500)
+  }
+  // flush a pending property edit if the panel unmounts before the debounce fires
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => () => { if (propsTimer.current) clearTimeout(propsTimer.current); flushProps() }, [])
+
   const remove = async () => {
     await window.wist.tasks.remove(task.id)
     onChanged()
@@ -328,7 +383,7 @@ export default function TaskPeek({ task, onClose, onChanged }: { task: Task; onC
       />
 
       <Prop icon={CalendarDays} label={t('tasks.dueLabel')}>
-        <DatePicker withTime value={due} onChange={(v) => { setDue(v); patch({ due_date: v || null }) }} placeholder={t('tasks.noDue')} />
+        <DatePicker variant="inline" withTime value={due} onChange={(v) => { setDue(v); patch({ due_date: v || null }) }} placeholder={t('tasks.noDue')} />
       </Prop>
       <Prop icon={Clock} label={t('tasks.statusLabel')}>
         <PillSelect
@@ -339,22 +394,36 @@ export default function TaskPeek({ task, onClose, onChanged }: { task: Task; onC
           onChange={(s) => { setStatus(s); patch({ status: s }) }}
         />
       </Prop>
+      <Prop icon={Flag} label={t('tasks.priority')}>
+        <PillSelect
+          value={priority}
+          options={PRIORITIES}
+          hue={(p) => PRIORITY_HUE[p]}
+          label={(p) => t(`tasks.prio.${p}` as 'tasks.prio.none')}
+          onChange={(p) => { setPriority(p); patch({ priority: p }) }}
+        />
+      </Prop>
+      <Prop icon={FolderKanban} label={t('tasks.project')}>
+        <LinkField
+          bare
+          dotColor={projectColor}
+          icon={FolderKanban}
+          placeholder={t('tasks.linkProjectAdd')}
+          currentName={projectName}
+          options={projects}
+          onSelect={(id) => { setProjectId(id); patch({ project_id: id }) }}
+          onClear={() => { setProjectId(null); patch({ project_id: null }) }}
+          onOpen={() => { if (projectId) { navigate(`/project/${projectId}`); onClose() } }}
+          searchPh={t('tasks.searchProject')}
+        />
+      </Prop>
 
       {!more ? (
-        <button onClick={() => setMore(true)} className="mt-2.5 inline-flex items-center gap-1.5 text-[13px] text-zinc-500 transition-colors hover:text-zinc-300">
+        <button onClick={() => setMore(true)} className="ml-[2px] mt-1.5 inline-flex items-center gap-1.5 text-[13px] text-zinc-500 transition-colors hover:text-zinc-300">
           <ChevronRight size={14} /> {t('tasks.moreProps')}
         </button>
       ) : (
         <>
-          <Prop icon={Flag} label={t('tasks.priority')}>
-            <PillSelect
-              value={priority}
-              options={PRIORITIES}
-              hue={(p) => PRIORITY_HUE[p]}
-              label={(p) => t(`tasks.prio.${p}` as 'tasks.prio.none')}
-              onChange={(p) => { setPriority(p); patch({ priority: p }) }}
-            />
-          </Prop>
           <Prop icon={Bell} label={t('tasks.reminder')}>
             <div className="mb-1.5 flex flex-wrap gap-1.5">
               {([['hour', t('tasks.remindIn1h')], ['evening', t('tasks.remindThisEve')], ['tomorrow', t('tasks.remindTomorrow')]] as const).map(([k, label]) => (
@@ -376,25 +445,29 @@ export default function TaskPeek({ task, onClose, onChanged }: { task: Task; onC
               </p>
             )}
           </Prop>
-          <Prop icon={FolderKanban} label={t('tasks.links')}>
-            <div className="space-y-2">
-              <LinkField
-                icon={FolderKanban}
-                placeholder={t('tasks.linkProjectAdd')}
-                currentName={projectName}
-                options={projects}
-                onSelect={(id) => { setProjectId(id); patch({ project_id: id }) }}
-                onClear={() => { setProjectId(null); patch({ project_id: null }) }}
-                onOpen={() => { if (projectId) { navigate(`/project/${projectId}`); onClose() } }}
-                searchPh={t('tasks.searchProject')}
-              />
-            </div>
-          </Prop>
-          <button onClick={() => setMore(false)} className="mt-1 inline-flex items-center gap-1.5 text-[13px] text-zinc-500 transition-colors hover:text-zinc-300">
+          <button onClick={() => setMore(false)} className="ml-[2px] mt-1 inline-flex items-center gap-1.5 text-[13px] text-zinc-500 transition-colors hover:text-zinc-300">
             <ChevronDown size={14} /> {t('tasks.lessProps')}
           </button>
         </>
       )}
+
+      {/* typed user properties (Capacities-style) */}
+      <div ref={propsBoxRef} className="mt-1">
+        <div className="mb-1">
+          <TypePicker
+            typeId={task.props?.type}
+            onPick={(tp) => {
+              const merged = tp ? mergeTypeFields(fieldsRef.current, tp) : fieldsRef.current
+              setPropFields(merged)
+              patch({ props: { ...(task.props ?? {}), type: tp ? tp.id : undefined, fields: merged } })
+            }}
+          />
+        </div>
+        <PropertyEditor fields={propFields} onChange={onPropsChange} />
+      </div>
+
+      {/* связи — the universal relations layer surfaced on the task */}
+      <Relations focus={{ type: 'task', id: task.id }} />
 
       {/* description — borderless & auto-growing, so it writes clean (no box / highlight)
           like the note editor and the panel grows to fit a long description */}

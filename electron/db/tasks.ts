@@ -1,15 +1,7 @@
 import { db, now } from './database'
+import * as edges from './edges'
+import { safeParse, safeParseObject, stringifyProps } from './_row'
 import type { Task, TaskComment, TaskAttachment } from '../../src/types/models'
-
-function safeParse(v: unknown): string[] {
-  if (typeof v !== 'string') return []
-  try {
-    const parsed = JSON.parse(v)
-    return Array.isArray(parsed) ? parsed.filter((x) => typeof x === 'string') : []
-  } catch {
-    return []
-  }
-}
 
 const STATUSES = ['todo', 'doing', 'done'] as const
 type TaskStatus = (typeof STATUSES)[number]
@@ -24,6 +16,7 @@ const validPriority = (p: unknown): p is (typeof PRIORITIES)[number] =>
 const rowToTask = (row: any): Task => ({
   ...row,
   tags: safeParse(row.tags),
+  props: safeParseObject(row.props),
   status: validStatus(row.status) ? row.status : row.done ? 'done' : 'todo',
   priority: validPriority(row.priority) ? row.priority : 'none',
 })
@@ -33,7 +26,9 @@ const SELECT = `SELECT t.*, p.name AS project_name
   LEFT JOIN projects p ON p.id = t.project_id`
 
 export function listTasks(filters: { done?: boolean; projectId?: number } = {}): Task[] {
-  const where: string[] = ['t.deleted_at IS NULL']
+  // hide tasks whose hub is in the Trash — a soft-deleted project shouldn't leave its
+  // tasks floating in the global list with a "deleted" hub name (they return on restore)
+  const where: string[] = ['t.deleted_at IS NULL', '(t.project_id IS NULL OR p.deleted_at IS NULL)']
   const params: any[] = []
   if (filters.done !== undefined) {
     where.push('t.done = ?')
@@ -71,7 +66,7 @@ export function createTask(data: Partial<Task>): Task {
   const done = status === 'done' ? 1 : 0
   const info = db()
     .prepare(
-      'INSERT INTO tasks (title, note, priority, due_date, remind_at, tags, project_id, source, status, done, completed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+      'INSERT INTO tasks (title, note, priority, due_date, remind_at, tags, project_id, source, status, done, completed_at, props) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     )
     .run(
       (data.title ?? '').trim() || 'Untitled',
@@ -84,9 +79,12 @@ export function createTask(data: Partial<Task>): Task {
       typeof data.source === 'string' && data.source ? data.source.slice(0, 64) : 'user',
       status,
       done,
-      done ? now() : null
+      done ? now() : null,
+      stringifyProps(data.props)
     )
-  return getTask(Number(info.lastInsertRowid))!
+  const id = Number(info.lastInsertRowid)
+  edges.setContainer({ type: 'task', id }, data.project_id ?? null)
+  return getTask(id)!
 }
 
 export function updateTask(id: number, patch: Partial<Task>): Task {
@@ -113,6 +111,10 @@ export function updateTask(id: number, patch: Partial<Task>): Task {
   if (patch.tags !== undefined) {
     sets.push('tags = ?')
     values.push(JSON.stringify(Array.isArray(patch.tags) ? patch.tags : []))
+  }
+  if (patch.props !== undefined) {
+    sets.push('props = ?')
+    values.push(stringifyProps(patch.props))
   }
   // status drives done; a legacy `done` patch drives status. Keep all three coherent
   // so the kanban, the list checkbox, Home and the agent API never disagree.
@@ -141,6 +143,8 @@ export function updateTask(id: number, patch: Partial<Task>): Task {
     // scope to live rows so a late/stale write can't resurrect a trashed task
     db().prepare(`UPDATE tasks SET ${sets.join(', ')} WHERE id = ? AND deleted_at IS NULL`).run(...values)
   }
+  // keep the containment edge in lockstep with the project_id column
+  if (patch.project_id !== undefined) edges.setContainer({ type: 'task', id }, patch.project_id ?? null)
   return getTask(id)!
 }
 
@@ -187,33 +191,16 @@ export function removeComment(id: number): void {
 }
 
 // ---- task attachments (images/files in the detail peek) ----
-// Created lazily (IF NOT EXISTS) instead of via a numbered migration so it can't
-// collide with migrations being added in parallel sessions.
-let _attReady = false
-function ensureAttachments(): void {
-  if (_attReady) return
-  db().exec(`
-    CREATE TABLE IF NOT EXISTS task_attachments (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
-      path TEXT NOT NULL,
-      name TEXT NOT NULL DEFAULT '',
-      created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
-    );
-    CREATE INDEX IF NOT EXISTS idx_task_attachments_task ON task_attachments(task_id);
-  `)
-  _attReady = true
-}
+// The table + index are created by migration 026, so it's guaranteed present after
+// openDatabase() — no lazy CREATE needed.
 
 export function listAttachments(taskId: number): TaskAttachment[] {
-  ensureAttachments()
   return db()
     .prepare('SELECT * FROM task_attachments WHERE task_id = ? ORDER BY created_at ASC, id ASC')
     .all(taskId) as TaskAttachment[]
 }
 
 export function addAttachment(taskId: number, filePath: string, name: string): TaskAttachment {
-  ensureAttachments()
   const info = db()
     .prepare('INSERT INTO task_attachments (task_id, path, name) VALUES (?, ?, ?)')
     .run(taskId, filePath, (name ?? '').trim())
@@ -221,6 +208,5 @@ export function addAttachment(taskId: number, filePath: string, name: string): T
 }
 
 export function removeAttachment(id: number): void {
-  ensureAttachments()
   db().prepare('DELETE FROM task_attachments WHERE id = ?').run(id)
 }

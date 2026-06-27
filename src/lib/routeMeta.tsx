@@ -1,6 +1,7 @@
 import {
   Archive,
   BarChart3,
+  CalendarDays,
   FileText,
   FolderKanban,
   Frame,
@@ -22,6 +23,7 @@ import type { TKey } from '../i18n'
 const STATIC: Record<string, [LucideIcon, TKey]> = {
   '/': [Home, 'nav.home'],
   '/favorites': [Heart, 'nav.favorites'],
+  '/calendar': [CalendarDays, 'nav.calendar'],
   '/notes': [PenLine, 'nav.notes'],
   '/tasks': [ListTodo, 'nav.tasks'],
   '/vault': [Archive, 'nav.vault'],

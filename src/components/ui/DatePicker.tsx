@@ -33,7 +33,7 @@ export default function DatePicker({
   value: string
   onChange: (v: string) => void
   placeholder?: string
-  variant?: 'field' | 'icon'
+  variant?: 'field' | 'icon' | 'inline'
   title?: string
   withTime?: boolean
 }) {
@@ -112,7 +112,31 @@ export default function DatePicker({
 
   return (
     <>
-      {variant === 'icon' ? (
+      {variant === 'inline' ? (
+        // quiet inline control — no field box, just text that highlights on hover
+        // (used in the task peek so a property reads as a line, not an empty form box)
+        <button
+          ref={btnRef}
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          className="group/dp flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left transition-colors hover:bg-highlight"
+        >
+          <span className={`min-w-0 flex-1 truncate ${display ? 'text-zinc-200' : 'text-zinc-500'}`}>{display || placeholder || ''}</span>
+          {display && (
+            <span
+              role="button"
+              tabIndex={-1}
+              onClick={(e) => {
+                e.stopPropagation()
+                onChange('')
+              }}
+              className="shrink-0 rounded p-0.5 text-zinc-600 opacity-0 transition-all hover:text-danger group-hover/dp:opacity-100"
+            >
+              <X size={13} />
+            </span>
+          )}
+        </button>
+      ) : variant === 'icon' ? (
         <button
           ref={btnRef}
           type="button"

@@ -31,6 +31,15 @@ export interface GraphNode {
   label: string
   sub: string | null
   route: string
+  /** Hint: start the node near this world-space coordinate (optional). */
+  initialX?: number
+  initialY?: number
+  /** If true, render dimmed + smaller (asteroid belt orphan). */
+  orphan?: boolean
+  /** Capacities soft bg color (--obj-*-soft) for the node chip background. */
+  colorSoft?: string
+  /** Structural anchor (root / kind hub) — rendered larger, fixed radius. */
+  hub?: boolean
 }
 export interface GraphEdge {
   a: number
@@ -58,10 +67,10 @@ export const GRAPH_DEFAULTS: GraphView = {
   arrows: false,
   nodeScale: 1,
   linkWidth: 1,
-  linkDistance: 85,
-  repel: 120,
-  linkForce: 0.18,
-  centerForce: 0.08,
+  linkDistance: 120,
+  repel: 230,
+  linkForce: 0.16,
+  centerForce: 0.05,
   labelFade: 1,
   linkColor: '',
 }
@@ -89,7 +98,9 @@ export interface GraphHandle {
 interface SimNode {
   id: string
   deg: number
+  baseR: number // resolved render radius (hub-aware), computed once per build
   color: string
+  colorSoft: string // (unused for dot rendering; kept for API compatibility)
   node: GraphNode
   x: number
   y: number
@@ -97,6 +108,8 @@ interface SimNode {
   vy: number
   fx?: number | null
   fy?: number | null
+  driftA: number // wander angle — gives the graph perpetual gentle motion
+  driftSpeed: number
 }
 interface SimLink {
   source: SimNode
@@ -149,9 +162,69 @@ const clamp01 = (n: number) => (n < 0 ? 0 : n > 1 ? 1 : n)
 const easeOut = (t: number) => 1 - (1 - t) * (1 - t)
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t
 
-// node radius from degree — hubs bigger, leaves smaller (Obsidian's heuristic)
-const radiusFor = (deg: number) => Math.min(18, 4.5 + Math.sqrt(deg) * 2.8)
+// Exact Capacities icons — polyline/line/rect converted to M..L.. path strings.
+const ICON_P2D: Record<string, Path2D[]> = {
+  note: [   // blue: FileText
+    new Path2D('M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z'),
+    new Path2D('M14 2L14 8L20 8'),
+  ],
+  task: [   // orange: CheckSquare
+    new Path2D('M9 11L12 14L22 4'),
+    new Path2D('M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11'),
+  ],
+  project: [  // indigo: Folder
+    new Path2D('M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z'),
+  ],
+  canvas: [   // purple: MessageSquare / idea
+    new Path2D('M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'),
+  ],
+  vault: [    // slate: Archive
+    new Path2D('M21 8L21 21L3 21L3 8'),
+    new Path2D('M1 3H23V8H1Z'),
+    new Path2D('M10 12L14 12'),
+  ],
+  file: [     // slate: Archive (same)
+    new Path2D('M21 8L21 21L3 21L3 8'),
+    new Path2D('M1 3H23V8H1Z'),
+    new Path2D('M10 12L14 12'),
+  ],
+  folder: [   // indigo: Folder (same as project)
+    new Path2D('M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z'),
+  ],
+  root: [     // indigo: LayoutGrid — workspace anchor
+    new Path2D('M3 3H10V10H3Z'),
+    new Path2D('M14 3H21V10H14Z'),
+    new Path2D('M14 14H21V21H14Z'),
+    new Path2D('M3 14H10V21H3Z'),
+  ],
+}
+// Rounded rect helper (avoids TS issues with ctx.roundRect in older type defs)
+function rrect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+  ctx.beginPath()
+  ctx.moveTo(x + r, y)
+  ctx.lineTo(x + w - r, y)
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r)
+  ctx.lineTo(x + w, y + h - r)
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h)
+  ctx.lineTo(x + r, y + h)
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r)
+  ctx.lineTo(x, y + r)
+  ctx.quadraticCurveTo(x, y, x + r, y)
+  ctx.closePath()
+}
+
+// Obsidian-style dots — small, grow gently with connections; hubs a touch bigger
+const radiusFor = (deg: number) => Math.max(4.5, Math.min(11, 4 + Math.sqrt(deg) * 1.3))
+const resolveRadius = (n: SimNode): number =>
+  n.node.hub ? (n.node.kind === 'root' ? 13 : 10) : radiusFor(n.deg)
 const isHubKind = (k: string) => k === 'root' || k === 'group'
+// gentle pop-in easing (slight overshoot) for the entrance animation
+const easeOutBack = (t: number) => {
+  if (t <= 0) return 0
+  if (t >= 1) return 1
+  const c1 = 1.12, c3 = c1 + 1
+  return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2)
+}
 
 function matchGroup(query: string, node: GraphNode): boolean {
   const q = query.trim().toLowerCase()
@@ -199,6 +272,9 @@ const GraphCanvasImpl = forwardRef<GraphHandle, Props>(function GraphCanvas(
     userMoved: false, // suppress auto-fit after the user pans/zooms
     pos: new Map<string, { x: number; y: number }>(),
     labelOp: new Map<string, number>(), // smoothed per-node label opacity
+    pulseNodes: new Map<string, number>(),  // nodeId → animation start ms
+    hoverScales: new Map<string, number>(), // nodeId → current scale (lerped)
+    births: new Map<string, number>(),      // nodeId → entrance delay ms (staggered)
   })
 
   eng.current.view = view
@@ -248,7 +324,8 @@ const GraphCanvasImpl = forwardRef<GraphHandle, Props>(function GraphCanvas(
     }
     const w = cv.clientWidth, h = cv.clientHeight
     const spanX = Math.max(1, maxX - minX), spanY = Math.max(1, maxY - minY)
-    const k = Math.min(w / (spanX + 140), h / (spanY + 140), 1.6)
+    // cap zoom-in low so sparse graphs stay zoomed-out (small chips + room for labels)
+    const k = Math.min(w / (spanX + 220), h / (spanY + 220), 1.0)
     e.camT.k = k
     e.camT.x = -((minX + maxX) / 2) * k
     e.camT.y = -((minY + maxY) / 2) * k
@@ -267,12 +344,16 @@ const GraphCanvasImpl = forwardRef<GraphHandle, Props>(function GraphCanvas(
       return {
         id: node.id,
         deg: 0,
+        baseR: 16,
         color: resolveColor(node, e.groups, colorOf),
+        colorSoft: node.colorSoft ?? '',
         node,
-        x: prev?.x ?? (Math.random() - 0.5) * 240,
-        y: prev?.y ?? (Math.random() - 0.5) * 240,
+        x: prev?.x ?? node.initialX ?? (Math.random() - 0.5) * 240,
+        y: prev?.y ?? node.initialY ?? (Math.random() - 0.5) * 240,
         vx: 0,
         vy: 0,
+        driftA: Math.random() * Math.PI * 2,
+        driftSpeed: 0.01 + Math.random() * 0.015,
       }
     })
     const byId = new Map(nodes.map((n) => [n.id, n]))
@@ -289,18 +370,21 @@ const GraphCanvasImpl = forwardRef<GraphHandle, Props>(function GraphCanvas(
       adj.get(s.id)!.add(tg.id)
       adj.get(tg.id)!.add(s.id)
     }
+    // resolve render radius now that degrees are known (used by collide + draw)
+    for (const n of nodes) n.baseR = resolveRadius(n)
 
     const v = e.view
     const sim = forceSimulation<SimNode, SimLink>(nodes)
-      .force('charge', forceManyBody<SimNode>().strength(-v.repel).distanceMin(12).distanceMax(480))
-      .force('link', forceLink<SimNode, SimLink>(links).distance(v.linkDistance).strength(v.linkForce))
-      .force('collide', forceCollide<SimNode>((d) => radiusFor(d.deg) * v.nodeScale + 4))
+      .force('charge', forceManyBody<SimNode>().strength((d) => -v.repel * (d.node.hub ? 2.4 : 1)).distanceMin(12).distanceMax(520))
+      .force('link', forceLink<SimNode, SimLink>(links).distance((l) => (l.source.node.hub || l.target.node.hub ? v.linkDistance * 1.5 : v.linkDistance)).strength(v.linkForce))
+      .force('collide', forceCollide<SimNode>((d) => d.baseR * v.nodeScale + 18).strength(1))
       .force('center', forceCenter(0, 0).strength(0.6))
       .force('x', forceX(0).strength(v.centerForce))
       .force('y', forceY(0).strength(v.centerForce))
-      .alpha(e.pos.size ? 0.25 : 1)
+      .alpha(e.pos.size ? 0.4 : 1)
       .alphaDecay(0.0228)
-      .velocityDecay(0.4)
+      .alphaTarget(0.025) // never fully cools — keeps the graph alive (no stagnation)
+      .velocityDecay(0.62) // strong damping → slow, smooth drift (not jittery)
       .stop()
 
     e.sim = sim
@@ -311,6 +395,12 @@ const GraphCanvasImpl = forwardRef<GraphHandle, Props>(function GraphCanvas(
     e.born = typeof performance !== 'undefined' ? performance.now() : Date.now()
     e.fitDone = false
     e.userMoved = false
+    // staggered entrance — root first, hubs next, leaves last (+ small scatter)
+    e.births.clear()
+    nodes.forEach((n, i) => {
+      const depth = n.node.kind === 'root' ? 0 : n.node.hub ? 1 : 2
+      e.births.set(n.id, depth * 85 + ((i * 23) % 130))
+    })
     if (e.pinned && !byId.has(e.pinned)) e.pinned = null
     for (const id of [...e.labelOp.keys()]) if (!byId.has(id)) e.labelOp.delete(id)
 
@@ -336,9 +426,23 @@ const GraphCanvasImpl = forwardRef<GraphHandle, Props>(function GraphCanvas(
       const W = cv.clientWidth, H = cv.clientHeight
       const darkBg = isDarkHex(pal.bg)
       const gAppear = easeOut(clamp01((e.clock - e.born) / FADE_IN))
+      // per-node entrance progress (0→1) with staggered birth delays
+      const GROW = 360
+      const apOf = (id: string) => clamp01((e.clock - e.born - (e.births.get(id) ?? 0)) / GROW)
       ctx.setTransform(e.dpr, 0, 0, e.dpr, 0, 0)
       ctx.fillStyle = pal.bg
       ctx.fillRect(0, 0, W, H) // solid ground — no vignette
+      // Dot grid — scrolls with pan (Capacities-style background texture)
+      {
+        const GRID = 26
+        const ox = ((W / 2 + cam.x) % GRID + GRID) % GRID
+        const oy = ((H / 2 + cam.y) % GRID + GRID) % GRID
+        ctx.fillStyle = darkBg ? 'rgba(255,255,255,0.048)' : 'rgba(0,0,0,0.06)'
+        for (let gx = ox - GRID; gx < W + 1; gx += GRID)
+          for (let gy = oy - GRID; gy < H + 1; gy += GRID) {
+            ctx.beginPath(); ctx.arc(gx, gy, 0.85, 0, Math.PI * 2); ctx.fill()
+          }
+      }
       ctx.globalAlpha = gAppear
       ctx.translate(W / 2 + cam.x, H / 2 + cam.y)
       ctx.scale(cam.k, cam.k)
@@ -348,104 +452,170 @@ const GraphCanvasImpl = forwardRef<GraphHandle, Props>(function GraphCanvas(
       const linkCol = e.view.linkColor || pal.edge
       const boost = pal.linkBoost ?? 1
 
-      // ---- edges: straight lines, low opacity (focused node's links glow accent) ----
+      // ---- edges: thin lines trimmed to chip edges; draw-in on entrance; accent on focus ----
       ctx.lineCap = 'round'
       for (const l of e.links) {
         const s = l.source, tg = l.target
+        const eap = Math.min(apOf(s.id), apOf(tg.id)) // entrance: appear once both ends are in
+        if (eap <= 0.01) continue
         const touches = focus && (s.id === focus || tg.id === focus)
         const dim = focus && !touches
-        const a = touches ? 0.85 : Math.min(0.9, (dim ? 0.04 : l.weak ? 0.12 : 0.2) * boost)
-        ctx.strokeStyle = touches ? hexA(acc, 0.85) : hexA(linkCol, a)
-        ctx.lineWidth = (touches ? 1.8 : l.weak ? 0.7 : 1) * e.view.linkWidth
+        const a = (touches ? 0.9 : dim ? 0.04 : Math.min(0.55, (l.weak ? 0.14 : 0.27) * boost)) * eap
+        // trim endpoints to each node's chip edge so lines kiss the squares, not overlap them
+        const dx = tg.x - s.x, dy = tg.y - s.y
+        const len = Math.hypot(dx, dy) || 1
+        const ux = dx / len, uy = dy / len
+        const sr = (s.baseR * e.view.nodeScale + 2)
+        const tr = (tg.baseR * e.view.nodeScale + 2)
+        if (len <= sr + tr) continue // nodes overlap — skip the line
+        const sx = s.x + ux * sr, sy = s.y + uy * sr
+        const fx = tg.x - ux * tr, fy = tg.y - uy * tr
+        // grow the line from the source toward the target during the entrance
+        const ex = sx + (fx - sx) * eap, ey = sy + (fy - sy) * eap
+        ctx.strokeStyle = touches ? hexA(acc, a) : hexA(linkCol, a)
+        ctx.lineWidth = (touches ? 1.5 : l.weak ? 0.55 : 0.9) * e.view.linkWidth
         ctx.beginPath()
-        ctx.moveTo(s.x, s.y)
-        ctx.lineTo(tg.x, tg.y)
+        ctx.moveTo(sx, sy)
+        ctx.lineTo(ex, ey)
         ctx.stroke()
-        if (e.view.arrows && !dim) {
-          const tr = radiusFor(tg.deg) * e.view.nodeScale + 2
-          const ang = Math.atan2(tg.y - s.y, tg.x - s.x)
-          const ax = tg.x - Math.cos(ang) * tr
-          const ay = tg.y - Math.sin(ang) * tr
-          const hh = 5
-          ctx.fillStyle = ctx.strokeStyle
-          ctx.beginPath()
-          ctx.moveTo(ax, ay)
-          ctx.lineTo(ax - Math.cos(ang - 0.42) * hh, ay - Math.sin(ang - 0.42) * hh)
-          ctx.lineTo(ax - Math.cos(ang + 0.42) * hh, ay - Math.sin(ang + 0.42) * hh)
-          ctx.closePath()
-          ctx.fill()
-        }
       }
 
-      // ---- nodes: flat fills; hubs get a thin rim + soft halo; focus gets accent ring ----
+      // ---- pulse rings (click feedback, drawn in world space before nodes) ----
+      for (const [pid, startT] of [...e.pulseNodes.entries()]) {
+        const progress = Math.min(1, (e.clock - startT) / 700)
+        if (progress >= 1) { e.pulseNodes.delete(pid); continue }
+        const pn = e.byId.get(pid)
+        if (!pn) { e.pulseNodes.delete(pid); continue }
+        const pr = pn.baseR * e.view.nodeScale * (pn.node.orphan ? 0.65 : 1)
+        const pulseR = pr * 1.4 + progress * 28
+        ctx.globalAlpha = gAppear * (1 - progress) * 0.55
+        ctx.beginPath()
+        ctx.arc(pn.x, pn.y, pulseR, 0, Math.PI * 2)
+        ctx.strokeStyle = hexA(acc, 1)
+        ctx.lineWidth = 2.5 / cam.k
+        ctx.stroke()
+      }
+
+      // ---- nodes: Obsidian-style bright dots with a soft glow ----
       for (const n of e.nodes) {
         const lit = isLit(n.id)
-        ctx.globalAlpha = gAppear * (focus ? (lit ? 1 : 0.12) : 1)
-        const hub = isHubKind(n.node.kind)
-        let r = radiusFor(n.deg) * e.view.nodeScale
-        if (n.id === focus) r *= 1.3
-        if ((hub || n.id === focus) && lit) {
-          ctx.beginPath()
-          ctx.arc(n.x, n.y, r + 3.5, 0, Math.PI * 2)
-          ctx.fillStyle = hexA(n.id === focus ? acc : n.color, 0.16)
-          ctx.fill()
+        const focusedThis = n.id === focus
+        const ap = apOf(n.id)
+        if (ap <= 0.001) continue
+        const apScale = easeOutBack(ap) // pop-in scale
+
+        // smooth hover scale (dot swells a touch on hover)
+        const hsTarget = focusedThis ? 1.4 : 1.0
+        const hsCur = e.hoverScales.get(n.id) ?? 1.0
+        const hsNext = lerp(hsCur, hsTarget, 0.18)
+        if (Math.abs(hsNext - 1.0) < 0.003 && !focusedThis) e.hoverScales.delete(n.id)
+        else e.hoverScales.set(n.id, hsNext)
+
+        const r = n.baseR * e.view.nodeScale * (n.node.orphan ? 0.7 : 1) * hsNext * apScale
+        const nodeAlpha = (focus ? (lit ? 1 : 0.1) : 1) * ap
+        const col = focusedThis ? acc : n.color
+
+        // soft glow (dark bg, lit nodes) so the bright dots feel alive
+        ctx.globalAlpha = nodeAlpha
+        if (darkBg && lit) {
+          ctx.shadowColor = col
+          ctx.shadowBlur = (focusedThis ? r * 2.4 : focus ? r * 1.6 : r * 1.1)
         }
         ctx.beginPath()
         ctx.arc(n.x, n.y, r, 0, Math.PI * 2)
-        ctx.fillStyle = n.color
+        ctx.fillStyle = col
         ctx.fill()
-        if (n.id === focus) {
-          ctx.lineWidth = 2.5 / cam.k
-          ctx.strokeStyle = hexA(acc, 0.9)
+        ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0
+
+        // hub nodes (root / sections) get a thin halo ring so the structure reads at a glance
+        if (n.node.hub && !focusedThis) {
+          ctx.globalAlpha = nodeAlpha * 0.45
+          ctx.lineWidth = 1.2 / cam.k
+          ctx.strokeStyle = col
+          ctx.beginPath()
+          ctx.arc(n.x, n.y, r + 3.5 / cam.k, 0, Math.PI * 2)
           ctx.stroke()
-        } else if (hub) {
-          ctx.lineWidth = 1.5 / cam.k
-          ctx.strokeStyle = hexA(darkBg ? '#ffffff' : '#000000', 0.14)
+          ctx.globalAlpha = nodeAlpha
+        }
+
+        // crisp focus ring
+        if (focusedThis) {
+          ctx.globalAlpha = nodeAlpha * 0.5
+          ctx.lineWidth = 1.4 / cam.k
+          ctx.strokeStyle = acc
+          ctx.beginPath()
+          ctx.arc(n.x, n.y, r + 4 / cam.k, 0, Math.PI * 2)
           ctx.stroke()
         }
       }
       ctx.globalAlpha = 1
 
-      // ---- labels (screen-space; centred below the node; fade in by zoom — no stacking) ----
-      // Obsidian behaviour: zoomed out → only hubs/big nodes are labelled; zooming in
-      // fades the rest in. Dense clusters overlap (you zoom to read) — we DON'T juggle slots.
+      // ---- labels: Capacities-style frosted-glass pills below each chip ----
+      // Each label sits on a rounded translucent pill (reads on any background), with
+      // a gap below the icon. Greedy anti-overlap keeps dense clusters tidy; hubs and
+      // the focused cluster always win.
       ctx.setTransform(e.dpr, 0, 0, e.dpr, 0, 0)
       ctx.textAlign = 'center'
-      ctx.textBaseline = 'top'
+      ctx.textBaseline = 'middle'
       const lf = e.view.labelFade
+      const GAP = 7, PADX = 8, PADY = 4
+      const cands: Array<{
+        nv: number; sx: number; top: number; w: number; h: number
+        hub: boolean; lit: boolean; pr: number; text: string; font: string
+      }> = []
       for (const n of e.nodes) {
-        const hub = isHubKind(n.node.kind)
-        const r = radiusFor(n.deg) * e.view.nodeScale * (n.id === focus ? 1.3 : 1)
-        const sizeF = clamp01((radiusFor(n.deg) - 4.5) / 8) // 0 (leaf) … 1 (hub-sized)
-        // zoom threshold: hubs label early, leaves only once you've zoomed in
-        const thr = hub ? 0.3 : 1.0 - sizeF * 0.4
+        const hub = isHubKind(n.node.kind) || !!n.node.hub
+        const ap = apOf(n.id)
+        if (ap <= 0.02) continue
+        // follow the chip: label glides down as the chip grows on hover / pops in
+        const hs = e.hoverScales.get(n.id) ?? 1
+        const r = n.baseR * e.view.nodeScale * hs * easeOutBack(ap)
+        const thr = hub ? 0.05 : 0.38 // show item labels earlier — fewer anonymous dots
         const z = cam.k * lf
         let target: number
         if (focus) target = isLit(n.id) ? 1 : 0
         else if (lf <= 0) target = 0
-        else target = clamp01((z - thr) / 0.35)
+        else target = clamp01((z - thr) / 0.3)
 
         const sx = W / 2 + cam.x + n.x * cam.k
-        const sy = H / 2 + cam.y + n.y * cam.k + r * cam.k + 4
-        if (sx < -180 || sx > W + 180 || sy < -30 || sy > H + 40) target = 0
+        const nodeBottom = H / 2 + cam.y + n.y * cam.k + r * cam.k
+        if (sx < -220 || sx > W + 220 || nodeBottom < -40 || nodeBottom > H + 60) target = 0
 
         const cur = e.labelOp.get(n.id) ?? 0
-        const nv = lerp(cur, target, 0.22) * gAppear
-        if (nv <= 0.02) {
-          e.labelOp.delete(n.id)
-          continue
-        }
-        e.labelOp.set(n.id, nv / (gAppear || 1))
+        const nv = lerp(cur, target, 0.22) * ap
+        if (nv <= 0.02) { e.labelOp.delete(n.id); continue }
+        e.labelOp.set(n.id, nv / (ap || 1))
+
         const raw = n.node.label
-        const label = raw.length > 26 ? raw.slice(0, 25) + '…' : raw
-        ctx.font = `${hub ? '600 12' : '11'}px Inter, -apple-system, system-ui, sans-serif`
-        ctx.globalAlpha = nv
-        ctx.lineWidth = 3.5
-        ctx.lineJoin = 'round'
-        ctx.strokeStyle = hexA(pal.bg, 0.9) // halo keeps text legible over edges
-        ctx.strokeText(label, sx, sy)
-        ctx.fillStyle = pal.text
-        ctx.fillText(label, sx, sy)
+        const text = raw.length > 16 ? raw.slice(0, 15) + '…' : raw
+        const fpx = 11 // единый размер текста для всех нод
+        const font = `${hub ? '600 ' : '500 '}${fpx}px Inter, -apple-system, system-ui, sans-serif`
+        ctx.font = font
+        const w = ctx.measureText(text).width + PADX * 2
+        const lit = !focus || isLit(n.id)
+        const pr = (focus && lit ? 4 : 0) + (hub ? 2 : 0)
+        // extra nudge down when focused so the label clears the enlarged chip
+        cands.push({ nv, sx, top: nodeBottom + GAP + (n.id === focus ? 3 : 0), w, h: fpx + PADY * 2, hub, lit, pr, text, font })
+      }
+
+      cands.sort((a, b) => b.pr - a.pr)
+      const placed: Array<{ x0: number; y0: number; x1: number; y1: number }> = []
+      const MARGIN = 4 // px breathing room between pills so nothing kisses
+      for (const c of cands) {
+        const box = { x0: c.sx - c.w / 2 - MARGIN, y0: c.top - MARGIN, x1: c.sx + c.w / 2 + MARGIN, y1: c.top + c.h + MARGIN }
+        const must = c.hub || (!!focus && c.lit)
+        if (!must && placed.some((p) => box.x0 < p.x1 && box.x1 > p.x0 && box.y0 < p.y1 && box.y1 > p.y0)) continue
+        placed.push(box)
+
+        ctx.font = c.font
+        ctx.globalAlpha = c.nv
+        // Obsidian-style plain text with shadow for readability
+        ctx.shadowColor = darkBg ? 'rgba(0,0,0,0.9)' : 'rgba(255,255,255,0.95)'
+        ctx.shadowBlur = 5
+        ctx.shadowOffsetY = 0
+        ctx.fillStyle = c.lit && !!focus ? acc : pal.text
+        ctx.fillText(c.text, c.sx, c.top + c.h / 2 + 0.5)
+        ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0
       }
       ctx.globalAlpha = 1
     }
@@ -454,6 +624,14 @@ const GraphCanvasImpl = forwardRef<GraphHandle, Props>(function GraphCanvas(
       e.clock = typeof performance !== 'undefined' ? performance.now() : Date.now()
       if (e.sim && e.sim.alpha() > 0.0015) {
         e.sim.tick()
+        // perpetual gentle wander — each node slowly circles, so the graph is always
+        // subtly alive (no stagnation); collision keeps air between them
+        for (const n of e.nodes) {
+          if (n.fx != null) continue
+          n.driftA += n.driftSpeed
+          n.vx += Math.cos(n.driftA) * 0.18
+          n.vy += Math.sin(n.driftA) * 0.18
+        }
         e.dirty = true
         // once the layout has settled, frame it once (unless the user already explored)
         if (!e.fitDone && !e.userMoved && e.sim.alpha() < 0.06) {
@@ -468,7 +646,8 @@ const GraphCanvasImpl = forwardRef<GraphHandle, Props>(function GraphCanvas(
         c.k = lerp(c.k, ct.k, 0.22)
         e.dirty = true
       }
-      if (e.clock - e.born < FADE_IN) e.dirty = true // keep drawing through the fade-in
+      if (e.clock - e.born < 820) e.dirty = true // keep drawing through the staggered entrance
+      if (e.pulseNodes.size > 0 || e.hoverScales.size > 0) e.dirty = true
       if (e.dirty) {
         draw()
         e.dirty = false
@@ -487,11 +666,11 @@ const GraphCanvasImpl = forwardRef<GraphHandle, Props>(function GraphCanvas(
       let best: SimNode | null = null
       let bestD = Infinity
       for (const n of e.nodes) {
-        const r = radiusFor(n.deg) * e.view.nodeScale + 4
-        const d = (n.x - wx) ** 2 + (n.y - wy) ** 2
-        if (d < r * r && d < bestD) {
-          bestD = d
-          best = n
+        const r = n.baseR * e.view.nodeScale + 5
+        const dx = Math.abs(n.x - wx), dy = Math.abs(n.y - wy)
+        if (dx < r && dy < r) {
+          const d = dx * dx + dy * dy
+          if (d < bestD) { bestD = d; best = n }
         }
       }
       return best
@@ -537,7 +716,12 @@ const GraphCanvasImpl = forwardRef<GraphHandle, Props>(function GraphCanvas(
         e.hover = id
         e.onTip(
           n
-            ? { head: data.kindNames[n.node.kind] ?? n.node.kind, label: n.node.label, sub: n.node.sub, color: n.color, clientX: ev.clientX, clientY: ev.clientY }
+            ? {
+                head: n.node.hub
+                  ? (n.node.kind === 'root' ? 'Воркспейс' : 'Раздел')
+                  : (data.kindNames[n.node.kind] ?? n.node.kind),
+                label: n.node.label, sub: n.node.sub, color: n.color, clientX: ev.clientX, clientY: ev.clientY,
+              }
             : null
         )
       }
@@ -549,6 +733,7 @@ const GraphCanvasImpl = forwardRef<GraphHandle, Props>(function GraphCanvas(
         if (drag.node) {
           drag.node.fx = null; drag.node.fy = null
           if (!drag.moved) {
+            e.pulseNodes.set(drag.node.id, e.clock) // ripple on click
             const route = drag.node.node.route
             if (route) e.onNavigate(route)
             else e.pinned = e.pinned === drag.node.id ? null : drag.node.id
@@ -606,9 +791,9 @@ const GraphCanvasImpl = forwardRef<GraphHandle, Props>(function GraphCanvas(
     const e = eng.current
     const sim = e.sim
     if (!sim) return
-    ;(sim.force('charge') as ForceManyBody<SimNode> | undefined)?.strength(-view.repel)
-    ;(sim.force('link') as ForceLink<SimNode, SimLink> | undefined)?.distance(view.linkDistance).strength(view.linkForce)
-    ;(sim.force('collide') as ForceCollide<SimNode> | undefined)?.radius((d) => radiusFor(d.deg) * view.nodeScale + 4)
+    ;(sim.force('charge') as ForceManyBody<SimNode> | undefined)?.strength((d) => -view.repel * (d.node.hub ? 2.4 : 1))
+    ;(sim.force('link') as ForceLink<SimNode, SimLink> | undefined)?.distance((l) => (l.source.node.hub || l.target.node.hub ? view.linkDistance * 1.5 : view.linkDistance)).strength(view.linkForce)
+    ;(sim.force('collide') as ForceCollide<SimNode> | undefined)?.radius((d) => d.baseR * view.nodeScale + 18)
     ;(sim.force('x') as ForceX<SimNode> | undefined)?.strength(view.centerForce)
     ;(sim.force('y') as ForceY<SimNode> | undefined)?.strength(view.centerForce)
     sim.alpha(Math.max(sim.alpha(), 0.3))

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type PointerEvent as RPointerEvent } from 'react'
 import { ArrowLeft, Frame, Plus, StickyNote, Trash2, Type, ZoomIn, ZoomOut } from 'lucide-react'
-import { supabase } from '../../lib/supabase'
+import { supabase, subscribe } from '../../data/cloud'
 import { useWorkspaceStore } from '../../store/workspaceStore'
 import { STICKY_PALETTE, timeAgo } from '../../lib/wsUi'
 import Spinner from '../ui/Spinner'
@@ -46,10 +46,7 @@ export default function CanvasSection({ workspaceId, userId }: { workspaceId: st
 
   useEffect(() => {
     reload()
-    const ch = supabase.channel(`canvases:${workspaceId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'shared_canvases', filter: `workspace_id=eq.${workspaceId}` }, reload)
-      .subscribe()
-    return () => { supabase.removeChannel(ch) }
+    return subscribe(`canvases:${workspaceId}`, 'shared_canvases', `workspace_id=eq.${workspaceId}`, reload)
   }, [workspaceId, reload])
 
   const create = async () => {
@@ -127,22 +124,18 @@ function CanvasBoard({ canvas, userId, onBack }: { canvas: SharedCanvas; userId:
   useEffect(() => {
     supabase.from('shared_canvas_nodes').select('*').eq('canvas_id', canvas.id)
       .then(({ data }) => setNodes(data ?? []))
-    const ch = supabase.channel(`canvas:${canvas.id}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'shared_canvas_nodes', filter: `canvas_id=eq.${canvas.id}` },
-        (payload) => {
-          if (payload.eventType === 'DELETE') {
-            setNodes((p) => p.filter((n) => n.id !== (payload.old as CanvasNode).id))
-          } else {
-            const fresh = payload.new as CanvasNode
-            setNodes((p) => {
-              const i = p.findIndex((n) => n.id === fresh.id)
-              if (i === -1) return [...p, fresh]
-              const next = [...p]; next[i] = fresh; return next
-            })
-          }
+    return subscribe(`canvas:${canvas.id}`, 'shared_canvas_nodes', `canvas_id=eq.${canvas.id}`, (payload) => {
+      if (payload.eventType === 'DELETE') {
+        setNodes((p) => p.filter((n) => n.id !== (payload.old as CanvasNode).id))
+      } else {
+        const fresh = payload.new as CanvasNode
+        setNodes((p) => {
+          const i = p.findIndex((n) => n.id === fresh.id)
+          if (i === -1) return [...p, fresh]
+          const next = [...p]; next[i] = fresh; return next
         })
-      .subscribe()
-    return () => { supabase.removeChannel(ch) }
+      }
+    })
   }, [canvas.id])
 
   const renameCanvas = async (v: string) => {

@@ -1,8 +1,9 @@
 import { useRef, useState } from 'react'
-import { CircleAlert, ImagePlus, Plus, X } from 'lucide-react'
+import { ChevronDown, ChevronRight, CircleAlert, ImagePlus, Plus, X } from 'lucide-react'
 import Modal from './ui/Modal'
 import ChipsInput from './ui/ChipsInput'
 import DatePicker from './ui/DatePicker'
+import Select from './ui/Select'
 import ProjectCover from './ProjectCover'
 import { toast } from '../store/toastStore'
 import { useI18n } from '../i18n'
@@ -16,26 +17,36 @@ import {
   type ProjectStatus,
 } from '../types/models'
 
+// quick emoji palette for a hub's identity icon (Notion-style)
+const HUB_EMOJI = ['🧭', '🎯', '📚', '💡', '🌱', '🏋️', '✍️', '🎨', '💼', '🗂️', '🎬', '🔭']
+
 export default function ProjectModal({
   project,
+  seed,
   onClose,
   onSaved,
 }: {
   project: Project | null
+  seed?: Partial<Project> | null
   onClose: () => void
   onSaved: (saved: Project) => void
 }) {
   const { t } = useI18n()
-  const [name, setName] = useState(project?.name ?? '')
+  const [name, setName] = useState(project?.name ?? seed?.name ?? '')
+  const [icon, setIcon] = useState(project?.icon ?? seed?.icon ?? '')
   const [client, setClient] = useState(project?.client ?? '')
   const [showClient, setShowClient] = useState(!!project?.client)
-  const [kind, setKind] = useState(project?.kind ?? '')
+  const [kind, setKind] = useState(project?.kind ?? seed?.kind ?? '')
   const [status, setStatus] = useState<ProjectStatus>(project?.status ?? 'active')
   const [deadline, setDeadline] = useState(project?.deadline ?? '')
   const [tools, setTools] = useState<string[]>(project?.tools ?? [])
-  const [color, setColor] = useState<string | null>(project?.color ?? null)
+  const [color, setColor] = useState<string | null>(project?.color ?? seed?.color ?? null)
   const [cover, setCover] = useState<string | null>(project?.cover_path ?? null)
   const [description, setDescription] = useState(project?.description ?? '')
+  // editing an existing hub opens advanced expanded if it already uses those fields
+  const [showAdvanced, setShowAdvanced] = useState(
+    !!(project && (project.cover_path || project.deadline || project.client || project.tools.length))
+  )
   const [saving, setSaving] = useState(false)
   const [nameErr, setNameErr] = useState(false)
   const nameRef = useRef<HTMLInputElement>(null)
@@ -57,6 +68,7 @@ export default function ProjectModal({
     setSaving(true)
     const data = {
       name: name.trim(),
+      icon: icon || null,
       client: showClient ? client.trim() || null : null,
       kind: kind.trim(),
       status,
@@ -80,46 +92,6 @@ export default function ProjectModal({
   return (
     <Modal title={project ? t('project.edit') : t('project.new')} onClose={onClose}>
       <div className="space-y-4">
-        {/* cover — preset gradient templates or an uploaded image */}
-        <div>
-          <label className="mb-1.5 block text-xs font-medium text-zinc-400">{t('project.cover')}</label>
-          {cover && (
-            <ProjectCover cover={cover} className="mb-2 h-24 w-full rounded-xl border border-edge">
-              <button
-                type="button"
-                onClick={() => setCover(null)}
-                title={t('common.delete')}
-                className="absolute right-2 top-2 rounded-lg bg-black/60 p-1.5 text-zinc-100 backdrop-blur-sm transition-colors hover:text-danger"
-              >
-                <X size={13} />
-              </button>
-            </ProjectCover>
-          )}
-          <div className="flex flex-wrap items-center gap-1.5">
-            <button
-              type="button"
-              onClick={pickCover}
-              title={t('project.addCover')}
-              className="flex h-7 w-9 items-center justify-center rounded-lg border border-dashed border-edge text-zinc-500 transition-colors hover:border-accent hover:text-zinc-300"
-            >
-              <ImagePlus size={14} />
-            </button>
-            {COVER_TEMPLATES.map((tpl) => {
-              const val = `gradient:${tpl.id}`
-              return (
-                <button
-                  key={tpl.id}
-                  type="button"
-                  onClick={() => setCover(val)}
-                  title={t('project.coverTemplate')}
-                  className={`h-7 w-9 rounded-lg border transition-transform hover:scale-105 ${cover === val ? 'border-accent ring-1 ring-accent' : 'border-edge'}`}
-                  style={{ backgroundImage: tpl.css }}
-                />
-              )
-            })}
-          </div>
-        </div>
-
         <div className="field">
           <label>
             {t('project.name')} <span className="req">*</span>
@@ -143,89 +115,42 @@ export default function ProjectModal({
           )}
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="mb-1 block text-xs font-medium text-zinc-400">{t('project.kind')}</label>
-            <input
-              className="input"
-              list="project-kind-suggestions"
-              placeholder={t('project.kindPh')}
-              value={kind}
-              onChange={(e) => setKind(e.target.value)}
-            />
-            <datalist id="project-kind-suggestions">
-              {PROJECT_KIND_SUGGESTIONS.map((k) => (
-                <option key={k} value={k} />
-              ))}
-            </datalist>
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-zinc-400">{t('project.status')}</label>
-            <select className="select w-full" value={status} onChange={(e) => setStatus(e.target.value as ProjectStatus)}>
-              {PROJECT_STATUSES.map((s) => (
-                <option key={s} value={s}>
-                  {t(`project.status.${s}` as 'project.status.active')}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="mb-1 block text-xs font-medium text-zinc-400">{t('project.deadline')}</label>
-            <DatePicker value={deadline} onChange={setDeadline} placeholder={t('hub.noDeadline')} />
-          </div>
-          {!showClient && (
-            <div className="flex items-end">
-              <button
-                type="button"
-                onClick={() => setShowClient(true)}
-                className="flex items-center gap-1.5 py-2 text-sm text-zinc-500 transition-colors hover:text-zinc-200"
-              >
-                <Plus size={14} /> {t('project.addClient')}
-              </button>
-            </div>
-          )}
-        </div>
-
-        {showClient && (
-          <div>
-            <label className="mb-1 block text-xs font-medium text-zinc-400">{t('project.client')}</label>
-            <div className="flex gap-2">
-              <input className="input" placeholder={t('project.clientPh')} value={client} onChange={(e) => setClient(e.target.value)} />
-              <button
-                type="button"
-                onClick={() => {
-                  setClient('')
-                  setShowClient(false)
-                }}
-                title={t('common.delete')}
-                className="btn-ghost shrink-0 !px-3"
-              >
-                <X size={15} />
-              </button>
-            </div>
-          </div>
-        )}
-
         <div>
-          <label className="mb-1.5 block text-xs font-medium text-zinc-400">{t('project.tools')}</label>
-          <ChipsInput value={tools} onChange={setTools} placeholder={t('project.toolsPh')} />
-          {!tools.length && (
-            <div className="mt-1.5 flex flex-wrap gap-1">
-              {PROJECT_TOOL_SUGGESTIONS.map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => setTools([s])}
-                  className="rounded bg-raised px-2 py-0.5 text-[11px] text-zinc-500 transition-colors hover:text-zinc-200"
-                >
-                  + {s}
-                </button>
-              ))}
-            </div>
-          )}
+          <label className="mb-1 block text-xs font-medium text-zinc-400">{t('project.kind')}</label>
+          <input
+            className="input"
+            list="project-kind-suggestions"
+            placeholder={t('project.kindPh')}
+            value={kind}
+            onChange={(e) => setKind(e.target.value)}
+          />
+          <datalist id="project-kind-suggestions">
+            {PROJECT_KIND_SUGGESTIONS.map((k) => (
+              <option key={k} value={k} />
+            ))}
+          </datalist>
+        </div>
+
+        {/* identity icon — emoji, optional (falls back to a serif monogram) */}
+        <div>
+          <label className="mb-1.5 block text-xs font-medium text-zinc-400">{t('project.icon')}</label>
+          <div className="flex flex-wrap gap-1.5">
+            {HUB_EMOJI.map((e) => (
+              <button
+                key={e}
+                type="button"
+                onClick={() => setIcon(icon === e ? '' : e)}
+                className={`flex h-8 w-8 items-center justify-center rounded-lg border text-base transition-transform hover:scale-105 ${
+                  icon === e ? 'border-accent ring-1 ring-accent' : 'border-edge'
+                }`}
+              >
+                {e}
+              </button>
+            ))}
+            {icon && !HUB_EMOJI.includes(icon) && (
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-accent ring-1 ring-accent text-base">{icon}</span>
+            )}
+          </div>
         </div>
 
         <div>
@@ -260,6 +185,125 @@ export default function ProjectModal({
             onChange={(e) => setDescription(e.target.value)}
           />
         </div>
+
+        {/* advanced — the production-flavoured fields, tucked away so the common path stays light */}
+        <div className="border-t border-edge pt-3">
+          <button
+            type="button"
+            onClick={() => setShowAdvanced((v) => !v)}
+            className="flex items-center gap-1.5 text-sm font-medium text-zinc-400 transition-colors hover:text-zinc-200"
+          >
+            {showAdvanced ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+            {t('project.advanced')}
+          </button>
+        </div>
+
+        {showAdvanced && (
+          <div className="space-y-4">
+            {/* cover — preset gradient templates or an uploaded image */}
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-zinc-400">{t('project.cover')}</label>
+              {cover && (
+                <ProjectCover cover={cover} className="mb-2 h-24 w-full rounded-xl border border-edge">
+                  <button
+                    type="button"
+                    onClick={() => setCover(null)}
+                    title={t('common.delete')}
+                    className="absolute right-2 top-2 rounded-lg bg-black/60 p-1.5 text-zinc-100 backdrop-blur-sm transition-colors hover:text-danger"
+                  >
+                    <X size={13} />
+                  </button>
+                </ProjectCover>
+              )}
+              <div className="flex flex-wrap items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={pickCover}
+                  title={t('project.addCover')}
+                  className="flex h-7 w-9 items-center justify-center rounded-lg border border-dashed border-edge text-zinc-500 transition-colors hover:border-accent hover:text-zinc-300"
+                >
+                  <ImagePlus size={14} />
+                </button>
+                {COVER_TEMPLATES.map((tpl) => {
+                  const val = `gradient:${tpl.id}`
+                  return (
+                    <button
+                      key={tpl.id}
+                      type="button"
+                      onClick={() => setCover(val)}
+                      title={t('project.coverTemplate')}
+                      className={`h-7 w-9 rounded-lg border transition-transform hover:scale-105 ${cover === val ? 'border-accent ring-1 ring-accent' : 'border-edge'}`}
+                      style={{ backgroundImage: tpl.css }}
+                    />
+                  )
+                })}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-zinc-400">{t('project.status')}</label>
+                <Select
+                  className="w-full"
+                  value={status}
+                  options={PROJECT_STATUSES.map((s) => ({ value: s, label: t(`project.status.${s}` as 'project.status.active') }))}
+                  onChange={(v) => setStatus(v as ProjectStatus)}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-zinc-400">{t('project.deadline')}</label>
+                <DatePicker value={deadline} onChange={setDeadline} placeholder={t('hub.noDeadline')} />
+              </div>
+            </div>
+
+            {showClient ? (
+              <div>
+                <label className="mb-1 block text-xs font-medium text-zinc-400">{t('project.client')}</label>
+                <div className="flex gap-2">
+                  <input className="input" placeholder={t('project.clientPh')} value={client} onChange={(e) => setClient(e.target.value)} />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setClient('')
+                      setShowClient(false)
+                    }}
+                    title={t('common.delete')}
+                    className="btn-ghost shrink-0 !px-3"
+                  >
+                    <X size={15} />
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setShowClient(true)}
+                className="flex items-center gap-1.5 text-sm text-zinc-500 transition-colors hover:text-zinc-200"
+              >
+                <Plus size={14} /> {t('project.addClient')}
+              </button>
+            )}
+
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-zinc-400">{t('project.tools')}</label>
+              <ChipsInput value={tools} onChange={setTools} placeholder={t('project.toolsPh')} />
+              {!tools.length && (
+                <div className="mt-1.5 flex flex-wrap gap-1">
+                  {PROJECT_TOOL_SUGGESTIONS.map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => setTools([s])}
+                      className="rounded bg-raised px-2 py-0.5 text-[11px] text-zinc-500 transition-colors hover:text-zinc-200"
+                    >
+                      + {s}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         <div className="flex justify-end gap-2 pt-1">
           <button className="btn-ghost" onClick={onClose}>

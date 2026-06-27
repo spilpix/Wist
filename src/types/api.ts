@@ -5,8 +5,17 @@ import type {
   Favorite,
   FavoriteKind,
   FavoriteInput,
+  NodeType,
+  NodeRef,
+  EdgeKind,
+  RawEdge,
+  RelatedEdge,
+  ResolvedNode,
   Note,
   NoteFolder,
+  NoteSearchHit,
+  ObjectType,
+  JournalEntry,
   Project,
   ProjectAsset,
   ProjectPatch,
@@ -96,6 +105,13 @@ export interface WistApi {
     remove(kind: FavoriteKind, ref: string | number): Promise<void>
     reorder(ids: number[]): Promise<void>
   }
+  edges: {
+    related(type: NodeType, id: string | number, kinds?: EdgeKind[]): Promise<RelatedEdge[]>
+    search(query: string, exclude?: NodeRef): Promise<ResolvedNode[]>
+    link(src: NodeRef, kind: EdgeKind, dst: NodeRef): Promise<void>
+    unlink(edgeId: number): Promise<void>
+    listAll(): Promise<RawEdge[]>
+  }
   vault: {
     list(parentId?: number | null): Promise<VaultFile[]>
     browse(dir: string): Promise<VaultDiskEntry[]>
@@ -111,6 +127,12 @@ export interface WistApi {
   }
   fs: {
     listDir(dir: string): Promise<Array<{ name: string; path: string; isDir: boolean }>>
+  }
+  objectTypes: {
+    list(): Promise<ObjectType[]>
+    create(data: Partial<ObjectType>): Promise<ObjectType>
+    update(id: number, patch: Partial<ObjectType>): Promise<ObjectType>
+    remove(id: number): Promise<void>
   }
   canvas: {
     list(): Promise<Canvas[]>
@@ -131,6 +153,12 @@ export interface WistApi {
     update(id: number, patch: Partial<Note>): Promise<Note>
     remove(id: number): Promise<void>
     tags(): Promise<string[]>
+    searchFts(query: string): Promise<NoteSearchHit[]>
+  }
+  journal: {
+    get(day: string): Promise<JournalEntry | null>
+    range(from: string, to: string): Promise<JournalEntry[]>
+    save(day: string, patch: { content?: string; mood?: number | null }): Promise<JournalEntry>
   }
   noteFolders: {
     list(): Promise<NoteFolder[]>

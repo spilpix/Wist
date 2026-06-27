@@ -2,6 +2,7 @@ import { Fragment, useEffect, useRef, useState } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import {
   ArrowUpRight,
+  CalendarDays,
   ChevronDown,
   Compass,
   File as FileIcon,
@@ -26,11 +27,11 @@ import {
 } from 'lucide-react'
 import Tooltip from './ui/Tooltip'
 import ProfileMenu from './ProfileMenu'
+import NewMenu from './NewMenu'
 import { useUiStore } from '../store/uiStore'
-import { useHistoryStore } from '../store/historyStore'
 import { useFavoritesStore } from '../store/favoritesStore'
-import { routeMeta } from '../lib/routeMeta'
 import { dragHasMedia, readMediaDrag } from '../lib/mediaDrag'
+import { hueForRoute, objColor } from '../lib/objectColors'
 import { useSortable } from '../lib/useSortable'
 import { useTreeSort } from '../lib/useTreeSort'
 import { toast } from '../store/toastStore'
@@ -55,25 +56,23 @@ interface MenuItem {
 }
 type MenuState = { x: number; y: number; items: MenuItem[] } | null
 
-// Дом (personal world): productivity + libraries + tools. Each content library is a direct link.
-// In the БИБЛИОТЕКИ section the old per-category "Файлы" was repurposed into "Мои файлы" — the
-// single entry to the unified /library folder hub (the others still deep-link their category).
+// PRIMARY nav — the app's core pages, in frequency order (Home anchors the top, the
+// daily drivers Tasks/Notes lead, Calendar+Workspace close the arc). Rendered WITHOUT a
+// section header: this block IS the app, so a "section" label would only add noise
+// (Notion/Linear keep their top nav unlabelled). The "+ New" creator and the profile
+// pill sit above it; Favorites and Hubs sit below.
 const HOME_GROUPS: Array<{ key: TKey; id: string; links: Link[] }> = [
   {
-    key: 'nav.productivity',
-    id: 'productivity',
+    key: 'nav.objects',
+    id: 'objects',
     links: [
+      { to: '/', key: 'nav.home', icon: Home },
       { to: '/tasks', key: 'nav.tasks', icon: ListTodo },
       { to: '/notes', key: 'nav.notes', icon: PenLine },
-      { to: '/vault', key: 'nav.vault', icon: FileText },
-    ],
-  },
-  {
-    key: 'nav.tools',
-    id: 'tools',
-    links: [
+      { to: '/vault', key: 'nav.files', icon: FileText },
       { to: '/canvas', key: 'nav.canvas', icon: Frame },
       { to: '/tree', key: 'nav.tree', icon: Share2 },
+      { to: '/calendar', key: 'nav.calendar', icon: CalendarDays },
       { to: '/workspace', key: 'nav.workspace', icon: Users },
     ],
   },
@@ -88,20 +87,17 @@ const FAV_KIND_ICON: Record<FavoriteKind, typeof Home> = {
   route: Compass,
 }
 
-// a row's resting / active look. Active rows get a soft NEUTRAL fill (Notion-style) — no
-// colour at all: the grey ground + brighter primary ink is the whole "you are here" signal
-// (black in light theme, white in dark — never blue).
+// a row's resting / active look. Active rows get a soft fill + brighter primary ink —
+// the "you are here" signal. Resting rows are muted and only fill on hover.
 function rowClass(active: boolean): string {
   return [
-    'group/i relative flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-[14px] font-medium transition-colors duration-200 ease-out',
+    'group/i relative flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-[14px] font-medium transition-colors duration-150 ease-out',
     active
       ? 'bg-sidebar-active text-zinc-100'
       : 'text-zinc-400 hover:bg-highlight hover:text-zinc-100',
   ].join(' ')
 }
 function iconClass(active: boolean): string {
-  // active icon brightens to the primary ink so it matches the active label — neutral,
-  // theme-driven (black/white), never the accent colour
   return active ? 'shrink-0 text-zinc-100' : 'shrink-0 text-zinc-500 group-hover/i:text-zinc-300'
 }
 function loadCollapsed(): Set<string> {
@@ -113,8 +109,6 @@ function loadCollapsed(): Set<string> {
 }
 
 // section header names can be renamed; overrides persist in localStorage.
-// Validate the shape so a corrupt/foreign entry can never render a non-string
-// label (Sidebar lives outside the route ErrorBoundary).
 function loadSectionNames(): Record<string, string> {
   try {
     const raw = JSON.parse(localStorage.getItem('wist.sectionNames') ?? '{}')
@@ -128,15 +122,13 @@ function loadSectionNames(): Record<string, string> {
   }
 }
 
-// user-chosen order of the nav groups (drag to reorder). Persisted as a list of
-// group ids; unknown/new groups fall back to their HOME_GROUPS position.
+// user-chosen order of the nav groups. Persisted as a list of group ids.
 function loadGroupOrder(): string[] {
   const def = HOME_GROUPS.map((g) => g.id)
   try {
     const raw = JSON.parse(localStorage.getItem('wist.groupOrder') ?? '[]')
     if (!Array.isArray(raw)) return def
     const known = raw.filter((id): id is string => typeof id === 'string' && def.includes(id))
-    // append any group not covered by the saved order (e.g. a newly added section)
     return [...known, ...def.filter((id) => !known.includes(id))]
   } catch {
     return def
@@ -148,13 +140,13 @@ function orderGroups(order: string[]): typeof HOME_GROUPS {
   return order.map((id) => byId.get(id)).filter(Boolean) as typeof HOME_GROUPS
 }
 
-// ── nav-item layout: which items live in which section + their order. Like the group
-// order, this is user-curated (drag a row inside a section OR across to another) and
-// persisted. Derived from HOME_GROUPS but resilient to it changing: items that no longer
-// exist are dropped, brand-new ones are appended to their home section.
+// ── nav-item layout: which items live in which section + their order. Bumped to a v2
+// key so the new primary-nav order (Home first, Calendar/Workspace folded in) takes
+// effect on upgrade instead of being overridden by a stale saved layout.
 const ALL_ITEMS = HOME_GROUPS.flatMap((g) => g.links.map((link) => ({ link, group: g.id })))
 const LINK_BY_TO = new Map(ALL_ITEMS.map(({ link }) => [link.to, link] as const))
 const DEFAULT_ITEM_LAYOUT: Record<string, string[]> = Object.fromEntries(HOME_GROUPS.map((g) => [g.id, g.links.map((l) => l.to)]))
+const ITEM_LAYOUT_KEY = 'wist.navLayout.v2'
 
 function cloneItemLayout(): Record<string, string[]> {
   return Object.fromEntries(Object.entries(DEFAULT_ITEM_LAYOUT).map(([k, v]) => [k, [...v]]))
@@ -162,7 +154,7 @@ function cloneItemLayout(): Record<string, string[]> {
 
 function loadItemLayout(): Record<string, string[]> {
   try {
-    const raw = JSON.parse(localStorage.getItem('wist.itemLayout') ?? 'null')
+    const raw = JSON.parse(localStorage.getItem(ITEM_LAYOUT_KEY) ?? 'null')
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return cloneItemLayout()
     const out: Record<string, string[]> = {}
     const seen = new Set<string>()
@@ -173,7 +165,6 @@ function loadItemLayout(): Record<string, string[]> {
         : []
       out[gid].forEach((to) => seen.add(to))
     }
-    // any known item the saved layout didn't place → append to its home section
     for (const { link, group } of ALL_ITEMS) {
       if (!seen.has(link.to)) {
         ;(out[group] ??= []).push(link.to)
@@ -187,10 +178,9 @@ function loadItemLayout(): Record<string, string[]> {
 }
 
 /**
- * A small Notion-style section header: muted label that can be renamed inline
- * (double-click the label, or the pencil that appears on hover) and, when
- * `collapsible`, toggles its group open/closed. Defined at module scope so its
- * editing state survives parent re-renders.
+ * A small Notion-style section header: a quiet muted label that, when `collapsible`,
+ * toggles its group open/closed (chevron always faintly visible so it's discoverable).
+ * Renaming is opt-in via `renamable` — the primary blocks (Favorites/Hubs) are fixed.
  */
 function SectionHeader({
   id,
@@ -198,6 +188,7 @@ function SectionHeader({
   defaultLabel,
   renameHint,
   onRename,
+  renamable = true,
   collapsible = false,
   isCollapsed = false,
   onToggle,
@@ -209,6 +200,7 @@ function SectionHeader({
   defaultLabel: string
   renameHint: string
   onRename: (id: string, value: string) => void
+  renamable?: boolean
   collapsible?: boolean
   isCollapsed?: boolean
   onToggle?: () => void
@@ -225,8 +217,6 @@ function SectionHeader({
   }
   const commit = () => {
     const next = draft.trim()
-    // empty, or unchanged-from-default → drop the override so the i18n binding
-    // (and language switching) keeps working. Never freeze a translated default.
     onRename(id, next && next !== defaultLabel ? next : '')
     setEditing(false)
   }
@@ -281,26 +271,25 @@ function SectionHeader({
       )}
       <span
         onClick={(e) => e.stopPropagation()}
-        onDoubleClick={begin}
-        title={renameHint}
-        className="min-w-0 select-none truncate text-[11px] font-semibold uppercase tracking-wider text-zinc-600 transition-colors group-hover/h:text-zinc-500"
+        onDoubleClick={renamable ? begin : undefined}
+        title={renamable ? renameHint : undefined}
+        className="min-w-0 select-none truncate text-[11px] font-semibold uppercase tracking-wider text-zinc-500"
       >
         {label}
       </span>
       <div className="ml-auto flex items-center gap-0.5">
-        <button
-          onClick={begin}
-          title={renameHint}
-          className="rounded-lg p-0.5 text-zinc-500 opacity-0 transition-all duration-200 hover:bg-highlight hover:text-zinc-200 group-hover/h:opacity-100"
-        >
-          <Pencil size={12} />
-        </button>
+        {renamable && (
+          <button
+            onClick={begin}
+            title={renameHint}
+            className="rounded-lg p-0.5 text-zinc-500 opacity-0 transition-all duration-200 hover:bg-highlight hover:text-zinc-200 group-hover/h:opacity-100"
+          >
+            <Pencil size={12} />
+          </button>
+        )}
         {right}
         {collapsible && (
-          <ChevronDown
-            size={12}
-            className={`text-zinc-600 transition-all duration-200 ${isCollapsed ? '-rotate-90 opacity-100' : 'opacity-0 group-hover/h:opacity-100'}`}
-          />
+          <ChevronDown size={12} className={`text-zinc-500 transition-transform duration-200 ${isCollapsed ? '-rotate-90' : ''}`} />
         )}
       </div>
     </div>
@@ -321,13 +310,13 @@ function FavThumb({ fav }: { fav: Favorite }) {
     )
   }
   const Icon = FAV_KIND_ICON[fav.kind] ?? Star
-  return <Icon size={16} className="shrink-0 text-zinc-500 group-hover/i:text-zinc-300" />
+  return <Icon size={17} className="shrink-0 text-zinc-500 group-hover/i:text-zinc-300" />
 }
 
 /**
  * The inline "Избранное" list — always-visible pinned shortcuts (Notion's Favorites).
  * Rows reorder by drag (a thin accent line marks the drop slot) and reveal a `•••`
- * menu + a one-tap unpin star on hover. Module-scope so its drag state is isolated.
+ * menu on hover. Module-scope so its drag state is isolated.
  */
 function FavoritesList({
   favorites,
@@ -431,8 +420,6 @@ export default function Sidebar() {
   const { t } = useI18n()
   const navigate = useNavigate()
   const pathname = useLocation().pathname
-  const historyEntries = useHistoryStore((s) => s.entries)
-  const removeHistory = useHistoryStore((s) => s.remove)
   const compact = useUiStore((s) => s.sidebarCollapsed)
   const setPalette = useUiStore((s) => s.setPalette)
   const toggleSidebar = useUiStore((s) => s.toggleSidebar)
@@ -449,9 +436,8 @@ export default function Sidebar() {
   const [dropProject, setDropProject] = useState<number | null>(null) // hub link lit as a drop target
   const [renamingProject, setRenamingProject] = useState<{ id: number; value: string } | null>(null)
   const [menu, setMenu] = useState<MenuState>(null) // shared right-click / ••• context menu
-  // collapsed-rail hover preview: hovering the 56px rail slides the full sidebar
-  // out over the content (auto-hides on mouse-out) — one-handed nav without giving
-  // up canvas space. A short open-delay avoids firing when the cursor just grazes it.
+  // collapsed-rail hover preview: hovering the left edge slides the full sidebar out over
+  // the content (auto-hides on mouse-out). A short open-delay avoids accidental triggers.
   const [peek, setPeek] = useState(false)
   const peekTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const openPeek = () => {
@@ -472,7 +458,6 @@ export default function Sidebar() {
     if (!compact) setPeek(false) // expanding clears any pending peek so it never auto-opens later
   }, [compact])
   // true while dragging the resize edge — suppresses the collapse/expand width-morph
-  // transition so the edge tracks the cursor 1:1 instead of rubber-banding behind it
   const [resizing, setResizing] = useState(false)
 
   // universal favorites — the always-visible pinned section
@@ -486,8 +471,7 @@ export default function Sidebar() {
     loadFavs()
   }, [loadFavs])
 
-  // drop a media item (Library title / playlist / track / Vault file) straight onto a hub
-  // in the sidebar to file it there — no need to open the hub first
+  // drop a media item straight onto a hub in the sidebar to file it there
   const addMediaToProject = async (pid: number, name: string, e: React.DragEvent) => {
     const items = readMediaDrag(e)
     if (!items) return
@@ -504,20 +488,8 @@ export default function Sidebar() {
     if (n) toast(`${t('dnd.added')} → ${name}`, 'success')
   }
 
-  // which "world" are we in? Хаб = the projects list; Дом = the personal world
-  // (which owns the productivity + tools nav: notes, canvas, graph).
-  const inHub = pathname.startsWith('/project') || pathname.startsWith('/vault')
   const onTrash = pathname === '/trash'
   const onProfile = pathname === '/profile'
-  const onFavorites = pathname === '/favorites'
-  const onHistory = pathname === '/history'
-  const inHome = !inHub && !onTrash && !onProfile && !onFavorites && !onHistory && pathname !== '/settings'
-
-  // recent deep items (a specific hub / title / canvas) for one-click return. The flat
-  // top-level pages already live in the nav, so we only surface detail routes here.
-  const deepRecents = historyEntries
-    .filter((e) => /^\/(project|canvas)\//.test(e.path) && e.path.split('?')[0] !== pathname)
-    .slice(0, 4)
 
   // close the context menu + collapse the hover-peek on navigation
   useEffect(() => {
@@ -555,10 +527,6 @@ export default function Sidebar() {
     })
   }, [])
 
-  const isLinkActive = (to: string, routeActive: boolean): boolean => {
-    return routeActive
-  }
-
   const toggleGroup = (id: string) => {
     const next = new Set(collapsed)
     next.has(id) ? next.delete(id) : next.add(id)
@@ -574,7 +542,7 @@ export default function Sidebar() {
     setSectionNames((prev) => {
       const next = { ...prev }
       if (value) next[id] = value
-      else delete next[id] // empty → fall back to the default i18n name
+      else delete next[id]
       try {
         localStorage.setItem('wist.sectionNames', JSON.stringify(next))
       } catch {
@@ -599,8 +567,7 @@ export default function Sidebar() {
     reorderGroups
   )
 
-  // nav-item reorder (within a section or across to another). The multi-container
-  // pointer drag resolves the section under the cursor; `moveItem` rewrites + persists.
+  // nav-item reorder (within the primary block). `moveItem` rewrites + persists.
   const [itemLayout, setItemLayout] = useState<Record<string, string[]>>(loadItemLayout)
   const moveItem = (itemId: string, toGroup: string, toIndex: number) => {
     setItemLayout((prev) => {
@@ -612,12 +579,11 @@ export default function Sidebar() {
       if (!fromGroup) return prev
       const fromIndex = next[fromGroup].indexOf(itemId)
       next[fromGroup].splice(fromIndex, 1)
-      // index was measured with the source still in place → shift when moving down in-section
       let idx = fromGroup === toGroup && fromIndex < toIndex ? toIndex - 1 : toIndex
       idx = Math.max(0, Math.min(next[toGroup].length, idx))
       next[toGroup].splice(idx, 0, itemId)
       try {
-        localStorage.setItem('wist.itemLayout', JSON.stringify(next))
+        localStorage.setItem(ITEM_LAYOUT_KEY, JSON.stringify(next))
       } catch {
         /* storage unavailable */
       }
@@ -637,7 +603,7 @@ export default function Sidebar() {
   const openItem = (route: string): MenuItem => ({ label: t('sidebar.open'), icon: ArrowUpRight, onClick: () => navigate(route) })
   const splitItem = (route: string): MenuItem => ({ label: t('sidebar.openInSplit'), icon: SplitSquareHorizontal, onClick: () => setSplit(route) })
 
-  // menu for a plain nav link (library / tool / productivity item)
+  // menu for a plain nav link
   const navMenu = (e: React.MouseEvent, link: Link) => {
     const pinned = useFavoritesStore.getState().isPinned('route', link.to)
     openMenu(e, [
@@ -693,24 +659,31 @@ export default function Sidebar() {
 
   const navRow = (link: Link) => {
     const { to, key, icon: Icon } = link
+    // Capacities-style: tint the type icon by its hue (Home/Trash stay neutral = slate)
+    const hue = hueForRoute(to)
+    const tint = hue && hue !== 'slate' ? objColor(hue) : undefined
     return (
-      <NavLink key={to} to={to} draggable={false} onContextMenu={(e) => navMenu(e, link)} className={({ isActive }) => rowClass(isLinkActive(to, isActive))}>
-        {({ isActive }) => {
-          const active = isLinkActive(to, isActive)
-          return (
-            <>
-              <Icon size={17} className={iconClass(active)} />
-              <span className="min-w-0 flex-1 truncate">{t(key)}</span>
-              {to === '/tasks' && taskCount > 0 && <span className="shrink-0 text-[11px] font-medium text-zinc-500">{taskCount}</span>}
-              <button
-                onClick={(e) => navMenu(e, link)}
-                className="shrink-0 rounded p-0.5 text-zinc-500 opacity-0 transition-all hover:bg-highlight hover:text-zinc-200 group-hover/i:opacity-100"
-              >
-                <MoreHorizontal size={14} />
-              </button>
-            </>
-          )
-        }}
+      <NavLink
+        key={to}
+        to={to}
+        end={to === '/'}
+        draggable={false}
+        onContextMenu={(e) => navMenu(e, link)}
+        className={({ isActive }) => rowClass(isActive)}
+      >
+        {({ isActive }) => (
+          <>
+            <Icon size={17} className={iconClass(isActive)} style={tint ? { color: tint } : undefined} />
+            <span className="min-w-0 flex-1 truncate">{t(key)}</span>
+            {to === '/tasks' && taskCount > 0 && <span className="shrink-0 text-[11px] font-medium text-zinc-500">{taskCount}</span>}
+            <button
+              onClick={(e) => navMenu(e, link)}
+              className="shrink-0 rounded p-0.5 text-zinc-500 opacity-0 transition-all hover:bg-highlight hover:text-zinc-200 group-hover/i:opacity-100"
+            >
+              <MoreHorizontal size={14} />
+            </button>
+          </>
+        )}
       </NavLink>
     )
   }
@@ -726,7 +699,7 @@ export default function Sidebar() {
     setResizing(true)
     const onMove = (ev: MouseEvent) => {
       if (Math.abs(ev.clientX - startX) > 3) moved = true
-      if (moved) setSidebarWidth(startW + (ev.clientX - startX)) // don't drift width on a collapse-click
+      if (moved) setSidebarWidth(startW + (ev.clientX - startX))
     }
     const cleanup = () => {
       document.removeEventListener('mousemove', onMove)
@@ -738,7 +711,7 @@ export default function Sidebar() {
     }
     const onUp = () => {
       cleanup()
-      if (!moved) toggleSidebar() // a click without drag collapses
+      if (!moved) toggleSidebar()
     }
     resizeCleanup.current = cleanup
     document.addEventListener('mousemove', onMove)
@@ -797,26 +770,6 @@ export default function Sidebar() {
   ) : null
 
   // ================= full sidebar (in-flow when expanded, or a hover-peek overlay) =================
-  // a round tab pill whose label width animates open/closed (.tab-morph) instead
-  // of snapping — gives the soft Notion-style transition between Дом / Хаб.
-  // Дом / Хаб — a two-up segmented switch. BOTH labels always show so the Хаб (the
-  // projects world, a core part of Bard) is never hidden behind a bare icon. The active
-  // section gets a NEUTRAL filled pill (grey ground + primary ink) — no accent colour, so
-  // it reads black in light theme / white in dark, exactly like Notion's nav.
-  const tabBtn = (active: boolean) =>
-    `flex h-9 flex-1 items-center justify-center gap-2 rounded-lg text-[13px] font-semibold transition-colors duration-200 ease-out ${
-      active
-        ? 'bg-sidebar-active text-zinc-100 shadow-[var(--card-shadow)]'
-        : 'text-zinc-400 hover:bg-highlight hover:text-zinc-100'
-    }`
-
-  // One panel, two render modes:
-  //  • in-flow (overlay=false) — ALWAYS mounted (see the return), so React keeps the same
-  //    <aside> node across collapse/expand and its width MORPHS 0 ↔ full with a soft
-  //    transition instead of snapping. (Suppressed while resizing or peeking — see below.)
-  //  • hover-peek (overlay=true) — floats over the canvas; slides in SOLID from the left
-  //    edge with a soft shadow (no opacity fade — that read as an eye-straining "ghost"),
-  //    driven by `peek`. pointer-events drop while hidden so it never blocks the canvas.
   const fullAside = (overlay: boolean) => (
     <aside
       style={{
@@ -829,9 +782,7 @@ export default function Sidebar() {
           : `relative flex h-full shrink-0 flex-col overflow-hidden bg-sidebar ${compact ? '' : 'border-r border-edge'}`
       }
     >
-      {/* top: collapse toggle (drag region) + a search field. h-[42px] + border-b matches the
-          content TopBar (and the native window controls) so the search field sits exactly
-          level with the workspace tabs and the whole top edge reads as one straight line. */}
+      {/* top: collapse toggle (drag region) + search field — level with the content TopBar */}
       <div className="app-drag flex h-[42px] shrink-0 items-center gap-1 border-b border-edge px-2">
         <Tooltip label={t('app.toggleSidebar')} shortcut="Ctrl B" side="bottom">
           <button
@@ -851,29 +802,58 @@ export default function Sidebar() {
         </button>
       </div>
 
-      {/* tab bar — Дом / Хаб (the context switch). Trash + Favorites are no longer tabs:
-          Favorites is an always-visible section below, Trash a quiet row at the bottom. */}
-      <div className="flex items-center gap-1.5 px-2.5 pb-3 pt-3">
-        <button onClick={() => navigate('/')} className={tabBtn(inHome)}>
-          <Home size={16} className="shrink-0" />
-          <span className="leading-none">{t('nav.home')}</span>
-        </button>
-        <button onClick={() => navigate('/projects')} className={tabBtn(inHub)}>
-          <FolderKanban size={16} className="shrink-0" />
-          <span className="leading-none">{t('nav.hub')}</span>
-        </button>
-      </div>
+      <nav className="flex-1 overflow-y-auto px-2.5 pb-4 pt-2">
+        {/* Профиль · + Новый — pinned to the very top */}
+        <div className="mb-3 space-y-1.5">
+          <ProfileMenu active={onProfile} placement="down" />
+          <NewMenu />
+        </div>
 
-      <nav className="flex-1 overflow-y-auto px-2.5 pb-4 pt-1">
-        {/* Избранное — always-visible pinned shortcuts (header stays even when empty so the
-            full Favorites page is always reachable and new users discover pinning) */}
-        <div>
+        {/* PRIMARY nav — the app's pages (header-less, frequency order) */}
+        <div data-sortable-container>
+          {orderedGroups.map((group) => {
+            const items = groupItems(group.id)
+            return (
+              <div
+                key={group.id}
+                data-sortable-item
+                className={groupDrag.draggingId === group.id ? 'drag-taken' : ''}
+              >
+                <div data-treesort-group={overlay ? undefined : group.id} className="space-y-px">
+                  {items.map((link, i) =>
+                    overlay ? (
+                      navRow(link)
+                    ) : (
+                      <Fragment key={link.to}>
+                        {itemSort.over?.group === group.id && itemSort.over.index === i && <div className="insert-line" />}
+                        <div
+                          data-treesort-item={link.to}
+                          onMouseDown={(e) => itemSort.onPointerDown(e, link.to)}
+                          className={itemSort.dragId === link.to ? 'drag-taken' : ''}
+                        >
+                          {navRow(link)}
+                        </div>
+                      </Fragment>
+                    )
+                  )}
+                  {!overlay && itemSort.over?.group === group.id && itemSort.over.index === items.length && (
+                    <div className="insert-line" />
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+
+        {/* Избранное — always-visible pinned shortcuts */}
+        <div className="mt-5">
           <SectionHeader
             id="favorites"
             label={sectionLabel('favorites', 'nav.favorites')}
             defaultLabel={t('nav.favorites')}
             renameHint={t('sidebar.renameHint')}
             onRename={renameSection}
+            renamable={false}
             collapsible
             isCollapsed={collapsed.has('favorites')}
             onToggle={() => toggleGroup('favorites')}
@@ -904,7 +884,7 @@ export default function Sidebar() {
               ) : (
                 <button
                   onClick={() => navigate('/favorites')}
-                  className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[12px] text-zinc-600 transition-colors hover:bg-highlight hover:text-zinc-400"
+                  className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[12px] text-zinc-500 transition-colors hover:bg-highlight hover:text-zinc-300"
                 >
                   <Star size={13} className="shrink-0" />
                   <span className="min-w-0 flex-1 truncate">{t('fav.pinsEmpty')}</span>
@@ -914,181 +894,110 @@ export default function Sidebar() {
           </div>
         </div>
 
-        {/* recent deep items — one-click return to a hub / title / canvas you were just in */}
-        {deepRecents.length > 0 && (
-          <div className="mt-4 border-t border-edge pt-4">
-            <div className="group/recent mb-0.5 flex items-center gap-1 px-2 py-1">
-              <span className="min-w-0 flex-1 select-none truncate text-[11px] font-semibold uppercase tracking-wider text-zinc-600">
-                {t('nav.recent')}
-              </span>
+        {/* ХАБЫ — the hub (project) list */}
+        <div className="mt-5">
+          <SectionHeader
+            id="projects"
+            label={sectionLabel('projects', 'nav.projects')}
+            defaultLabel={t('nav.projects')}
+            renameHint={t('sidebar.renameHint')}
+            onRename={renameSection}
+            renamable={false}
+            collapsible
+            isCollapsed={collapsed.has('projects')}
+            onToggle={() => toggleGroup('projects')}
+            right={
               <button
-                onClick={() => removeHistory((e) => /^\/(project|canvas)\//.test(e.path))}
-                title={t('nav.recentClear')}
-                className="select-none text-[11px] font-medium text-zinc-600 opacity-0 transition-opacity duration-200 hover:text-zinc-300 group-hover/recent:opacity-100"
+                onClick={(e) => { e.stopPropagation(); navigate('/projects?new=1') }}
+                title={t('hub.new')}
+                className="rounded-lg p-0.5 text-zinc-500 transition-colors duration-200 hover:bg-highlight hover:text-zinc-200"
               >
-                {t('nav.recentClear')}
+                <Plus size={14} />
               </button>
-            </div>
+            }
+          />
+          <div className={`collapse-morph ${collapsed.has('projects') ? '' : 'is-open'}`}>
             <div className="space-y-px">
-              {deepRecents.map((e) => {
-                const { icon: Icon, label } = routeMeta(e.path, t)
-                const active = e.path.split('?')[0] === pathname
-                return (
-                  <button key={e.path} onClick={() => navigate(e.path)} className={`${rowClass(active)} w-full`}>
-                    <Icon size={16} className={iconClass(active)} />
-                    <span className="min-w-0 flex-1 truncate text-left">{e.title || label}</span>
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-        )}
-
-        {inHub ? (
-          <div className="mt-4 border-t border-edge pt-4">
-            <SectionHeader
-              id="projects"
-              label={sectionLabel('projects', 'nav.projects')}
-              defaultLabel={t('nav.projects')}
-              renameHint={t('sidebar.renameHint')}
-              onRename={renameSection}
-              right={
+              {hubProjects.filter((p) => p.status !== 'archived').length === 0 ? (
                 <button
                   onClick={() => navigate('/projects?new=1')}
-                  title={t('hub.new')}
-                  className="rounded-lg p-0.5 text-zinc-500 transition-colors duration-200 hover:bg-highlight hover:text-zinc-200"
+                  className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[12px] text-zinc-500 transition-colors hover:bg-highlight hover:text-zinc-300"
                 >
-                  <Plus size={14} />
+                  <Plus size={13} className="shrink-0" />
+                  <span>{t('hub.new')}</span>
                 </button>
-              }
-            />
-            <div className="space-y-px">
-              {hubProjects
-                .filter((p) => p.status !== 'archived')
-                .map((p) => {
-                  const active = pathname === `/project/${p.id}`
-                  const isRenaming = renamingProject?.id === p.id
-                  return (
-                    <div
-                      key={p.id}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => !isRenaming && navigate(`/project/${p.id}`)}
-                      onKeyDown={(e) => e.key === 'Enter' && !isRenaming && navigate(`/project/${p.id}`)}
-                      onContextMenu={(e) => projectMenu(e, p)}
-                      className={`${rowClass(active)} cursor-pointer ${dropProject === p.id ? '!bg-accent/10 ring-1 ring-accent/70' : ''}`}
-                      onDragOver={(e) => {
-                        if (!dragHasMedia(e)) return
-                        e.preventDefault()
-                        e.dataTransfer.dropEffect = 'copy'
-                        if (dropProject !== p.id) setDropProject(p.id)
-                      }}
-                      onDragLeave={(e) => {
-                        if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropProject((x) => (x === p.id ? null : x))
-                      }}
-                      onDrop={(e) => {
-                        if (!dragHasMedia(e)) return
-                        e.preventDefault()
-                        setDropProject(null)
-                        addMediaToProject(p.id, p.name, e)
-                      }}
-                    >
-                      <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: p.color || PROJECT_STATUS_COLORS[p.status] }} />
-                      {isRenaming ? (
-                        <input
-                          autoFocus
-                          value={renamingProject!.value}
-                          onChange={(ev) => setRenamingProject({ id: p.id, value: ev.target.value })}
-                          onClick={(ev) => ev.stopPropagation()}
-                          onBlur={commitRenameProject}
-                          onKeyDown={(ev) => {
-                            ev.stopPropagation()
-                            if (ev.key === 'Enter') commitRenameProject()
-                            if (ev.key === 'Escape') setRenamingProject(null)
-                          }}
-                          className="min-w-0 flex-1 rounded border border-edge bg-field px-1 py-0.5 text-[13px] text-zinc-100 outline-none focus:border-accent"
-                        />
-                      ) : (
-                        <>
-                          <span className="min-w-0 flex-1 truncate">{p.name}</span>
-                          <button
-                            onClick={(e) => projectMenu(e, p)}
-                            className="shrink-0 rounded p-0.5 text-zinc-500 opacity-0 transition-all hover:bg-highlight hover:text-zinc-200 group-hover/i:opacity-100"
-                          >
-                            <MoreHorizontal size={14} />
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  )
-                })}
+              ) : (
+                hubProjects
+                  .filter((p) => p.status !== 'archived')
+                  .map((p) => {
+                    const active = pathname === `/project/${p.id}`
+                    const isRenaming = renamingProject?.id === p.id
+                    return (
+                      <div
+                        key={p.id}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => !isRenaming && navigate(`/project/${p.id}`)}
+                        onKeyDown={(e) => e.key === 'Enter' && !isRenaming && navigate(`/project/${p.id}`)}
+                        onContextMenu={(e) => projectMenu(e, p)}
+                        className={`${rowClass(active)} cursor-pointer ${dropProject === p.id ? '!bg-accent/10 ring-1 ring-accent/70' : ''}`}
+                        onDragOver={(e) => {
+                          if (!dragHasMedia(e)) return
+                          e.preventDefault()
+                          e.dataTransfer.dropEffect = 'copy'
+                          if (dropProject !== p.id) setDropProject(p.id)
+                        }}
+                        onDragLeave={(e) => {
+                          if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropProject((x) => (x === p.id ? null : x))
+                        }}
+                        onDrop={(e) => {
+                          if (!dragHasMedia(e)) return
+                          e.preventDefault()
+                          setDropProject(null)
+                          addMediaToProject(p.id, p.name, e)
+                        }}
+                      >
+                        <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: p.color || PROJECT_STATUS_COLORS[p.status] }} />
+                        {isRenaming ? (
+                          <input
+                            autoFocus
+                            value={renamingProject!.value}
+                            onChange={(ev) => setRenamingProject({ id: p.id, value: ev.target.value })}
+                            onClick={(ev) => ev.stopPropagation()}
+                            onBlur={commitRenameProject}
+                            onKeyDown={(ev) => {
+                              ev.stopPropagation()
+                              if (ev.key === 'Enter') commitRenameProject()
+                              if (ev.key === 'Escape') setRenamingProject(null)
+                            }}
+                            className="min-w-0 flex-1 rounded border border-edge bg-field px-1 py-0.5 text-[13px] text-zinc-100 outline-none focus:border-accent"
+                          />
+                        ) : (
+                          <>
+                            <span className="min-w-0 flex-1 truncate">{p.name}</span>
+                            <button
+                              onClick={(e) => projectMenu(e, p)}
+                              className="shrink-0 rounded p-0.5 text-zinc-500 opacity-0 transition-all hover:bg-highlight hover:text-zinc-200 group-hover/i:opacity-100"
+                            >
+                              <MoreHorizontal size={14} />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    )
+                  })
+              )}
             </div>
           </div>
-        ) : (
-          <div data-sortable-container className="mt-4 border-t border-edge pt-4">
-            {orderedGroups.map((group, gi) => {
-              const isCollapsed = collapsed.has(group.id)
-              const items = groupItems(group.id)
-              return (
-                <Fragment key={group.id}>
-                  {groupDrag.overIndex === gi && <div className="insert-line" />}
-                  <div
-                    data-sortable-item
-                    className={`${gi > 0 ? 'mt-4 border-t border-edge pt-4' : ''} ${groupDrag.draggingId === group.id ? 'drag-taken' : ''}`}
-                  >
-                    <SectionHeader
-                      id={group.id}
-                      label={sectionLabel(group.id, group.key)}
-                      defaultLabel={t(group.key)}
-                      renameHint={t('sidebar.renameHint')}
-                      onRename={renameSection}
-                      collapsible
-                      isCollapsed={isCollapsed}
-                      onToggle={() => toggleGroup(group.id)}
-                      onHandleDown={(e) => groupDrag.onHandleDown(e, group.id)}
-                    />
-                    <div className={`collapse-morph ${isCollapsed ? '' : 'is-open'}`}>
-                      <div>
-                        <div data-treesort-group={overlay ? undefined : group.id} className="space-y-px">
-                          {items.map((link, i) =>
-                            overlay ? (
-                              navRow(link)
-                            ) : (
-                              <Fragment key={link.to}>
-                                {itemSort.over?.group === group.id && itemSort.over.index === i && <div className="insert-line" />}
-                                <div
-                                  data-treesort-item={link.to}
-                                  onMouseDown={(e) => itemSort.onPointerDown(e, link.to)}
-                                  className={itemSort.dragId === link.to ? 'drag-taken' : ''}
-                                >
-                                  {navRow(link)}
-                                </div>
-                              </Fragment>
-                            )
-                          )}
-                          {!overlay && itemSort.over?.group === group.id && itemSort.over.index === items.length && (
-                            <div className="insert-line" />
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </Fragment>
-              )
-            })}
-            {groupDrag.overIndex === orderedGroups.length && <div className="insert-line" />}
-          </div>
-        )}
+        </div>
       </nav>
 
-      {/* bottom: a quiet Корзина utility row + the Claude-style profile pill (Settings,
-          Profile, Language, History, Statistics live in the profile menu) */}
+      {/* bottom: a quiet Корзина utility row */}
       <div className="space-y-1 border-t border-edge px-2 py-2">
         <NavLink to="/trash" className={({ isActive }) => `${rowClass(isActive)} text-[13px]`}>
-          <Trash2 size={16} className={iconClass(onTrash)} />
+          <Trash2 size={17} className={iconClass(onTrash)} />
           <span className="min-w-0 flex-1 truncate">{t('nav.trash')}</span>
         </NavLink>
-        <ProfileMenu active={onProfile} />
       </div>
 
       {!overlay && resizeHandle}
@@ -1096,17 +1005,8 @@ export default function Sidebar() {
     </aside>
   )
 
-  // collapsed → just the rail, with the full sidebar sliding over content on hover.
-  // The wrapper's onMouseLeave closes the peek (the overlay is its descendant, so
-  // staying over the overlay keeps it open; moving onto the content closes it).
-  // collapsed → the sidebar fully hides (Notion-style), giving the page the whole width
-  // (a big win on Graph/Canvas, which carry their own sidebar). A thin strip at the very
-  // left edge summons it as a hover-peek; the always-visible toggle in the content TopBar
-  // (Layout) re-opens it for keeps. Ctrl+B toggles too.
-  // The in-flow panel is ALWAYS mounted (first child) so React keeps the same <aside>
-  // node across collapse/expand — its width then morphs 0 ↔ full with a soft transition
-  // instead of snapping. Collapsed it rests at width 0 (clipped, no border); a thin
-  // left-edge strip summons the hover-peek overlay, which floats over the canvas.
+  // collapsed → the sidebar fully hides; a thin left-edge strip summons a hover-peek.
+  // The in-flow panel is ALWAYS mounted (first child) so its width morphs 0 ↔ full.
   return (
     <>
       {fullAside(false)}

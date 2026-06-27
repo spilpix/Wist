@@ -15,14 +15,21 @@ import {
   ListTree,
   MoreHorizontal,
   MoreVertical,
+  Network,
   PenLine,
   Pin,
+  Share2,
   Star,
   Trash2,
   X,
 } from 'lucide-react'
 import PlainEditor from '../components/notes/PlainEditor'
 import MarkdownView from '../components/MarkdownView'
+import PropertyEditor from '../components/PropertyEditor'
+import TypePicker, { mergeTypeFields } from '../components/TypePicker'
+import TypeBadge from '../components/TypeBadge'
+import { useObjectTypesStore } from '../store/objectTypesStore'
+import { objColor, type ObjHue } from '../lib/objectColors'
 import ConfirmDialog from '../components/ui/ConfirmDialog'
 import Skeleton, { SkeletonLine } from '../components/ui/Skeleton'
 import { toast } from '../store/toastStore'
@@ -30,8 +37,22 @@ import { useUiStore } from '../store/uiStore'
 import { useTabStore } from '../store/tabStore'
 import { useFavoritesStore } from '../store/favoritesStore'
 import { physKey } from '../lib/keyboard'
-import type { Note, NoteFolder } from '../types/models'
+import type { Canvas, Note, NoteFolder, ObjectProps } from '../types/models'
 import { useI18n, t as tGlobal } from '../i18n'
+import { buildMindMap } from '../lib/noteToCanvas'
+import {
+  listNotes,
+  listNoteFolders,
+  createNote as apiCreateNote,
+  updateNote,
+  removeNote,
+  createNoteFolder,
+  renameNoteFolder,
+  removeNoteFolder,
+  reorderNoteFolders,
+} from '../data/notes'
+import { listCanvases, createCanvas, updateCanvas } from '../data/canvas'
+import { relatedEdges } from '../data/edges'
 
 // ─── Draft ──────────────────────────────────────────────────────────────────
 
@@ -43,6 +64,7 @@ interface Draft {
   project_id: number | null
   pinned: boolean
   folder_id: number | null
+  props: ObjectProps
   token: number
 }
 
@@ -55,6 +77,7 @@ const emptyDraft = (title = '', folderId: number | null = null, projectId: numbe
   project_id: projectId,
   pinned: false,
   folder_id: folderId,
+  props: {},
   token: ++draftToken,
 })
 
@@ -125,6 +148,7 @@ export default function Notes() {
 
   const [notes, setNotes] = useState<Note[] | null>(null)
   const [folders, setFolders] = useState<NoteFolder[]>([])
+  const [canvases, setCanvases] = useState<Canvas[]>([]) // for ![[Board]] embeds
   const [draft, setDraft] = useState<Draft | null>(null)
   const [saveState, setSaveState] = useState<SaveState>('idle')
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -163,6 +187,16 @@ export default function Notes() {
   const loadFavs = useFavoritesStore((s) => s.load)
   const toggleFav = useFavoritesStore((s) => s.toggle)
   const isFav = useFavoritesStore((s) => s.isPinned)
+  // object types → colour the note's "spine"/passport by its type hue (Capacities-style)
+  const typeById = useObjectTypesStore((s) => s.byId)
+  const typeLoaded = useObjectTypesStore((s) => s.loaded)
+  const loadTypes = useObjectTypesStore((s) => s.load)
+  useEffect(() => {
+    if (!typeLoaded) loadTypes()
+  }, [typeLoaded, loadTypes])
+  const noteType = draft?.props?.type != null ? typeById[draft.props.type] : undefined
+  const noteHue: ObjHue = noteType ? (noteType.hue as ObjHue) : 'slate'
+  const spineColor = noteType ? objColor(noteHue) : 'rgb(var(--edge))'
   useEffect(() => {
     loadFavs()
   }, [loadFavs])
@@ -194,8 +228,8 @@ export default function Notes() {
   const load = useCallback(async () => {
     try {
       const [ns, fs] = await Promise.all([
-        window.wist.notes.list({}),
-        window.wist.noteFolders.list(),
+        listNotes({}),
+        listNoteFolders(),
       ])
       setNotes(ns)
       setFolders(fs)
@@ -221,7 +255,7 @@ export default function Notes() {
         const order = new Map(ids.map((id, i) => [id, i]))
         return prev.map((f) => (order.has(f.id) ? { ...f, sort: order.get(f.id)! } : f))
       })
-      window.wist.noteFolders.reorder(ids).then(load).catch(() => load())
+      reorderNoteFolders(ids).then(load).catch(() => load())
     },
     [load]
   )
@@ -300,6 +334,11 @@ export default function Notes() {
     load()
   }, [load])
 
+  // canvases for ![[Board]] embeds (resolve a name → board to open)
+  useEffect(() => {
+    listCanvases().then(setCanvases).catch(() => undefined)
+  }, [])
+
   const persist = useCallback(
     (d: Draft): Promise<number | null> => {
       const run = saveChain.current.then(async (): Promise<number | null> => {
@@ -313,12 +352,13 @@ export default function Notes() {
           project_id: d.project_id,
           pinned: (d.pinned ? 1 : 0) as 0 | 1,
           folder_id: d.folder_id,
+          props: d.props ?? {},
         }
         let savedId: number
         if (existingId != null) {
-          savedId = (await window.wist.notes.update(existingId, payload)).id
+          savedId = (await updateNote(existingId, payload)).id
         } else {
-          savedId = (await window.wist.notes.create(payload)).id
+          savedId = (await apiCreateNote(payload)).id
           createdByToken.current.set(d.token, savedId)
         }
         setSaveState('saved')
@@ -371,6 +411,7 @@ export default function Notes() {
         project_id: nt.project_id,
         pinned: !!nt.pinned,
         folder_id: nt.folder_id ?? null,
+        props: nt.props ?? {},
         token: ++draftToken,
       })
       setSaveState('saved')
@@ -420,7 +461,7 @@ export default function Notes() {
 
   const deleteNote = async () => {
     if (draft?.id == null) return
-    await window.wist.notes.remove(draft.id)
+    await removeNote(draft.id)
     setConfirmDelete(false)
     setDraft(null)
     toast(tGlobal('notes.deleted'))
@@ -429,25 +470,39 @@ export default function Notes() {
 
   // ─── connections (backlinks / outgoing) ─────────────────────────────────────
 
-  const backlinks = useMemo(() => {
-    if (!draft?.title?.trim() || !notes) return []
-    const needle = `[[${draft.title.trim().toLowerCase()}]]`
-    return notes.filter((nt) => nt.id !== draft.id && nt.content.toLowerCase().includes(needle))
-  }, [notes, draft?.title, draft?.id])
-
-  const outgoing = useMemo(() => {
-    if (!draft) return []
-    const out: Array<{ name: string; go: () => void }> = []
-    const seen = new Set<string>()
-    for (const m of draft.content.matchAll(/\[\[([^\]|]+)(?:\|[^\]]*)?\]\]/g)) {
-      const key = m[1].trim().toLowerCase()
-      if (seen.has(key)) continue
-      seen.add(key)
-      const note = (notes ?? []).find((x) => x.title.trim().toLowerCase() === key)
-      if (note) { out.push({ name: m[1], go: () => openNote(note) }); continue }
+  // Backlinks come from the universal edges layer (`refers` edges pointing AT this
+  // note), not a content-substring scan — so they survive renames and don't collide
+  // on duplicate titles. Re-fetched whenever the note switches or `notes` reloads
+  // after a save (the edge gets written in the same updateNote that triggered it).
+  const [backlinks, setBacklinks] = useState<{ id: number; title: string }[]>([])
+  useEffect(() => {
+    const id = draft?.id
+    if (id == null) {
+      setBacklinks([])
+      return
     }
-    return out
-  }, [draft, notes, openNote])
+    let cancelled = false
+    relatedEdges('note', id, ['refers'])
+      .then((rels) => {
+        if (cancelled) return
+        const seen = new Set<number>()
+        const bl: { id: number; title: string }[] = []
+        for (const r of rels) {
+          if (r.direction !== 'in' || r.node.type !== 'note' || r.node.missing) continue
+          const nid = Number(r.node.id)
+          if (seen.has(nid)) continue
+          seen.add(nid)
+          bl.push({ id: nid, title: r.node.label })
+        }
+        setBacklinks(bl)
+      })
+      .catch(() => {
+        if (!cancelled) setBacklinks([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [draft?.id, notes])
 
   const wordCount = useMemo(() => {
     if (!draft) return 0
@@ -463,6 +518,62 @@ export default function Notes() {
       if (note) openNote(note)
     },
     [notes, openNote]
+  )
+
+  // ![[Name]] embed → open the matching canvas (board) or note
+  const openEmbed = useCallback(
+    (name: string) => {
+      const key = name.trim().toLowerCase()
+      const c = canvases.find((x) => (x.name || '').trim().toLowerCase() === key)
+      if (c) {
+        navigate(`/canvas/${c.id}`)
+        return
+      }
+      const n = (notes ?? []).find((x) => (x.title || '').trim().toLowerCase() === key)
+      if (n) openNote(n)
+    },
+    [canvases, notes, navigate, openNote]
+  )
+
+  // Text → Canvas: lay the current note out as a mind-map on a fresh board.
+  // Headings → branches, list items / paragraphs → leaves, wired by connectors.
+  const layoutOnCanvas = useCallback(async () => {
+    setShowOptions(false)
+    const d = draftRef.current
+    if (!d) return
+    if (!d.content.trim()) {
+      toast(t('notes.toCanvasEmpty'))
+      return
+    }
+    // persist first so the root note-card links back + the content is current
+    const savedId = await persist(d).catch(() => null)
+    const id = typeof savedId === 'number' ? savedId : d.id
+    try {
+      const { nodes, edges, viewport } = buildMindMap({ id: id ?? null, title: d.title, content: d.content })
+      const c = await createCanvas(d.title.trim() || t('notes.untitled'))
+      await updateCanvas(c.id, { data: { nodes, edges, viewport } })
+      toast(t('notes.toCanvasDone'))
+      navigate(`/canvas/${c.id}`)
+    } catch (e) {
+      console.error('note → canvas failed', e)
+      toast(tGlobal('notes.saveError'))
+    }
+  }, [persist, navigate, t])
+
+  // create-on-miss target for the [[ ]] autocomplete: make the note (in the current
+  // note's folder) so the link resolves, then reload so it joins the tree + title list
+  const createLinkedNote = useCallback(
+    async (title: string) => {
+      const folderId = draftRef.current?.folder_id ?? null
+      try {
+        await apiCreateNote({ title, content: '', folder_id: folderId })
+        await load()
+      } catch (e) {
+        console.error('create linked note failed', e)
+        toast(tGlobal('notes.saveError'))
+      }
+    },
+    [load]
   )
 
   // reading view: flip a "- [ ]" ↔ "- [x]" checkbox on the given line
@@ -501,7 +612,7 @@ export default function Notes() {
     const parentId = newFolderParentId === false ? null : newFolderParentId
     setNewFolderParentId(false)
     if (!name) return
-    await window.wist.noteFolders.create(name, parentId)
+    await createNoteFolder(name, parentId)
     await load()
     setExpandedFolders((prev) => {
       const next = new Set(prev)
@@ -521,13 +632,13 @@ export default function Notes() {
     const name = renamingValue.trim()
     setRenamingFolderId(null)
     if (!name) return
-    await window.wist.noteFolders.rename(renamingFolderId, name)
+    await renameNoteFolder(renamingFolderId, name)
     await load()
   }
 
   const deleteFolder = async (folderId: number) => {
     setContextMenu(null)
-    await window.wist.noteFolders.remove(folderId)
+    await removeNoteFolder(folderId)
     await load()
   }
 
@@ -556,7 +667,7 @@ export default function Notes() {
     const title = renamingNoteValue.trim()
     setRenamingNoteId(null)
     if (!title) return
-    await window.wist.notes.update(id, { title })
+    await updateNote(id, { title })
     if (draftRef.current?.id === id) setDraft((d) => (d ? { ...d, title } : d))
     await load()
   }
@@ -565,7 +676,7 @@ export default function Notes() {
     setContextMenu(null)
     const title = note.title ? nextUntitledTitle(notes ?? [], note.title, handedOutTitles.current) : ''
     if (title) handedOutTitles.current.add(title)
-    await window.wist.notes.create({
+    await apiCreateNote({
       title,
       content: note.content,
       tags: note.tags,
@@ -578,7 +689,7 @@ export default function Notes() {
 
   const deleteNoteById = async (note: Note) => {
     setContextMenu(null)
-    await window.wist.notes.remove(note.id)
+    await removeNote(note.id)
     if (draftRef.current?.id === note.id) setDraft(null)
     toast(tGlobal('notes.deleted'))
     await load()
@@ -601,6 +712,25 @@ export default function Notes() {
   const tree = useMemo(
     () => (notes ? buildTree(folders, notes, sortMode) : []),
     [folders, notes, sortMode]
+  )
+
+  // unlinked mentions — other notes that name this one in plain text but haven't [[linked]] it yet
+  const unlinkedMentions = useMemo(() => {
+    const title = draft?.title?.trim().toLowerCase()
+    if (!title || title.length < 3 || !notes) return []
+    return notes
+      .filter((nt) => {
+        if (nt.id === draft?.id) return false
+        const c = nt.content.toLowerCase()
+        return c.includes(title) && !c.includes(`[[${title}]]`) && !c.includes(`[[${title}|`)
+      })
+      .slice(0, 8)
+  }, [notes, draft?.title, draft?.id])
+
+  // titles for the [[ ]] autocomplete (id + title only)
+  const noteTitleList = useMemo(
+    () => (notes ?? []).filter((n) => n.title?.trim()).map((n) => ({ id: n.id, title: n.title })),
+    [notes]
   )
 
   // ─── multi-select ───────────────────────────────────────────────────────────
@@ -645,7 +775,7 @@ export default function Notes() {
     setBulkConfirm(false)
     if (!ids.length) return
     try {
-      await Promise.all(ids.map((id) => window.wist.notes.remove(id)))
+      await Promise.all(ids.map((id) => removeNote(id)))
       if (draftRef.current?.id != null && selectedIds.has(draftRef.current.id)) setDraft(null)
       clearSelection()
       toast(tGlobal('notes.deletedN', { n: ids.length }))
@@ -812,7 +942,7 @@ export default function Notes() {
             setContextMenu({ kind: 'note', id: nt.id, x: e.clientX, y: e.clientY })
           }}
         >
-          <FileText size={13} className="shrink-0" />
+          {nt.props?.type != null ? <TypeBadge typeId={nt.props.type} size={13} /> : <FileText size={13} className="shrink-0" />}
           {isRenamingNote ? (
             <input
               autoFocus
@@ -1018,141 +1148,204 @@ export default function Notes() {
         </div>
       ) : (
         <div className="flex min-w-0 flex-1 flex-col">
-          {/* Obsidian-style top bar: centered title · reading-mode · options */}
-          <div className="relative flex h-9 shrink-0 items-center border-b border-edge px-2">
-            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-              <span className="max-w-[55%] truncate text-[13px] text-zinc-400">{draft.title || t('notes.untitled')}</span>
-            </div>
-            <div className="z-10 ml-auto flex items-center gap-0.5">
-              <button
-                className={`rounded-lg p-1.5 transition-colors hover:bg-highlight ${readingMode ? 'bg-highlight text-zinc-100' : 'text-zinc-500 hover:text-zinc-200'}`}
-                title={readingMode ? t('notes.editMode') : t('notes.readingMode')}
-                onClick={() => setReadingMode((v) => !v)}
-              >
-                {readingMode ? <PenLine size={15} /> : <BookOpen size={15} />}
-              </button>
-              <div className="relative">
-                <button
-                  className={`rounded-lg p-1.5 transition-colors hover:bg-highlight ${showOptions ? 'bg-highlight text-zinc-200' : 'text-zinc-500 hover:text-zinc-200'}`}
-                  title={t('notes.options')}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setShowOptions((v) => !v)
-                  }}
-                >
-                  <MoreVertical size={15} />
-                </button>
-                {showOptions && (
-                  <div
-                    className="absolute right-0 top-full z-50 mt-1 w-56 rounded-lg border border-edge bg-raised p-1 shadow-lg"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <button
-                      className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[13px] text-zinc-300 hover:bg-highlight"
-                      onClick={() => {
-                        patchDraft({ pinned: !draft.pinned })
-                        setShowOptions(false)
-                      }}
-                    >
-                      <Pin size={14} className={`shrink-0 ${draft.pinned ? 'fill-current text-zinc-200' : 'text-zinc-500'}`} />
-                      {draft.pinned ? t('notes.unpin') : t('notes.pin')}
-                    </button>
-                    {draft.id != null && (
-                      <button
-                        className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[13px] text-zinc-300 hover:bg-highlight"
-                        onClick={() => {
-                          setShowOptions(false)
-                          toggleNoteFav({ id: draft.id, title: draft.title } as Note)
-                        }}
-                      >
-                        <Star
-                          size={14}
-                          className={`shrink-0 ${isFav('note', draft.id) ? 'fill-current text-[var(--c-yellow-text)]' : 'text-zinc-500'}`}
-                        />
-                        {isFav('note', draft.id) ? t('fav.unpin') : t('fav.pin')}
-                      </button>
-                    )}
-                    {draft.id != null && (
-                      <>
-                        <div className="my-1 h-px bg-edge" />
+          {/* ── Notion×Obsidian×Capacities: one clean column, links below the text ── */}
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <div className="mx-auto w-full max-w-[760px] px-10 py-8">
+                  {/* header — type badge + title, a slim type-coloured rule as the only accent */}
+                  <div className="mb-6 border-t-2 pt-4" style={{ borderColor: spineColor }}>
+                    <div className="mb-3 flex items-center gap-2.5">
+                      <TypePicker
+                        typeId={draft.props?.type}
+                        onPick={(type) =>
+                          type
+                            ? patchDraft({ props: { ...(draft.props ?? {}), type: type.id, fields: mergeTypeFields(draft.props?.fields ?? [], type) } })
+                            : patchDraft({ props: { ...(draft.props ?? {}), type: undefined } })
+                        }
+                      />
+                      <div className="ml-auto flex items-center gap-0.5">
                         <button
-                          className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[13px] text-danger hover:bg-highlight"
-                          onClick={() => {
-                            setShowOptions(false)
-                            setConfirmDelete(true)
-                          }}
+                          className={`rounded-lg p-1.5 transition-colors hover:bg-highlight ${readingMode ? 'bg-highlight text-zinc-100' : 'text-zinc-500 hover:text-zinc-200'}`}
+                          title={readingMode ? t('notes.editMode') : t('notes.readingMode')}
+                          onClick={() => setReadingMode((v) => !v)}
                         >
-                          <Trash2 size={14} className="shrink-0" /> {t('common.delete')}
+                          {readingMode ? <PenLine size={15} /> : <BookOpen size={15} />}
                         </button>
-                      </>
+                        <div className="relative">
+                          <button
+                            className={`rounded-lg p-1.5 transition-colors hover:bg-highlight ${showOptions ? 'bg-highlight text-zinc-200' : 'text-zinc-500 hover:text-zinc-200'}`}
+                            title={t('notes.options')}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setShowOptions((v) => !v)
+                            }}
+                          >
+                            <MoreVertical size={15} />
+                          </button>
+                          {showOptions && (
+                            <div
+                              className="absolute right-0 top-full z-50 mt-1 w-56 rounded-lg border border-edge bg-raised p-1 shadow-lg"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <button
+                                className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[13px] text-zinc-300 hover:bg-highlight"
+                                onClick={() => {
+                                  patchDraft({ pinned: !draft.pinned })
+                                  setShowOptions(false)
+                                }}
+                              >
+                                <Pin size={14} className={`shrink-0 ${draft.pinned ? 'fill-current text-zinc-200' : 'text-zinc-500'}`} />
+                                {draft.pinned ? t('notes.unpin') : t('notes.pin')}
+                              </button>
+                              {draft.id != null && (
+                                <button
+                                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[13px] text-zinc-300 hover:bg-highlight"
+                                  onClick={() => {
+                                    setShowOptions(false)
+                                    toggleNoteFav({ id: draft.id, title: draft.title } as Note)
+                                  }}
+                                >
+                                  <Star
+                                    size={14}
+                                    className={`shrink-0 ${isFav('note', draft.id) ? 'fill-current text-[var(--c-yellow-text)]' : 'text-zinc-500'}`}
+                                  />
+                                  {isFav('note', draft.id) ? t('fav.unpin') : t('fav.pin')}
+                                </button>
+                              )}
+                              {draft.id != null && (
+                                <button
+                                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[13px] text-zinc-300 hover:bg-highlight"
+                                  onClick={() => { setShowOptions(false); layoutOnCanvas() }}
+                                >
+                                  <Network size={14} className="shrink-0 text-zinc-500" /> {t('notes.toCanvas')}
+                                </button>
+                              )}
+                              {draft.id != null && (
+                                <button
+                                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[13px] text-zinc-300 hover:bg-highlight"
+                                  onClick={() => { setShowOptions(false); navigate(`/tree?focus=note:${draft.id}`) }}
+                                >
+                                  <Share2 size={14} className="shrink-0 text-zinc-500" /> {t('notes.openInGraph')}
+                                </button>
+                              )}
+                              {draft.id != null && (
+                                <>
+                                  <div className="my-1 h-px bg-edge" />
+                                  <button
+                                    className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[13px] text-danger hover:bg-highlight"
+                                    onClick={() => {
+                                      setShowOptions(false)
+                                      setConfirmDelete(true)
+                                    }}
+                                  >
+                                    <Trash2 size={14} className="shrink-0" /> {t('common.delete')}
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    {readingMode ? (
+                      <h1 className="text-3xl font-bold leading-tight text-white">{draft.title || t('notes.untitled')}</h1>
+                    ) : (
+                      <input
+                        className="block w-full bg-transparent text-3xl font-bold leading-tight text-white outline-none focus-visible:outline-none placeholder:text-zinc-700"
+                        placeholder={t('notes.titlePlaceholder')}
+                        value={draft.title}
+                        onChange={(e) => patchDraft({ title: e.target.value })}
+                      />
                     )}
                   </div>
-                )}
-              </div>
+
+                  {/* properties zone */}
+                  <div className="mb-7">
+                    <div className="mb-1.5 text-[11px] font-medium uppercase tracking-wider text-zinc-600">{t('props.section')}</div>
+                    <PropertyEditor
+                      fields={draft.props?.fields ?? []}
+                      onChange={(fields) => patchDraft({ props: { ...(draft.props ?? {}), fields } })}
+                      className="-ml-1"
+                    />
+                    {draft.tags.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {draft.tags.map((tag) => (
+                          <button
+                            key={tag}
+                            onClick={() => navigate(`/tree?focus=tag:${encodeURIComponent(tag.toLowerCase())}`)}
+                            className="rounded-full bg-raised px-2 py-0.5 text-[12px] transition-opacity hover:opacity-80"
+                            style={{ color: objColor('teal') }}
+                          >
+                            #{tag}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* body — reading view or editor (PlainEditor untouched) */}
+                  {readingMode ? (
+                    <MarkdownView
+                      content={draft.content}
+                      onOpenLink={openLink}
+                      onOpenTag={(tag) => navigate(`/tree?focus=tag:${encodeURIComponent(tag.toLowerCase())}`)}
+                      onOpenEmbed={openEmbed}
+                      onToggleCheckbox={toggleCheckbox}
+                    />
+                  ) : (
+                    <PlainEditor
+                      key={draft.token}
+                      noteKey={draft.token}
+                      value={draft.content}
+                      onChange={(md) => patchDraft({ content: md, tags: extractTags(md) })}
+                      placeholder={t('notes.bodyPlaceholder')}
+                      t={t}
+                      noteTitles={noteTitleList}
+                      onOpenLink={openLink}
+                      onCreateLink={createLinkedNote}
+                    />
+                  )}
+
+                  {/* connections — Obsidian-style linked + unlinked mentions, calmly below the text */}
+                  {(backlinks.length > 0 || unlinkedMentions.length > 0) && (
+                    <div className="mt-12 border-t border-edge pt-6">
+                      {backlinks.length > 0 && (
+                        <div className="mb-6">
+                          <div className="mb-2.5 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">{t('notes.backlinks')}</div>
+                          <div className="flex flex-col gap-0.5">
+                            {backlinks.map((bl) => (
+                              <button
+                                key={bl.id}
+                                onClick={() => { const n = notes.find((x) => x.id === bl.id); if (n) openNote(n) }}
+                                className="flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] text-zinc-300 transition-colors hover:bg-highlight"
+                              >
+                                <FileText size={13} className="shrink-0 text-zinc-500" /> <span className="truncate">{bl.title || t('notes.untitled')}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {unlinkedMentions.length > 0 && (
+                        <div>
+                          <div className="mb-2.5 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">{t('notes.unlinkedMentions')}</div>
+                          <div className="flex flex-col gap-0.5">
+                            {unlinkedMentions.map((nt) => (
+                              <button
+                                key={nt.id}
+                                onClick={() => openNote(nt)}
+                                className="flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] text-zinc-400 transition-colors hover:bg-highlight hover:text-zinc-200"
+                              >
+                                <FileText size={13} className="shrink-0 text-zinc-600" /> <span className="truncate">{nt.title || t('notes.untitled')}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
             </div>
           </div>
 
-          {/* body: editor or reading view */}
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            <div className="mx-auto max-w-[720px] px-6 py-10">
-              {readingMode ? (
-                <>
-                  <h1 className="mb-4 text-4xl font-bold leading-tight text-white">{draft.title || t('notes.untitled')}</h1>
-                  <MarkdownView content={draft.content} onOpenLink={openLink} onToggleCheckbox={toggleCheckbox} />
-                </>
-              ) : (
-                <>
-                  <input
-                    className="mb-4 block w-full bg-transparent text-4xl font-bold leading-tight text-white outline-none focus-visible:outline-none placeholder:text-zinc-700"
-                    placeholder={t('notes.titlePlaceholder')}
-                    value={draft.title}
-                    onChange={(e) => patchDraft({ title: e.target.value })}
-                  />
-                  <PlainEditor
-                    key={draft.token}
-                    noteKey={draft.token}
-                    value={draft.content}
-                    onChange={(md) => patchDraft({ content: md, tags: extractTags(md) })}
-                    placeholder={t('notes.bodyPlaceholder')}
-                    t={t}
-                  />
-                </>
-              )}
-
-              {/* connections */}
-              {(outgoing.length > 0 || backlinks.length > 0) && (
-                <div className="mt-10 border-t border-edge pt-4">
-                  {outgoing.length > 0 && (
-                    <div className="mb-2 flex flex-wrap items-center gap-1.5">
-                      <span className="text-[11px] font-semibold uppercase tracking-wide text-zinc-600">{t('notes.outgoing')}</span>
-                      {outgoing.map((o) => (
-                        <button key={o.name} onClick={o.go} className="rounded-full bg-raised px-2.5 py-0.5 text-xs text-accent-bright transition-colors hover:bg-highlight">
-                          {o.name}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  {backlinks.length > 0 && (
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <span className="text-[11px] font-semibold uppercase tracking-wide text-zinc-600">{t('notes.backlinks')}</span>
-                      {backlinks.map((nt) => (
-                        <button
-                          key={nt.id}
-                          onClick={() => openNote(nt)}
-                          className="flex items-center gap-1 rounded-full bg-raised px-2.5 py-0.5 text-xs text-zinc-300 transition-colors hover:bg-highlight"
-                        >
-                          <FileText size={11} /> {nt.title || nt.content.slice(0, 24)}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-            </div>
-          </div>
-
-          {/* bottom-right status bar (Obsidian-style) */}
+          {/* bottom-right status bar */}
           <div className="flex shrink-0 items-center justify-end gap-4 border-t border-edge px-5 py-1 text-[11px] text-zinc-600">
             {saveState !== 'idle' && <span>{saveState === 'saving' ? t('notes.saving') : t('notes.savedNow')}</span>}
             <span>{t('notes.statBacklinks').replace('{n}', String(backlinks.length))}</span>

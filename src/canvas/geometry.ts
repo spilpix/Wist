@@ -145,6 +145,25 @@ export function boxesIntersect(a: Box, b: Box): boolean {
   return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y
 }
 
+// Ray-casting point-in-polygon (for lasso selection)
+export function pointInPolygon(pt: Pt, poly: Pt[]): boolean {
+  let inside = false
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const xi = poly[i].x, yi = poly[i].y, xj = poly[j].x, yj = poly[j].y
+    if ((yi > pt.y) !== (yj > pt.y) && pt.x < ((xj - xi) * (pt.y - yi)) / (yj - yi) + xi) inside = !inside
+  }
+  return inside
+}
+
+// True if any corner of the box is inside the polygon, or any poly vertex is inside the box.
+export function boxIntersectsPolygon(box: Box, poly: Pt[]): boolean {
+  const corners: Pt[] = [
+    { x: box.x, y: box.y }, { x: box.x + box.w, y: box.y },
+    { x: box.x + box.w, y: box.y + box.h }, { x: box.x, y: box.y + box.h },
+  ]
+  return corners.some((c) => pointInPolygon(c, poly)) || poly.some((p) => pointInBox(p, box))
+}
+
 // best pair of side anchors between two boxes (nearest-side routing, Miro-style)
 export function bestAnchors(a: Box, b: Box): [CanvasAnchor, CanvasAnchor] {
   const ca = center(a)
@@ -240,3 +259,92 @@ export function stickyFont(n: { w: number; h: number; text?: string; fontSize?: 
 }
 
 export const isLegacy = (n: CanvasNode) => n.type === 'text' || n.type === 'note' || n.type === 'image'
+
+// ── Smart drawing — freehand shape recognition ────────────────────────────
+
+function ptSegDist(p: Pt, a: Pt, b: Pt): number {
+  const dx = b.x - a.x, dy = b.y - a.y
+  const lenSq = dx * dx + dy * dy
+  if (lenSq === 0) return Math.hypot(p.x - a.x, p.y - a.y)
+  const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / lenSq))
+  return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy))
+}
+
+// Douglas-Peucker: keep only the structurally important points
+export function strokeSimplify(pts: Pt[], epsilon: number): Pt[] {
+  if (pts.length <= 2) return [...pts]
+  let maxD = 0, maxI = 0
+  for (let i = 1; i < pts.length - 1; i++) {
+    const d = ptSegDist(pts[i], pts[0], pts[pts.length - 1])
+    if (d > maxD) { maxD = d; maxI = i }
+  }
+  if (maxD > epsilon) {
+    return [
+      ...strokeSimplify(pts.slice(0, maxI + 1), epsilon).slice(0, -1),
+      ...strokeSimplify(pts.slice(maxI), epsilon),
+    ]
+  }
+  return [pts[0], pts[pts.length - 1]]
+}
+
+function polyArea(pts: Pt[]): number {
+  let a = 0
+  for (let i = 0, n = pts.length; i < n; i++) {
+    const j = (i + 1) % n
+    a += pts[i].x * pts[j].y - pts[j].x * pts[i].y
+  }
+  return Math.abs(a * 0.5)
+}
+
+function vertexAngle(a: Pt, b: Pt, c: Pt): number {
+  const v1x = a.x - b.x, v1y = a.y - b.y
+  const v2x = c.x - b.x, v2y = c.y - b.y
+  const mag = Math.hypot(v1x, v1y) * Math.hypot(v2x, v2y)
+  if (mag === 0) return 180
+  return (Math.acos(Math.max(-1, Math.min(1, (v1x * v2x + v1y * v2y) / mag))) * 180) / Math.PI
+}
+
+export type SmartResult = { kind: 'shape'; shape: CanvasShape } | { kind: 'line' }
+
+export function recognizeShape(rawPts: Pt[]): SmartResult | null {
+  if (rawPts.length < 5) return null
+
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity
+  for (const p of rawPts) {
+    if (p.x < x0) x0 = p.x; if (p.x > x1) x1 = p.x
+    if (p.y < y0) y0 = p.y; if (p.y > y1) y1 = p.y
+  }
+  const bw = x1 - x0, bh = y1 - y0
+  const diag = Math.hypot(bw, bh)
+  if (diag < 15) return null
+
+  const simp = strokeSimplify(rawPts, diag * 0.06)
+  const n = simp.length
+
+  // Closed: first and last raw points are near each other
+  const closeDist = Math.hypot(rawPts[0].x - rawPts[rawPts.length - 1].x, rawPts[0].y - rawPts[rawPts.length - 1].y)
+  const isClosed = closeDist < diag * 0.25
+
+  if (!isClosed) {
+    // Straight line: all raw points stay close to the chord
+    const maxDev = rawPts.slice(1, -1).reduce((mx, p) => Math.max(mx, ptSegDist(p, rawPts[0], rawPts[rawPts.length - 1])), 0)
+    return maxDev / diag < 0.08 ? { kind: 'line' } : null
+  }
+
+  const fillRatio = bw * bh > 0 ? polyArea(simp) / (bw * bh) : 0
+
+  // Ellipse: DP couldn't reduce to few corners → many points remain, shape is round
+  if (n >= 6 && fillRatio > 0.60) return { kind: 'shape', shape: 'ellipse' }
+
+  // Triangle: 3–4 simplified points
+  if (n <= 4) return { kind: 'shape', shape: 'triangle' }
+
+  // 4–6 points: rectangle vs diamond
+  if (n <= 6) {
+    const angles = simp.map((p, i) => vertexAngle(simp[(i - 1 + n) % n], p, simp[(i + 1) % n]))
+    const allRight = angles.every((a) => Math.abs(a - 90) < 35)
+    return { kind: 'shape', shape: allRight ? 'rect' : 'diamond' }
+  }
+
+  return fillRatio > 0.5 ? { kind: 'shape', shape: 'ellipse' } : null
+}

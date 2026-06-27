@@ -2,6 +2,7 @@ import Database from 'better-sqlite3'
 import { app } from 'electron'
 import path from 'node:path'
 import fs from 'node:fs'
+import * as edges from './edges'
 
 let _db: Database.Database | null = null
 
@@ -100,6 +101,19 @@ export function openDatabase(): Database.Database {
   _db = new Database(file)
   applyPragmas(_db)
   migrate(_db)
+  // one-time: seed the edges graph from existing notes' [[links]] and #tags so the
+  // knowledge web reflects pre-existing links from first launch (idempotent gate inside)
+  try {
+    edges.backfillNoteLinkEdges()
+  } catch (e) {
+    console.error('[db] note-link backfill failed', e)
+  }
+  // one-time: seed canvas card edges so existing boards join the graph
+  try {
+    edges.backfillCanvasCardEdges()
+  } catch (e) {
+    console.error('[db] canvas-card backfill failed', e)
+  }
   return _db
 }
 
@@ -634,6 +648,106 @@ const MIGRATIONS: string[] = [
     created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
   );
   CREATE INDEX idx_ai_reports_chat ON ai_reports(assistant, chat);
+  `,
+
+  // 025 — edges: ONE universal relations table. Containment (hub→item), references
+  // (object→object) and, later, tags all become a single typed directed edge
+  // `src --kind--> dst`, where every object is a node addressed by (type, id). This
+  // collapses three separate mechanisms (project_id columns, links, tags) into one
+  // and makes backlinks ("what points at me?") a single query. Existing project_id
+  // links are backfilled as `contains` edges so nothing is lost.
+  `
+  CREATE TABLE edges (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    src_type TEXT NOT NULL,
+    src_id TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    dst_type TEXT NOT NULL,
+    dst_id TEXT NOT NULL,
+    sort INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+  );
+  CREATE UNIQUE INDEX idx_edges_unique ON edges(src_type, src_id, kind, dst_type, dst_id);
+  CREATE INDEX idx_edges_src ON edges(src_type, src_id);
+  CREATE INDEX idx_edges_dst ON edges(dst_type, dst_id);
+
+  INSERT OR IGNORE INTO edges (src_type, src_id, kind, dst_type, dst_id)
+    SELECT 'project', CAST(project_id AS TEXT), 'contains', 'task', CAST(id AS TEXT)
+    FROM tasks WHERE project_id IS NOT NULL;
+  INSERT OR IGNORE INTO edges (src_type, src_id, kind, dst_type, dst_id)
+    SELECT 'project', CAST(project_id AS TEXT), 'contains', 'note', CAST(id AS TEXT)
+    FROM notes WHERE project_id IS NOT NULL;
+  `,
+
+  // 026 — promote task_attachments to a real migration. It was previously created
+  // lazily (CREATE IF NOT EXISTS on first attachment use), which a fresh
+  // backup-restore couldn't rely on — so attachments silently failed to restore.
+  // IF NOT EXISTS makes this a no-op when the lazy table already exists. Additive.
+  `
+  CREATE TABLE IF NOT EXISTS task_attachments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    path TEXT NOT NULL,
+    name TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_task_attachments_task ON task_attachments(task_id);
+  `,
+
+  // 027 — full-text search over notes via FTS5. The built-in LIKE/lower() only
+  // case-folds ASCII, so Cyrillic search was broken + JS-side scans don't scale.
+  // FTS5's unicode61 tokenizer case-folds Cyrillic correctly and gives ranked
+  // results + snippets. External-content index (content='notes') kept in lockstep
+  // by triggers; `rebuild` backfills from existing rows. NB: the fts5 shadow tables
+  // (notes_fts_*) are internal — never add them to the backup TABLES list; on restore
+  // the triggers repopulate the index as note rows are imported.
+  `
+  CREATE VIRTUAL TABLE notes_fts USING fts5(
+    title, content, content='notes', content_rowid='id',
+    tokenize = 'unicode61 remove_diacritics 2'
+  );
+  CREATE TRIGGER notes_fts_ai AFTER INSERT ON notes BEGIN
+    INSERT INTO notes_fts(rowid, title, content) VALUES (new.id, new.title, new.content);
+  END;
+  CREATE TRIGGER notes_fts_ad AFTER DELETE ON notes BEGIN
+    INSERT INTO notes_fts(notes_fts, rowid, title, content) VALUES('delete', old.id, old.title, old.content);
+  END;
+  CREATE TRIGGER notes_fts_au AFTER UPDATE ON notes BEGIN
+    INSERT INTO notes_fts(notes_fts, rowid, title, content) VALUES('delete', old.id, old.title, old.content);
+    INSERT INTO notes_fts(rowid, title, content) VALUES (new.id, new.title, new.content);
+  END;
+  INSERT INTO notes_fts(notes_fts) VALUES('rebuild');
+  `,
+  // 028 — props: a per-object JSON bag for typed user properties (Capacities-style).
+  // ONE JSON column (NOT EAV) so it rides SELECT * backups automatically and needs no
+  // edit to the two TABLES backup lists. Parsed/serialized like the existing `tags`.
+  `
+  ALTER TABLE notes ADD COLUMN props TEXT NOT NULL DEFAULT '{}';
+  ALTER TABLE tasks ADD COLUMN props TEXT NOT NULL DEFAULT '{}';
+  `,
+  // 029 — object types (Capacities-style): a type carries an icon, a hue and a set of
+  // preset property templates that seed an object's props.fields on assignment. Seeded
+  // with a few useful presets. NB: 'object_types' is added to BOTH backup TABLES lists.
+  `
+  CREATE TABLE object_types (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL DEFAULT '',
+    icon TEXT NOT NULL DEFAULT '',
+    hue TEXT NOT NULL DEFAULT 'slate',
+    fields TEXT NOT NULL DEFAULT '[]',
+    created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+  );
+  INSERT INTO object_types (name, icon, hue, fields) VALUES
+    ('Книга', 'BookOpen', 'orange', '[{"id":"author","name":"Автор","type":"text","value":""},{"id":"year","name":"Год","type":"number","value":null},{"id":"rating","name":"Оценка","type":"number","value":null},{"id":"read","name":"Прочитано","type":"checkbox","value":false}]'),
+    ('Человек', 'User', 'blue', '[{"id":"role","name":"Роль","type":"text","value":""},{"id":"email","name":"Email","type":"url","value":""},{"id":"phone","name":"Телефон","type":"text","value":""}]'),
+    ('Встреча', 'CalendarClock', 'red', '[{"id":"date","name":"Дата","type":"date","value":""},{"id":"people","name":"Участники","type":"text","value":""},{"id":"outcome","name":"Решения","type":"text","value":""}]'),
+    ('Идея', 'Lightbulb', 'yellow', '[{"id":"status","name":"Статус","type":"text","value":""},{"id":"impact","name":"Импульс","type":"text","value":""}]'),
+    ('Ссылка', 'Link', 'cyan', '[{"id":"url","name":"URL","type":"url","value":""},{"id":"source","name":"Источник","type":"text","value":""}]');
+  `,
+  // 030 — hub icon (emoji avatar): a short emoji or character that represents the hub.
+  // Shown as a coloured avatar chip in the hub header instead of the generic LayoutGrid icon.
+  `
+  ALTER TABLE projects ADD COLUMN icon TEXT;
   `,
 ]
 

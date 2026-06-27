@@ -87,6 +87,20 @@ const api = {
     remove: (kind: string, ref: string | number) => invoke('favorites:remove', kind, ref),
     reorder: (ids: number[]) => invoke('favorites:reorder', ids),
   },
+  edges: {
+    related: (type: string, id: string | number, kinds?: string[]) => invoke('edges:related', type, id, kinds),
+    search: (query: string, exclude?: { type: string; id: string | number }) => invoke('edges:search', query, exclude),
+    link: (src: { type: string; id: string | number }, kind: string, dst: { type: string; id: string | number }) =>
+      invoke('edges:link', src, kind, dst),
+    unlink: (edgeId: number) => invoke('edges:unlink', edgeId),
+    listAll: () => invoke('edges:listAll'),
+  },
+  objectTypes: {
+    list: () => invoke('objectTypes:list'),
+    create: (data: unknown) => invoke('objectTypes:create', data),
+    update: (id: number, patch: unknown) => invoke('objectTypes:update', id, patch),
+    remove: (id: number) => invoke('objectTypes:remove', id),
+  },
   canvas: {
     list: () => invoke('canvas:list'),
     get: (id: number) => invoke('canvas:get', id),
@@ -123,6 +137,12 @@ const api = {
     update: (id: number, patch: unknown) => invoke('notes:update', id, patch),
     remove: (id: number) => invoke('notes:remove', id),
     tags: () => invoke('notes:tags'),
+    searchFts: (query: string) => invoke('notes:searchFts', query),
+  },
+  journal: {
+    get: (day: string) => invoke('journal:get', day),
+    range: (from: string, to: string) => invoke('journal:range', from, to),
+    save: (day: string, patch: { content?: string; mood?: number | null }) => invoke('journal:save', day, patch),
   },
   noteFolders: {
     list: () => invoke('noteFolders:list'),

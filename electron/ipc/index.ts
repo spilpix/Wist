@@ -2,6 +2,7 @@ import { app, ipcMain, nativeImage, shell, dialog, BrowserWindow, clipboard } fr
 import fs from 'node:fs'
 import path from 'node:path'
 import * as notes from '../db/notes'
+import * as journal from '../db/journal'
 import * as noteFolders from '../db/noteFolders'
 import * as tasks from '../db/tasks'
 import * as projects from '../db/projects'
@@ -9,7 +10,9 @@ import * as projectSessions from '../db/projectSessions'
 import * as projectPatches from '../db/projectPatches'
 import * as trash from '../db/trash'
 import * as favorites from '../db/favorites'
+import * as edges from '../db/edges'
 import * as canvases from '../db/canvases'
+import * as objectTypes from '../db/objectTypes'
 import * as vault from '../db/vault'
 import * as files from './files'
 import * as data from './data'
@@ -17,11 +20,30 @@ import * as brain from './brain'
 import { registerP2pHandlers } from './p2p'
 import { getSettings, setSettings, regenerateApiToken } from '../settings'
 import { restartApiServer } from '../apiServer'
+import { scanHub, computeDiff } from '../services/hubScan'
+import { buildClipboardData } from '../services/clipboard'
 
 export function registerIpcHandlers(): void {
   registerP2pHandlers()
   const emitChange = (kind: string) => BrowserWindow.getAllWindows()[0]?.webContents.send('wist:data-changed', kind)
   const trashEvent: Record<string, string> = { project: 'projects', note: 'notes', task: 'tasks' }
+
+  // --- object types (Capacities) ---
+  ipcMain.handle('objectTypes:list', () => objectTypes.listObjectTypes())
+  ipcMain.handle('objectTypes:create', (_e, payload) => {
+    const r = objectTypes.createObjectType(payload ?? {})
+    emitChange('objectTypes')
+    return r
+  })
+  ipcMain.handle('objectTypes:update', (_e, id: number, patch) => {
+    const r = objectTypes.updateObjectType(id, patch ?? {})
+    emitChange('objectTypes')
+    return r
+  })
+  ipcMain.handle('objectTypes:remove', (_e, id: number) => {
+    objectTypes.deleteObjectType(id)
+    emitChange('objectTypes')
+  })
 
   // --- notes ---
   ipcMain.handle('notes:list', (_e, filters) => notes.listNotes(filters ?? {}))
@@ -41,6 +63,16 @@ export function registerIpcHandlers(): void {
     emitChange('notes')
   })
   ipcMain.handle('notes:tags', () => notes.distinctNoteTags())
+  ipcMain.handle('notes:searchFts', (_e, query: string) => notes.searchNotesFts(query ?? ''))
+
+  // --- journal (daily notes powering the Calendar) ---
+  ipcMain.handle('journal:get', (_e, day: string) => journal.getDay(day))
+  ipcMain.handle('journal:range', (_e, from: string, to: string) => journal.range(from, to))
+  ipcMain.handle('journal:save', (_e, day: string, patch) => {
+    const r = journal.saveDay(day, patch ?? {})
+    emitChange('journal')
+    return r
+  })
 
   // --- note folders ---
   ipcMain.handle('noteFolders:list', () => noteFolders.listFolders())
@@ -100,33 +132,8 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('tasks:removeAttachment', (_e, id: number) => tasks.removeAttachment(id))
 
   ipcMain.handle('clipboard:copy', (_e, payload: { text?: string; imagePaths?: string[] }) => {
-    const text = payload.text ?? ''
-    const paths = (payload.imagePaths ?? []).filter(Boolean)
-    let bitmap: ReturnType<typeof nativeImage.createFromPath> | null = null
-    const imgTags: string[] = []
-    for (const p of paths) {
-      try {
-        const ext = path.extname(p).slice(1).toLowerCase() || 'png'
-        const mime = ext === 'jpg' ? 'jpeg' : ext
-        imgTags.push(
-          `<img src="data:image/${mime};base64,${fs.readFileSync(p).toString('base64')}" style="max-width:100%;display:block;margin:8px 0" />`
-        )
-        if (!bitmap) {
-          const ni = nativeImage.createFromPath(p)
-          if (!ni.isEmpty()) bitmap = ni
-        }
-      } catch {
-        /* unreadable file — skip */
-      }
-    }
-    const data: { text?: string; html?: string; image?: ReturnType<typeof nativeImage.createFromPath> } = {}
-    if (text) data.text = text
-    if (text || imgTags.length) {
-      const esc = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-      data.html = `<div style="white-space:pre-wrap;font-family:sans-serif">${esc}</div>${imgTags.join('')}`
-    }
-    if (bitmap) data.image = bitmap
-    if (!data.text && !data.html && !data.image) return false
+    const data = buildClipboardData(payload)
+    if (!data) return false
     clipboard.write(data)
     return true
   })
@@ -235,70 +242,7 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('projectSessions:update', (_e, id: number, patch) => projectSessions.updateSession(id, patch ?? {}))
   ipcMain.handle('projectSessions:remove', (_e, id: number) => projectSessions.removeSession(id))
 
-  const scanHub = (projectId: number) => {
-    const assets = projects.listAssets(projectId)
-    const scanned: Record<string, string> = {}
-    const seen = new Set<string>()
-    let count = 0
-    const CAP = 40000
-    const SKIP = new Set(['node_modules', '.git', '.cache', 'dist', 'build', '$RECYCLE.BIN'])
-    const record = (full: string) => {
-      try {
-        const st = fs.statSync(full)
-        scanned[full] = `${Math.round(st.mtimeMs)}:${st.size}`
-        count++
-      } catch { /* skip */ }
-    }
-    const walk = (dir: string, depth: number) => {
-      if (depth > 14 || count >= CAP) return
-      let real: string
-      try { real = fs.realpathSync.native(dir) } catch { real = dir }
-      if (seen.has(real)) return
-      seen.add(real)
-      let ents: fs.Dirent[]
-      try { ents = fs.readdirSync(dir, { withFileTypes: true }) } catch { return }
-      for (const en of ents) {
-        if (count >= CAP) break
-        if (en.name.startsWith('.') || SKIP.has(en.name)) continue
-        const full = path.join(dir, en.name)
-        let isDir = en.isDirectory()
-        if (!isDir && en.isSymbolicLink()) {
-          try { isDir = fs.statSync(full).isDirectory() } catch { continue }
-        }
-        if (isDir) walk(full, depth + 1)
-        else record(full)
-      }
-    }
-    for (const a of assets) {
-      if (!a.path) continue
-      if (a.kind === 'folder') walk(a.path, 0)
-      else if (a.kind === 'file' || a.kind === 'image') record(a.path)
-    }
-    return { files: scanned, scanned: count }
-  }
-
-  const computeDiff = (projectId: number) => {
-    const prev = projectSessions.getSnapshot(projectId)
-    const { files: current, scanned } = scanHub(projectId)
-    const hadSnapshot = Object.keys(prev).length > 0
-    const added: string[] = []
-    const removed: string[] = []
-    const modified: string[] = []
-    if (hadSnapshot) {
-      for (const p of Object.keys(current)) {
-        if (!(p in prev)) added.push(p)
-        else if (prev[p] !== current[p]) modified.push(p)
-      }
-      for (const p of Object.keys(prev)) if (!(p in current)) removed.push(p)
-    }
-    const cap = (arr: string[]) => arr.slice(0, 1000)
-    const changes = {
-      added: cap(added), removed: cap(removed), modified: cap(modified),
-      addedCount: added.length, removedCount: removed.length, modifiedCount: modified.length, scanned,
-    }
-    return { files: current, changes }
-  }
-
+  // hub folder scan + change-diff live in ../services/hubScan (scanHub, computeDiff)
   ipcMain.handle('projects:previewChanges', (_e, projectId: number) => computeDiff(projectId).changes)
   ipcMain.handle('projects:snapshot', (_e, projectId: number) => {
     projectSessions.saveSnapshot(projectId, scanHub(projectId).files)
@@ -398,6 +342,21 @@ export function registerIpcHandlers(): void {
     favorites.reorderFavorites(ids ?? [])
     emitChange('favorites')
   })
+
+  // --- edges (universal object relations) ---
+  ipcMain.handle('edges:related', (_e, type: string, id: string | number, kinds?: string[]) =>
+    edges.related(type, String(id), kinds as edges.EdgeKind[] | undefined)
+  )
+  ipcMain.handle('edges:search', (_e, query: string, exclude?: edges.NodeRef) => edges.search(query ?? '', exclude))
+  ipcMain.handle('edges:link', (_e, src: edges.NodeRef, kind: string, dst: edges.NodeRef) => {
+    edges.link(src, kind as edges.EdgeKind, dst)
+    emitChange('edges')
+  })
+  ipcMain.handle('edges:unlink', (_e, edgeId: number) => {
+    edges.unlink(edgeId)
+    emitChange('edges')
+  })
+  ipcMain.handle('edges:listAll', () => edges.listAllRaw())
 
   // --- canvas ---
   ipcMain.handle('canvas:list', () => canvases.listCanvases())

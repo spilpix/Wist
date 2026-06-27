@@ -10,7 +10,7 @@ interface SettingsState {
 
 function hexToRgb(hex: string): string {
   const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
-  if (!m) return '35 131 225' // #2383E1 brand blue
+  if (!m) return '35 131 226' // #2383E2 brand blue
   return `${parseInt(m[1], 16)} ${parseInt(m[2], 16)} ${parseInt(m[3], 16)}`
 }
 
@@ -28,12 +28,12 @@ function darken(hex: string, amount = 0.3): string {
   return `${ch(m[1])} ${ch(m[2])} ${ch(m[3])}`
 }
 
-// Brand accent is Notion blue (#2383E1) — same hue in both themes, with a
+// Brand accent is Notion blue (#2383E2) — same hue in both themes, with a
 // theme-tuned hover/foreground so it stays legible. An empty accentColor means
 // "brand" (use these); a hex is a user override.
 const BRAND = {
-  light: { accent: '#2383e1', hover: '#1a73c9', bright: '#1768bd' },
-  dark: { accent: '#2383e1', hover: '#4a9be8', bright: '#5fa8ec' },
+  light: { accent: '#2383e2', hover: '#186ec3', bright: '#1a66b8' },
+  dark: { accent: '#2383e2', hover: '#338ee8', bright: '#63a9ec' },
 } as const
 
 let currentAccent = ''

@@ -39,9 +39,13 @@ export default function GridCanvas({ cam, width, height, mode }: Props) {
     if (mode === 'none' || cam.k <= 0) return
 
     // theme ink colour ("R G B" → "R,G,B")
-    const ink = (getComputedStyle(cv).getPropertyValue('--ink-0').trim() || '128 128 128').replace(/\s+/g, ',')
-    // Miro-style: sparse + very faint, roughly constant on-screen spacing
-    const maxAlpha = mode === 'dots' ? 0.26 : 0.13
+    const cs = getComputedStyle(cv)
+    const ink = (cs.getPropertyValue('--ink-0').trim() || '128 128 128').replace(/\s+/g, ',')
+    // dark boards need brighter grid dots to read; light boards stay subtle (FigJam-soft)
+    const bg = cs.getPropertyValue('--bg').trim().split(/\s+/).map(Number)
+    const isDark = !bg.length || (bg[0] || 0) + (bg[1] || 0) + (bg[2] || 0) < 384
+    // Miro-style: sparse, roughly constant on-screen spacing — alive but never busy
+    const maxAlpha = mode === 'dots' ? (isDark ? 0.42 : 0.22) : isDark ? 0.18 : 0.11
     const target = mode === 'dots' ? 46 : 52 // desired screen spacing of the primary grid
 
     // primary level: smallest GRID*2^n whose screen spacing ≥ target (keeps spacing ∈ [target, 2·target))

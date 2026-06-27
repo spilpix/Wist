@@ -38,9 +38,9 @@ export default function FramesPanel({ frames, nodes, onNavigate, onPresent, t }:
   const [open, setOpen] = useState(true)
   if (!frames.length) return null
   return (
-    <div className="pointer-events-auto rounded-xl border border-edge bg-surface backdrop-blur" style={{ boxShadow: 'var(--float-shadow)' }}>
+    <div className="pointer-events-auto rounded-2xl border border-edge bg-card ring-1 ring-black/5 backdrop-blur" style={{ boxShadow: 'var(--float-shadow)' }}>
       <div className="flex items-center gap-2 px-2.5 py-1.5">
-        <button className="flex items-center gap-1 text-xs font-semibold text-zinc-300" onClick={() => setOpen((v) => !v)}>
+        <button className="flex items-center gap-1 text-xs font-semibold text-[rgb(var(--ink-300))]" onClick={() => setOpen((v) => !v)}>
           {open ? <ChevronDown size={13} /> : <ChevronUp size={13} />}
           {t('canvas.frames', { n: frames.length })}
         </button>

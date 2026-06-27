@@ -1,5 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
+  listVault,
+  browseVault,
+  openVault,
+  addVaultPaths,
+  pickAndAddVault,
+  addVaultFolder,
+  createVaultFolder,
+  renameVault,
+  removeVault,
+  startVaultDrag,
+} from '../data/vault'
+import {
   Archive,
   ChevronRight,
   Eye,
@@ -89,11 +101,11 @@ export default function Vault({ embedded = false, kindFilter }: VaultProps = {})
     if (current.kind === 'vault') {
       setDiskItems(null)
       setVaultItems(null)
-      window.wist.vault.list(current.id).then(setVaultItems).catch(() => setVaultItems([]))
+      listVault(current.id).then(setVaultItems).catch(() => setVaultItems([]))
     } else {
       setVaultItems(null)
       setDiskItems(null)
-      window.wist.vault.browse(current.path).then(setDiskItems).catch(() => setDiskItems([]))
+      browseVault(current.path).then(setDiskItems).catch(() => setDiskItems([]))
     }
   }, [current])
 
@@ -148,7 +160,7 @@ export default function Vault({ embedded = false, kindFilter }: VaultProps = {})
       if (r.live && r.path) setCrumbs((c) => [...c, { kind: 'disk', path: r.path!, name: r.name }])
       else if (r.vaultId != null) setCrumbs((c) => [...c, { kind: 'vault', id: r.vaultId!, name: r.name }])
     } else if (r.path) {
-      window.wist.vault.open(r.path)
+      openVault(r.path)
     }
   }
 
@@ -165,7 +177,7 @@ export default function Vault({ embedded = false, kindFilter }: VaultProps = {})
   }
 
   const addFolder = async () => {
-    const r = await window.wist.vault.addFolder(parentId)
+    const r = await addVaultFolder(parentId)
     if (!r.folders) {
       toast(t('vault.noNew'))
       return
@@ -205,18 +217,18 @@ export default function Vault({ embedded = false, kindFilter }: VaultProps = {})
     const paths = Array.from(e.dataTransfer.files)
       .map((f) => window.wist.util.pathForFile(f))
       .filter(Boolean)
-    if (paths.length) addFiles(() => window.wist.vault.addPaths(paths, parentId))
+    if (paths.length) addFiles(() => addVaultPaths(paths, parentId))
   }
 
   const createFolder = async (name: string) => {
     if (!inVault) return
-    await window.wist.vault.createFolder(name, parentId)
+    await createVaultFolder(name, parentId)
     setNewFolderOpen(false)
     load()
   }
 
   const remove = async (id: number) => {
-    await window.wist.vault.remove(id)
+    await removeVault(id)
     load()
   }
 
@@ -238,7 +250,7 @@ export default function Vault({ embedded = false, kindFilter }: VaultProps = {})
             <button className="btn-ghost" onClick={addFolder}>
               <FolderOpen size={15} /> {t('vault.addFolder')}
             </button>
-            <button className="btn-accent" onClick={() => addFiles(() => window.wist.vault.pickAndAdd(parentId))}>
+            <button className="btn-accent" onClick={() => addFiles(() => pickAndAddVault(parentId))}>
               <Plus size={16} /> {t('vault.add')}
             </button>
           </div>
@@ -296,7 +308,7 @@ export default function Vault({ embedded = false, kindFilter }: VaultProps = {})
           subtitle={search || crumbs.length > 1 ? undefined : t('vault.emptySubtitle')}
           action={
             inVault && !search ? (
-              <button className="btn-accent" onClick={() => addFiles(() => window.wist.vault.pickAndAdd(parentId))}>
+              <button className="btn-accent" onClick={() => addFiles(() => pickAndAddVault(parentId))}>
                 <Plus size={16} /> {t('vault.add')}
               </button>
             ) : undefined
@@ -326,7 +338,7 @@ export default function Vault({ embedded = false, kindFilter }: VaultProps = {})
           initial={renaming.name}
           onClose={() => setRenaming(null)}
           onSubmit={async (name) => {
-            await window.wist.vault.rename(renaming.id, name)
+            await renameVault(renaming.id, name)
             setRenaming(null)
             load()
           }}
@@ -385,7 +397,7 @@ function VaultCard({
           return
         }
         e.preventDefault()
-        window.wist.vault.startDrag(r.path)
+        startVaultDrag(r.path)
       }}
     >
       {/* preview / icon — folders take the square «app-folder» tile (matches «Мои файлы») */}

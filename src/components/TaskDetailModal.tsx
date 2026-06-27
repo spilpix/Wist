@@ -292,6 +292,8 @@ export function LinkField({
   onClear,
   onOpen,
   searchPh,
+  bare = false,
+  dotColor = null,
 }: {
   icon: typeof FolderKanban
   placeholder: string
@@ -301,6 +303,8 @@ export function LinkField({
   onClear: () => void
   onOpen: () => void
   searchPh: string
+  bare?: boolean // quiet inline look (no field box) for the task peek
+  dotColor?: string | null // a colour dot before the name (e.g. the project's colour)
 }) {
   const [open, setOpen] = useState(false)
   const [q, setQ] = useState('')
@@ -341,7 +345,22 @@ export function LinkField({
   const list = q ? options.filter((o) => o.name.toLowerCase().includes(q.toLowerCase())) : options
 
   if (currentName) {
-    return (
+    return bare ? (
+      // quiet chip: colour dot + name, highlights on hover (matches the sidebar hub rows)
+      <div className="group/lf flex items-center gap-2 rounded-md px-1.5 py-1 transition-colors hover:bg-highlight">
+        {dotColor ? (
+          <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: dotColor }} />
+        ) : (
+          <Icon size={14} className="shrink-0 text-zinc-400" />
+        )}
+        <button onClick={onOpen} className="min-w-0 flex-1 truncate text-left text-[13.5px] text-zinc-200 hover:text-white">
+          {currentName}
+        </button>
+        <button onClick={onClear} className="shrink-0 rounded p-0.5 text-zinc-600 opacity-0 transition-all hover:text-danger group-hover/lf:opacity-100">
+          <X size={13} />
+        </button>
+      </div>
+    ) : (
       <div className="flex items-center gap-2 rounded-lg border border-edge bg-raised px-2.5 py-1.5">
         <Icon size={14} className="shrink-0 text-zinc-400" />
         <button onClick={onOpen} className="min-w-0 flex-1 truncate text-left text-sm text-zinc-200 hover:text-white">
@@ -358,9 +377,13 @@ export function LinkField({
       <button
         ref={btnRef}
         onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center gap-2 rounded-lg border border-dashed border-edge px-2.5 py-1.5 text-sm text-zinc-500 transition-colors hover:text-zinc-300"
+        className={
+          bare
+            ? 'flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-[13.5px] text-zinc-500 transition-colors hover:bg-highlight hover:text-zinc-300'
+            : 'flex w-full items-center gap-2 rounded-lg border border-dashed border-edge px-2.5 py-1.5 text-sm text-zinc-500 transition-colors hover:text-zinc-300'
+        }
       >
-        <Icon size={14} /> {placeholder}
+        <Icon size={14} className="shrink-0" /> {placeholder}
       </button>
       {open &&
         pos &&
